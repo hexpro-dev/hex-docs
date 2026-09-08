@@ -17,6 +17,10 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    # Every action below is pinned to a major that runs on node24. The runners force a
+    # node20 action onto node24 today and print a deprecation, and they will stop
+    # running one entirely; a bump here is a bump to a node24 major, never to whatever
+    # tag is newest.
     strategy:
       fail-fast: false
       matrix:
@@ -24,7 +28,7 @@ jobs:
         # toolchain is found before an upgrade rather than during one.
         node: [22, 24]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history, not the default depth of 1. Two things need it: the house
           # lint scans commit messages for attribution, and the compiler derives
@@ -34,11 +38,11 @@ jobs:
           # regression here fails the job instead of hiding.
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           run_install: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
           cache: pnpm
