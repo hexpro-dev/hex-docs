@@ -65,6 +65,15 @@ jobs:
             exit 1
           fi
 
-      # Typecheck, both suites with coverage, the dependency gate, the house lint and
-      # formatting, in one ladder that reports what each step examined.
+      # Typecheck, both suites with coverage, the dependency gate, the house lint, the
+      # browser paint check and formatting, in one ladder that reports what each step
+      # examined.
+      #
+      # `CI` is what turns a missing browser from a deliberate skip into a failure. The
+      # runner image ships Google Chrome and Chromium, so a paint row that found neither
+      # means the image changed under the check rather than that somebody chose to skip it,
+      # and the check that catches the theming defect would otherwise go quiet without
+      # anybody noticing.
       - run: pnpm verify
+        env:
+          CI: 'true'

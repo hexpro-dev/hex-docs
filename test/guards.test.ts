@@ -20,7 +20,13 @@ import { run as runImportGate } from '../scripts/check-imports.mjs';
 // @ts-expect-error -- see above.
 import { REQUIRED_DIRS, run as runHouseLint } from '../scripts/lint.mjs';
 // @ts-expect-error -- see above.
-import { countExamined, countTests, run as runLadder, STEPS } from '../scripts/verify.mjs';
+import {
+	countExamined,
+	countTestFiles,
+	countTests,
+	run as runLadder,
+	STEPS,
+} from '../scripts/verify.mjs';
 
 type CheckResult = {
 	name: string;
@@ -140,9 +146,15 @@ describe('the dependency gate, run against this repository', () => {
 		expect(failures.map((row) => `${row.name}: ${(row.problems ?? []).join('; ')}`)).toEqual([]);
 	});
 
-	test('the runtime half imports no packages at all', () => {
+	test('the runtime half imports react and nothing else', () => {
+		// This read "no package imports at all" until the renderer landed, which was true
+		// and is no longer the property worth asserting. React is a peer dependency every
+		// consumer already has for its own reasons, and it is the only entry on the gate's
+		// allowlist; the bar for a second is that every current and future consumer already
+		// depends on it. Naming the set here means a widened allowlist fails a test rather
+		// than passing a gate.
 		const row = rows.find((r) => r.name === 'src/ imports no packages');
-		expect(row?.note).toBe('no package imports at all');
+		expect(row?.note).toBe('packages used: react');
 		// The count is the point: a gate that walked an empty tree would pass silently
 		// without it.
 		expect(row?.examined ?? 0).toBeGreaterThan(20);
@@ -287,7 +299,7 @@ describe('the verification ladder', () => {
 		}
 	});
 
-	test('the ladder covers typecheck, both suites, both guards and formatting', () => {
+	test('the ladder covers typecheck, both suites, both guards, paint and formatting', () => {
 		const names = (STEPS as { name: string }[]).map((step) => step.name);
 		expect(names).toEqual([
 			'typecheck',
@@ -295,8 +307,21 @@ describe('the verification ladder', () => {
 			'toolchain tests',
 			'dependency gate',
 			'house lint',
+			'paint',
 			'formatting',
 		]);
+	});
+
+	test('exactly one step may report zero and still pass, and it is the browser one', () => {
+		// Every other row that examined nothing has stopped examining something, which is
+		// the rule this ladder exists to hold. The paint row is the exception because it has
+		// its own notion of a deliberate non-run: it reports SKIPPED where no browser is
+		// installed and FAILS when the same thing happens in CI, where the runner image
+		// ships one.
+		const permissive = (STEPS as { name: string; allowZero?: boolean }[]).filter(
+			(step) => step.allowZero === true,
+		);
+		expect(permissive.map((step) => step.name)).toEqual(['paint']);
 	});
 
 	test('the count extractors read real command output', () => {
@@ -359,6 +384,40 @@ describe('the ladder runner', () => {
 	test('a step whose note is set carries it through', () => {
 		const [row] = runLadder([{ ...passing, note: 'why this step exists' }]) as CheckResult[];
 		expect(row?.note).toBe('why this step exists');
+	});
+
+	test('a step that examined fewer things than the disk holds is a failure, not a smaller number', () => {
+		// The second pair of numbers, driven. A suite the runner never collected lowers the
+		// headline count and nothing else, so the shortfall has to be measured against
+		// something the command's own output cannot influence.
+		const [row] = runLadder([
+			{
+				...passing,
+				subset: () => ({ ran: 2, expected: 5, what: '5 test files under test/' }),
+			},
+		]) as CheckResult[];
+		expect(row?.state).toBe('FAIL');
+		expect(row?.problems?.[0]).toContain('collected 2 of 5');
+		expect(row?.problems?.[0]).toContain('5 test files under test/');
+	});
+
+	test('a step whose two numbers agree passes and says what it compared against', () => {
+		const [row] = runLadder([
+			{ ...passing, subset: () => ({ ran: 5, expected: 5, what: '5 test files under test/' }) },
+		]) as CheckResult[];
+		expect(row?.state).toBe('PASS');
+		expect(row?.note).toBe('5 test files under test/');
+	});
+
+	test('only a step that declares it may report zero and still pass', () => {
+		const zero = {
+			name: 'zero',
+			argv: ['node', '-e', "process.stdout.write('nothing examined')"],
+			unit: 'probes',
+			count: () => 0,
+		};
+		expect((runLadder([zero]) as CheckResult[])[0]?.state).toBe('FAIL');
+		expect((runLadder([{ ...zero, allowZero: true }]) as CheckResult[])[0]?.state).toBe('PASS');
 	});
 });
 
@@ -870,5 +929,54 @@ describe('the planted-character declaration, exercised in both directions', () =
 		const summary = render('t', rows as never);
 		write.mockRestore();
 		expect(summary.ok).toBe(false);
+	});
+});
+
+describe('the ladder counts test files as well as tests', () => {
+	/**
+	 * The hole this closes, and it was reachable here.
+	 *
+	 * A test row's headline count is the number of tests, and that number cannot report a
+	 * gap: a suite the runner never collected simply makes it smaller, and smaller is not
+	 * failing. `vitest.config.ts` matched `test/**\/*.test.ts` and not `.tsx`, so an entire
+	 * component suite would have collected nothing while the ladder printed PASS.
+	 */
+	test('every test row compares what ran against what is on disk', () => {
+		const rows = STEPS.filter((step) => step.unit === 'tests');
+		expect(rows.length).toBe(2);
+		for (const step of rows) expect(step.subset).toBeDefined();
+	});
+
+	test('the file count comes out of vitest own summary', () => {
+		expect(countTestFiles(' Test Files  18 passed (18)\n Tests  400 passed (400)')).toBe(18);
+		expect(countTestFiles('no summary here')).toBe(0);
+		// The two numbers are different things and a reader of the row has to be able to
+		// tell them apart.
+		expect(countTests(' Test Files  18 passed (18)\n Tests  400 passed (400)')).toBe(400);
+	});
+
+	test('the expectation counts the .ts and .tsx files this repository really has', () => {
+		const runtime = STEPS.find((step) => step.name === 'runtime tests');
+		const measured = runtime?.subset?.(' Test Files  1 passed (1)');
+		expect(measured).toBeDefined();
+		expect(measured?.ran).toBe(1);
+		// Derived from the disk rather than from a literal, and both extensions are really
+		// present: a walker that matched only `.ts` would give a smaller number here and
+		// the row would then agree with a runner that collected the same subset.
+		expect(measured?.expected).toBeGreaterThan(15);
+		expect(measured?.what).toContain('test files under test/');
+
+		const kit = STEPS.find((step) => step.name === 'toolchain tests');
+		expect(kit?.subset?.('')?.expected).toBeGreaterThan(10);
+	});
+
+	test('a shortfall is a failure that names the two numbers', () => {
+		// Driven rather than reasoned about. The row passes when the numbers agree and
+		// fails when they do not, and the failure has to say what it was expecting.
+		const runtime = STEPS.find((step) => step.name === 'runtime tests');
+		const expected = runtime?.subset?.('')?.expected as number;
+		const short = runtime?.subset?.(` Test Files  ${expected - 1} passed`);
+		expect(short?.ran).toBe(expected - 1);
+		expect(short?.expected).toBe(expected);
 	});
 });

@@ -11,5 +11,11 @@
 		"noEmit": true
 	},
 	"include": ["src", "bin", "test", "vitest.config.ts", "../src", "../fixtures"],
-	"exclude": ["node_modules", "dist", "coverage"]
+	// `../src/render` is excluded, and the reason is the `lib` above. The toolchain runs
+	// on node and deliberately has no DOM types, so a file here cannot reach for
+	// `document` by accident; the renderer is the browser half and is full of exactly
+	// that. Nothing in `kit/` imports it, so leaving it in this program would only ever
+	// typecheck browser code against a node environment and fail. The root tsconfig
+	// compiles it, with DOM and with no node types, which is the environment it runs in.
+	"exclude": ["node_modules", "dist", "coverage", "../src/render"]
 }

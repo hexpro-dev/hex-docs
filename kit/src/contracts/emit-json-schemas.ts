@@ -16,10 +16,12 @@
  */
 
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { z } from 'zod';
+
+import { STYLESHEET_PATH, emitStylesheet } from '../theme/stylesheet.js';
 
 import {
 	BANNED_CHARACTERS,
@@ -108,8 +110,26 @@ export function emitHouseRules(outDir: string = OUT): string {
 	return path;
 }
 
+/**
+ * The renderer's stylesheet, generated from the same tables.
+ *
+ * It joins this script rather than getting one of its own because it is the same kind of
+ * artifact and needs the same gate: one command regenerates every generated file, and CI
+ * fails on a diff afterwards. A second script would be a second thing to remember, and the
+ * one nobody runs is the one that goes stale.
+ *
+ * It writes outside `kit/`, which nothing else here does, so the path is resolved from the
+ * repository root rather than from `outDir`.
+ */
+export function emitStylesheetFile(root: string = resolve(OUT, '..', '..')): string {
+	const path = join(root, STYLESHEET_PATH);
+	mkdirSync(dirname(path), { recursive: true });
+	writeFileSync(path, emitStylesheet(), 'utf8');
+	return path;
+}
+
 export function emitAll(outDir: string = OUT): string[] {
-	return [...emitJsonSchemas(outDir), emitHouseRules(outDir)];
+	return [...emitJsonSchemas(outDir), emitHouseRules(outDir), emitStylesheetFile()];
 }
 
 if (

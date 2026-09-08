@@ -216,11 +216,19 @@ describe('the invariants a schema cannot express', () => {
 		expect(problems.some((p) => p.includes('nav names "ghost"'))).toBe(true);
 	});
 
-	test('a nav entry nested inside a group is checked too', () => {
+	test('a hidden nav entry is checked exactly like a visible one', () => {
+		// `hidden` keeps a page out of the sidebar and out of prev/next; it does not make
+		// the entry unchecked. A hidden entry naming a page the bundle does not carry is
+		// the same broken bundle, and it is harder to notice by reading the site.
 		const problems = validateManifestShape(
-			manifest({ nav: [{ slug: 'index', children: [{ slug: 'ghost' }] }] }),
+			manifest({ nav: [{ slug: 'index' }, { slug: 'ghost', hidden: true }] }),
 		);
 		expect(problems.some((p) => p.includes('nav names "ghost"'))).toBe(true);
+	});
+
+	test('a hidden entry naming a real page is accepted', () => {
+		const problems = validateManifestShape(manifest({ nav: [{ slug: 'index', hidden: true }] }));
+		expect(problems.filter((p) => p.includes('nav'))).toEqual([]);
 	});
 
 	test('an llmsOrder entry naming a page that does not exist is caught', () => {

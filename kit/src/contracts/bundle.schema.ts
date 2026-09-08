@@ -133,6 +133,7 @@ export const pageLocaleRecordSchema = z.strictObject({
 	rawDigest: sha256Schema,
 	rawBytes: positiveIntSchema,
 	title: z.string().min(1),
+	navTitle: z.string().min(1).optional(),
 	description: z.string().min(1),
 	updatedAt: utcTimestampSchema,
 	state: z.enum(TRANSLATION_STATES),
@@ -148,9 +149,7 @@ export const pageRecordSchema = z.strictObject({
 
 export const manifestNavNodeSchema: z.ZodType<ManifestNavNode> = z.strictObject({
 	slug: slugSchema,
-	get children() {
-		return z.array(manifestNavNodeSchema).optional();
-	},
+	hidden: z.literal(true).optional(),
 });
 
 export const searchIndexRecordSchema = z.strictObject({

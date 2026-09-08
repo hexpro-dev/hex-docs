@@ -25,3 +25,10 @@ fixtures/app/docs/site/snippets/
 # the generated schemas above are excluded for, and it would reformat the raw markdown
 # the compiler is asserting it produced.
 kit/test/golden/
+test/golden/
+
+# The generated stylesheet. `kit/src/theme/stylesheet.ts` writes it and the suite asserts
+# the checked-in file is byte for byte what the generator produces, so a formatter that
+# rewrote it would make that gate fail on every run until somebody taught the generator
+# prettier's CSS style. The generator's own output is the format.
+src/render/docs.css

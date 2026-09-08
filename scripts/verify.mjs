@@ -50,11 +50,82 @@ function countTsconfigs() {
  * @property {() => { expected: number, what: string }} [expect]  A count measured from
  *   somewhere other than the command's own output, so a step that runs a subset of what
  *   it should reports a shortfall rather than a smaller number.
+ * @property {(output: string) => { ran: number, expected: number, what: string }} [subset]
+ *   A second pair of numbers, for a step whose headline count is not the thing that can
+ *   silently shrink. A test row counts tests, and a suite the runner never collected makes
+ *   that number smaller rather than making the row fail; the number of files collected is
+ *   what can be compared against the disk.
+ * @property {boolean} [allowZero]  Whether a row that examined nothing may still pass.
+ *   True for exactly one step, and only because that step has its own notion of a
+ *   deliberate non-run: the browser check reports SKIPPED when no browser is installed and
+ *   FAILS when the same thing happens in CI, where the runner image ships one. Every other
+ *   row that examined nothing has stopped examining something.
  * @property {string} [note]
  */
 
 /** Pulls "Tests  226 passed" out of vitest's summary. */
 export const countTests = (output) => Number(/Tests\s+(\d+)\s+passed/.exec(output)?.[1] ?? 0);
+
+/** Pulls "Test Files  18 passed" out of the same summary. */
+export const countTestFiles = (output) =>
+	Number(/Test Files\s+(\d+)\s+passed/.exec(output)?.[1] ?? 0);
+
+/**
+ * Every test file on disk under a directory.
+ *
+ * @param {string} dir
+ * @returns {string[]}
+ */
+function testFilesIn(dir) {
+	/** @type {string[]} */
+	const found = [];
+	/** @type {string[]} */
+	const queue = [dir];
+	while (queue.length > 0) {
+		const current = /** @type {string} */ (queue.pop());
+		/** @type {import('node:fs').Dirent[]} */
+		let entries;
+		try {
+			entries = readdirSync(current, { withFileTypes: true });
+		} catch {
+			continue;
+		}
+		for (const entry of entries) {
+			if (entry.isSymbolicLink()) continue;
+			const full = join(current, entry.name);
+			if (entry.isDirectory()) {
+				if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+				queue.push(full);
+			} else if (/\.test\.tsx?$/.test(entry.name)) {
+				found.push(full);
+			}
+		}
+	}
+	return found.sort();
+}
+
+/**
+ * How many test files a suite should have collected, measured from the disk.
+ *
+ * The headline count for these two rows is the number of tests, and that number cannot
+ * report a gap: a test file the runner never collected simply makes it smaller, and
+ * smaller is not failing. The failure this closes is real and was reachable here.
+ * `vitest.config.ts` matched `test/**\/*.test.ts` and not `.tsx`, so a whole suite written
+ * as a component test would have collected nothing while the ladder printed PASS.
+ *
+ * @param {string} dir
+ * @returns {(output: string) => { ran: number, expected: number, what: string }}
+ */
+function expectTestFiles(dir) {
+	return (output) => {
+		const files = testFilesIn(join(ROOT, dir));
+		return {
+			ran: countTestFiles(output),
+			expected: files.length,
+			what: `${files.length} test files under ${dir}/`,
+		};
+	};
+}
 
 /** Pulls "N things examined" out of this package's own report footer. */
 export const countExamined = (output) => Number(/(\d+) things examined/.exec(output)?.[1] ?? 0);
@@ -83,12 +154,14 @@ export const STEPS = [
 		argv: ['pnpm', 'test:coverage'],
 		unit: 'tests',
 		count: countTests,
+		subset: expectTestFiles('test'),
 	},
 	{
 		name: 'toolchain tests',
 		argv: ['pnpm', 'test:kit:coverage'],
 		unit: 'tests',
 		count: countTests,
+		subset: expectTestFiles('kit/test'),
 	},
 	{
 		name: 'dependency gate',
@@ -101,6 +174,17 @@ export const STEPS = [
 		argv: ['pnpm', 'lint'],
 		unit: 'things',
 		count: countExamined,
+	},
+	{
+		name: 'paint',
+		// The one property of this package that only a CSS engine has an opinion about:
+		// whether a token override actually reaches the element it is meant to. The script
+		// says at length why a DOM library cannot answer it, and both of the two that were
+		// measured get it wrong in a way that passes on the broken stylesheet.
+		argv: ['pnpm', 'paint'],
+		unit: 'probes',
+		count: countExamined,
+		allowZero: true,
 	},
 	{
 		name: 'formatting',
@@ -179,7 +263,21 @@ export function run(steps = STEPS) {
 				);
 			}
 		}
-		const options = note === undefined ? {} : { note };
+		if (step.subset !== undefined) {
+			const { ran, expected, what } = step.subset(output);
+			note = note === undefined ? what : `${note}, ${what}`;
+			if (ran !== expected) {
+				shortfall.push(
+					`collected ${ran} of ${expected}. ${what}. A suite the runner never ` +
+						`collected lowers the count above rather than failing, which is why this ` +
+						`number is compared against the disk.`,
+				);
+			}
+		}
+		const options = {
+			...(note === undefined ? {} : { note }),
+			...(step.allowZero === true ? { allowZero: true } : {}),
+		};
 		results.push(check(step.name, measured, step.unit, shortfall, options));
 	}
 

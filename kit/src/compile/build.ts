@@ -452,6 +452,9 @@ export function buildBundle(appRoot: string, options: BuildOptions): BuildResult
 				rawDigest: sha256Hex(rawBytes),
 				rawBytes: rawBytes.length,
 				title: output.page.title.normalize('NFC'),
+				...(output.page.navTitle === undefined
+					? {}
+					: { navTitle: output.page.navTitle.normalize('NFC') }),
 				description: output.page.description.normalize('NFC'),
 				updatedAt:
 					output.page.translation.translationUpdated ?? output.page.translation.sourceUpdated,
@@ -658,7 +661,13 @@ function manifestNav(
 			nodes.push(...children);
 			continue;
 		}
-		if ('doc' in item && item.doc in pages) nodes.push({ slug: item.doc });
+		if ('doc' in item && item.doc in pages) {
+			// The reason a page is hidden stays in nav.json; the flag is what the renderer
+			// needs to keep it out of the sidebar and out of prev/next, which is what
+			// `nav.ts` promises a hidden page gets. The page stays in this array so that
+			// `nav` and `llmsOrder` continue to answer the same question.
+			nodes.push(item.hidden === undefined ? { slug: item.doc } : { slug: item.doc, hidden: true });
+		}
 	}
 	return nodes;
 }

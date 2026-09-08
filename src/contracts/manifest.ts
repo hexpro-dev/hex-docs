@@ -135,6 +135,15 @@ export interface PageLocaleRecord {
 	rawBytes: number;
 	/** NFC-normalised. */
 	title: string;
+	/**
+	 * The shorter sidebar label, when the page carries one.
+	 *
+	 * Here because the sidebar is built from this manifest and nowhere else: the bundle
+	 * has no `nav.json`, and the compiled page payload is only ever loaded for the page
+	 * the reader is on. Without it, the one field whose whole purpose is the sidebar was
+	 * a field the sidebar could not see.
+	 */
+	navTitle?: string;
 	description: string;
 	/** From `git log -1 --format=%cI` on this file, normalised to UTC. */
 	updatedAt: string;
@@ -191,16 +200,35 @@ export interface PageRecord {
 }
 
 /**
- * The nav, resolved. Slugs only.
+ * The nav, resolved: every page in reading order, flat.
  *
  * No inline titles: `nav.json` is language-neutral and titles come from each locale's
  * front matter, which this manifest already carries per page per locale. Inlining
  * seven locales of title here would be a derived field with nothing checking it
  * against the pages it was derived from.
+ *
+ * Flat, and it used to carry a `children` array that nothing ever wrote. It could not
+ * have been right: a `nav.json` group is not a page, so the compiler flattens it, and a
+ * group holding two pages from different sections is a shape no slug hierarchy can
+ * express. The renderer derives its sidebar nesting from the slugs themselves, where a
+ * section root is a real page with a real translated title, and a field with no writer
+ * and no reader is worse than no field because the next person builds on it.
  */
 export interface ManifestNavNode {
 	slug: string;
-	children?: ManifestNavNode[];
+	/**
+	 * Present when `nav.json` marks this page hidden.
+	 *
+	 * Without it the reader cannot honour what `nav.ts` promises, which is that a hidden
+	 * page stays out of the sidebar, the sitemap and prev/next while remaining published
+	 * and indexable. The reason the page is hidden stays in `nav.json`, because it is for
+	 * whoever has to explain the decision in a year and not for the renderer.
+	 *
+	 * The page stays in this array rather than being removed from it, so `nav` remains
+	 * the answer to "what order are the pages in" and `llmsOrder` and this list continue
+	 * to agree. A hidden page is published, so it belongs in `llms-full.txt`.
+	 */
+	hidden?: true;
 }
 
 export interface SearchIndexRecord {
@@ -487,15 +515,7 @@ export function validateManifestShape(manifest: BundleManifest): string[] {
 	// Every other place a slug appears must name a page that exists. A nav entry or an
 	// llms.txt line pointing at a slug the bundle does not carry renders as a link to
 	// nothing, and the reader is the one who finds out.
-	const navSlugs: string[] = [];
-	const collectNav = (nodes: ManifestNavNode[]): void => {
-		for (const node of nodes) {
-			navSlugs.push(node.slug);
-			if (node.children !== undefined) collectNav(node.children);
-		}
-	};
-	collectNav(manifest.nav);
-	for (const slug of navSlugs) {
+	for (const slug of manifest.nav.map((node) => node.slug)) {
 		if (!(slug in manifest.pages))
 			problems.push(`nav names "${slug}", which is not a page in this bundle.`);
 	}

@@ -45,6 +45,7 @@ export * from './lint.js';
 export * from './locales.js';
 export * from './manifest.js';
 export * from './nav.js';
+export * from './palette.js';
 export * from './page.js';
 export * from './project.js';
 export * from './search.js';

@@ -688,6 +688,223 @@ third of the banned-character partition a project could switch off, tree-layout 
 were reported as `unsupported-syntax`, and three pieces of reader-visible text (a link
 title, an image title, a fence's `title=`) reached no prose segment at all.
 
+## The renderer (step 4)
+
+`src/render/` is the React half and `src/site/` is the part of the same step that has no
+JSX in it. What follows is what would otherwise be rediscovered.
+
+### Two entry points, and the reason is not tidiness
+
+`src/index.ts` stays importable from bare node. `hex-web` imports this package from places
+with no bundler at all: its hand-run `.mjs` guards, its sitemap generation and `hexdocs
+sync` all run under plain node, where a `.css` specifier throws before anything else
+happens. So the barrel re-exports the contracts, the search client, the string tables and
+the address rules and stops there, and everything that renders lives behind
+`@hex-pro/docs/render`, which is the only module that imports the stylesheet.
+
+`test/render/entrypoints.test.ts` walks the actual import graph rather than trusting the
+arrangement, because the failure mode is one convenient re-export added a year from now and
+it breaks a build inside a submodule during a deploy.
+
+The stylesheet is imported by the package rather than by the consumer. Both consumers
+already use a component-level `import './Foo.css'` and both bundlers turn it into a
+code-split chunk linked only on the routes that need it, so a marketing page pays nothing
+and the install has no stylesheet step to forget.
+
+### No colour token reads a consumer's palette any more
+
+The chain used to end `var(--color-accent, #0b76d9)`, which made hex-web need no theming
+configuration at all. Measured against the second consumer, that is unsafe.
+`kcalc-web/front` declares seven of the fifteen host names the table used and stamps
+`data-ground="paper"` on every page, where `--color-ink` is `#1f2c26`. A docs page there
+would paint `--hx-ink` #1f2c26 on `--hx-ground` #0f0e0d, which is 1.33:1, and its accent
+#255745 on the package ground is 2.33:1, which fails the 3:1 a focus ring needs.
+
+A host link is only safe when the whole palette comes from one place and CSS cannot branch
+on whether it does. So every colour ships a literal, and the four tokens that keep a host
+are the three font stacks and the easing curve, neither of which can fail contrast.
+Per-instance theming is unchanged in kind: a consumer sets `--hx-accent` at or above the
+docs root and wins.
+
+### The check the theme contract prescribes is not sufficient on its own
+
+`theme.ts` says to render the shell under a theme class and assert the computed accent
+differs. Measured: the obvious optimisation, one private alias per token declared on the
+docs root so the chain is written once, **passes that check**.
+
+| where the token is rebound | chain at every use site | alias on the docs root |
+| -------------------------- | ----------------------- | ---------------------- |
+| an ancestor                | themed                  | themed                 |
+| the docs root itself       | themed                  | themed                 |
+| a descendant               | themed                  | **not themed**         |
+
+So `scripts/check-paint.mjs` carries a descendant probe, and `test/paint.test.ts` drives
+the whole check against a stylesheet with the alias deliberately reintroduced and asserts
+that exactly one probe fails and it is that one.
+
+Two DOM libraries were measured before that script was written, and neither can do this
+job. jsdom does not resolve `var()` at all and hands back the literal text. happy-dom
+resolves it **at the point of use**, which is the opposite of what a browser does, so it
+returns the correct colour for the broken stylesheet: a theme test written against it is
+worse than no test. happy-dom is still used, for the search dialog and the copy button,
+where events are the thing under test and CSS is not; the files that use it say so.
+
+Chrome over the DevTools Protocol needs no dependency at all, because Node 22 has a global
+`WebSocket`, and GitHub's ubuntu-24.04 image ships Google Chrome and Chromium
+preinstalled. The row is `SKIPPED` where no browser is installed and `FAIL` when the same
+thing happens with `CI` set, because the runner image has one and a check that went quiet
+would take the theming guarantee with it.
+
+### The stylesheet is generated, and the generator is what makes a hard-coded colour impossible
+
+`kit/src/theme/stylesheet.ts` writes `src/render/docs.css` from `THEME_TOKENS` and
+`PALETTE`, and `pnpm schemas` regenerates it beside the JSON Schemas and the rule pack. The
+only thing in it that can produce a colour is `t()`, which expands a name through
+`tokenValue` and throws on a name the tables do not carry. That is the difference between
+detecting a hard-coded `#f2ede6` and being unable to write one.
+
+Three rules the generator cannot enforce, each asserted in
+`kit/test/theme/stylesheet.test.ts`:
+
+**No `@layer`.** Measured against both consumers: hex-web's `app.css` declares none and has
+no bare-element selectors, and kcalc has an `@layer base` that restyles `p` and `h4`. Any
+unlayered rule beats every layered one, so a layered docs stylesheet would lose to kcalc's
+base and win nothing anywhere.
+
+**No physical properties.** They look right in six languages and wrong in Arabic, and the
+build that shows it is the one nobody runs.
+
+**No rule may select on `[data-reduced]`.** The attribute is rendered `false` for the whole
+first paint and flips in an effect, so a rule keyed off it is wrong for exactly the readers
+it is for. `@media (prefers-reduced-motion: reduce)` needs no JavaScript and is the gate.
+The attribute exists so a consumer's own effects can read the same answer.
+
+### The palette is a separate table from the theme tokens
+
+Thirty-one colours: twenty code scopes carried by ten values, five callout kinds and four
+status marks. They are in `src/contracts/palette.ts` rather than in `THEME_TOKENS` for a
+testing reason. `theme.test.ts` measures every token stating a ratio against the ground and
+the surface and pins the covered set in both directions, and a scope colour joining that
+sweep would be held to the wrong ground: a fence sits on `--hx-raised`.
+
+Every entry states both a floor and a **measurement**, and the measurement is checked
+against the value. That grammar came back into `theme.ts` as well, and it found two wrong
+numbers: `dim` said 7.16:1 for a colour that measures 7.39, and `faint` said 3.24:1 for one
+that measures 3.47, neither reachable from any pairing of any colour this package or either
+consumer ships. They went unchecked because the sweep read `Held to`, and `faint`'s whole
+point is that it states no floor.
+
+Colour is never the only channel. `inserted` and `deleted` measure 1.29:1 against each
+other, so the fence emits a gutter character; `lint.ts` bans the two glyphs an author would
+reach for and no glyph that survives the ban is covered by every font in seven languages,
+so a status mark is a CSS shape with a localised accessible name.
+
+### `highlight` indexes the excerpt, and three of four designs read it the other way
+
+`ast.ts` says "1-based line numbers to mark, relative to `startLine`", and that sentence has
+been read both ways. It means the numbers count from the top of the fence. The corpus
+settles it: `reference/api` writes `start=12 highlight="2,5-7"` over ten lines and means the
+guard clause and the three-line constructor call, and `developer/architecture` writes
+`start=48 highlight="3,9"` and means the throw and the alertMessage assignment. Adding
+`startLine` to the numbers marks nothing at all on either block, which renders as a
+perfectly ordinary code block. `test/render/code.test.ts` names both files and both sets of
+indices.
+
+### The table of contents and the anchors come from different lists
+
+`page.headings` is what the compiler filtered for a table of contents and the body is what
+carries the anchors, and neither substitutes for the other. `en/guide/troubleshooting` has
+seven headings in its body and six in `headings`, and the missing one is a depth-4 heading
+that is still a real anchor somebody can link to. A table of contents built from the body
+shows what the compiler deliberately filtered; anchors built from `headings` leave that
+heading unlinkable.
+
+### What step 4 found wrong in step 3
+
+Three defects in the bundle format, each invisible until something tried to render it.
+
+**The manifest's nav could not say which pages are hidden.** `nav.ts` promises a hidden page
+stays out of the sidebar, the sitemap and prev/next while remaining published and
+indexable, and `ManifestNavNode` carried no flag, so the renderer had no way to honour it.
+The corpus has one: `reference/api`. `hidden?: true` is now on the node, the page stays in
+the array so `nav` and `llmsOrder` keep answering the same question, and a hidden page gets
+neither neighbour rather than the two that surrounded it.
+
+**`ManifestNavNode.children` had no writer.** It could not have been right either: a
+`nav.json` group is not a page, so the compiler flattens it, and a group holding two pages
+from different sections is a shape no slug hierarchy can express. The sidebar derives its
+nesting from the slugs, where a section root is a real page with a real translated title.
+
+**`navTitle` never reached the manifest.** Its whole purpose is the sidebar, the sidebar is
+built from the manifest, and the bundle carries no `nav.json`, so the one field that exists
+for the sidebar was the one field the sidebar could not see.
+
+`DocsTranslationNotice.requested` was also widened from `string` to `Locale`, because it
+names the reader's language in a lookup table that has no key for anything else.
+
+### Decisions that were left implicit and are now written down
+
+- The shell owns the only `h1` and emits **no `<main>`**: both consumers' `root.tsx` already
+  renders one, and two is an authoring error a screen reader reports. There is no
+  `headingOffset` and there should not be one.
+- Five translation states map to three notices. `scaffolded` folds to `fallback`, which is
+  the fold `kit/src/compile/search.ts` already applies: the reader is looking at English at
+  a Spanish address, which is what a fallback is to them.
+- A stale translation stays indexable. It is a real translation of a real page in that
+  language, which is not true of the other two causes.
+- An AST major this runtime does not know is a refusal from `docsRoute`, not a page of
+  skipped nodes. `unhandledNode` stays the last resort it says it is, and there is one more
+  thing worth knowing about it: on a long-lived server, once per process is once per deploy.
+- The payload gets one small hand-written shape check at the seam. Zod is in `kit/` and this
+  half may import only `react`, and the alternative is a truncated JSON file becoming an
+  exception inside a React render, which on both consumers client-renders the whole shell.
+- A slug the bundle carries and `site.pages` does not is refused. Serving it would ship a
+  page with no canonical, no alternates and no `noindex`, and it would render perfectly.
+  `pageSkew` names the state at build time.
+- Dates are formatted as the ISO date the bundle already stores, and a consumer passes
+  `formatDate` to change that. `Intl.DateTimeFormat` answers from whatever ICU the runtime
+  was built with, which is a hydration mismatch on a string the reader sees. Plural
+  categories and language names are hand-written tables for the same reason.
+- A control the script has not reached yet renders **disabled** rather than absent or live.
+  A button announced as available that does nothing is worse than no button, and rendering
+  it only after hydration moves the layout under the reader.
+- The search dialog has exactly one exit, the browser's own `close` event, so Escape, the
+  backdrop, the close button and choosing a result all produce one `hexdocs:search-close`.
+
+### Where the interactive behaviour is tested, and why it is not all in one place
+
+The search dialog's keyboard and focus model is a reducer in `src/site/search-state.ts`,
+because the two regressions most likely to ship on that surface are transitions rather than
+renders: Escape dropping focus to the body, and `aria-activedescendant` still naming a row
+that is no longer in the list after a reopen. Both are invisible in a screenshot, fine in a
+golden, and one line each in a node test.
+
+`test/render/dom/` drives what is left, under happy-dom, because `renderToStaticMarkup`
+produces the markup an `onClick` is attached to and never calls it. The one thing that must
+never move into that directory is anything about CSS.
+
+### The render goldens
+
+`test/golden/render/body/` holds eight rendered bodies, each with the reason it was chosen,
+and the set is asserted to contain every member of `AST_NODE_TYPES` in both directions: a
+corpus edit that moves the only fence out of a goldened page regenerates cleanly and would
+otherwise take that arm out of coverage with nothing naming it. Every golden records the
+sha256 of the compiled page it was produced from, so an update run over stale kit output
+fails naming the file rather than writing the wrong answer into something that then looks
+like evidence. `UPDATE_RENDER_GOLDEN=1` rewrites them.
+
+There is no timestamp scan on the goldens. It was tried and refused the wrong thing: the
+API reference contains an ISO timestamp as documentation content, and it is as deterministic
+as the rest of the page. Rendering each body twice and comparing is the property that scan
+was reaching for, and it also catches a random id or an insertion-ordered iteration.
+
+### One thing the design pass said was missing and was not
+
+The runtime search client and the index the toolchain writes were said to have no test
+across the seam. They do: `kit/test/compile/search.test.ts` imports `searchIndex` from
+`src/search/query.js` and runs 81 smoke queries, ten a language, against indexes
+`buildBundle` produced in that same run.
+
 ## Code style
 
 Tabs. TypeScript strict, `verbatimModuleSyntax`, ES2022 / ESNext / bundler. Prettier with

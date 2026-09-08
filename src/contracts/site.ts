@@ -17,6 +17,7 @@
  */
 
 import type { LocalisedLabel } from './frontmatter.js';
+import type { Locale } from './locales.js';
 
 /** The `<project>.docs.json` format version. */
 export const SITE_CONFIG_VERSION = 1;
@@ -153,7 +154,13 @@ export interface DocsRouteVersion {
 export type DocsTranslationNotice =
 	| { state: 'current' }
 	| { state: 'stale'; sourceUpdated: string }
-	| { state: 'fallback'; requested: string };
+	/**
+	 * `requested` is a `Locale`, not a string. It is the language the reader asked for and
+	 * it is what names the language in the notice, so a widened type would put a cast at
+	 * every reader and let a locale that was never normalised reach a lookup table that
+	 * has no key for it.
+	 */
+	| { state: 'fallback'; requested: Locale };
 
 export interface DocsSeo {
 	/**
