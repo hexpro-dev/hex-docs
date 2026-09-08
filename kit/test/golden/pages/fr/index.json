@@ -1,0 +1,409 @@
+{
+	"ast": 1,
+	"project": "fixture-app",
+	"slug": "index",
+	"locale": "fr",
+	"title": "Documentation de Fixture App",
+	"description": "Lisez et r\u00e9\u00e9crivez les enregistrements NDEF d'un badge NFC depuis un iPhone, sans qu'aucune donn\u00e9e ne quitte l'appareil.",
+	"navTitle": "Vue d'ensemble",
+	"audience": "both",
+	"pageKind": "article",
+	"tags": [
+		"scanning"
+	],
+	"toc": true,
+	"headings": [
+		{
+			"id": "ce-que-fait-fixture-app",
+			"depth": 2,
+			"text": "Ce que fait Fixture App"
+		},
+		{
+			"id": "ce-qu-il-vous-faut",
+			"depth": 2,
+			"text": "Ce qu'il vous faut"
+		},
+		{
+			"id": "pour-aller-plus-loin",
+			"depth": 2,
+			"text": "Pour aller plus loin"
+		}
+	],
+	"body": [
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Fixture App transforme un iPhone en lecteur et en enregistreur de badges. L'app s'appuie sur le mat\u00e9riel NFC qu'Apple ouvre aux apps tierces, ce qui impose un badge \u00e0 la fois, la feuille Scan ouverte."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "ce-que-fait-fixture-app",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Ce que fait Fixture App"
+				}
+			],
+			"aliases": [
+				"what-fixture-app-does"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Approchez le bord sup\u00e9rieur du t\u00e9l\u00e9phone d'un badge et l'app d\u00e9code le message NDEF qu'il contient. Vous pouvez ensuite modifier un enregistrement sur place ou \u00e9craser le badge avec un nouveau message. Rien n'est envoy\u00e9 nulle part, et aucun historique de scan ne survit \u00e0 la fermeture de l'app."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Le lecteur reconna\u00eet les charges utiles suivantes :"
+				}
+			]
+		},
+		{
+			"type": "list",
+			"style": "bullet",
+			"tight": true,
+			"children": [
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "les enregistrements texte, avec le code de langue d\u00e9clar\u00e9 par le badge"
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "les enregistrements URI, y compris les raccourcis "
+								},
+								{
+									"type": "inlineCode",
+									"value": "tel:"
+								},
+								{
+									"type": "text",
+									"value": " et "
+								},
+								{
+									"type": "inlineCode",
+									"value": "mailto:"
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "les enregistrements de transfert Wi-Fi \u00e9crits par un t\u00e9l\u00e9phone Android"
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "les charges utiles vCard, affich\u00e9es sous forme de fiche contact"
+								}
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "L'\u00e9criture est "
+				},
+				{
+					"type": "emphasis",
+					"children": [
+						{
+							"type": "text",
+							"value": "destructive"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": ". L'app remplace l'int\u00e9gralit\u00e9 du message NDEF au lieu d'y ajouter des enregistrements : ce que contenait le badge dispara\u00eet d\u00e8s que vous touchez "
+				},
+				{
+					"type": "strong",
+					"children": [
+						{
+							"type": "text",
+							"value": "\u00c9crire"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": ". Un badge verrouill\u00e9 reste lisible, et l'\u00e9criture s'arr\u00eate sur "
+				},
+				{
+					"type": "inlineCode",
+					"value": "Tag is permanently locked"
+				},
+				{
+					"type": "text",
+					"value": " au lieu d'annoncer une r\u00e9ussite."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "ce-qu-il-vous-faut",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Ce qu'il vous faut"
+				}
+			],
+			"aliases": [
+				"what-you-need"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Mat\u00e9riel pris en charge : iPhone 7 ou plus r\u00e9cent, sous iOS 16 ou version ult\u00e9rieure."
+				},
+				{
+					"type": "break"
+				},
+				{
+					"type": "text",
+					"value": "Badges pris en charge : puces ISO 14443 de type A format\u00e9es pour NDEF."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "La "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "reference/chip-support",
+					"children": [
+						{
+							"type": "text",
+							"value": "matrice de compatibilit\u00e9 des puces"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " r\u00e9pertorie toutes les puces avec lesquelles le lecteur a \u00e9t\u00e9 test\u00e9, ainsi que la m\u00e9moire inscriptible de chacune. Un NTAG213 contient 132 octets, soit une URL courte et pas grand-chose d'autre."
+				}
+			]
+		},
+		{
+			"type": "callout",
+			"kind": "note",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "iOS ne transmet un badge \u00e0 une app en arri\u00e8re-plan que si ce badge porte un enregistrement URL correspondant au domaine associ\u00e9 de l'app. Tout le reste exige la feuille Scan ouverte au premier plan."
+						}
+					]
+				}
+			],
+			"title": [
+				{
+					"type": "text",
+					"value": "Lecture en arri\u00e8re-plan"
+				}
+			]
+		},
+		{
+			"type": "callout",
+			"kind": "caution",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "Fixture App a besoin d'environ deux secondes de contact pour terminer une \u00e9criture. Appuyer plus fort ne raccourcit pas ce d\u00e9lai, et un badge pli\u00e9 contre une coque m\u00e9tallique peut fissurer l'antenne log\u00e9e dans l'inlay."
+						}
+					]
+				}
+			],
+			"title": [
+				{
+					"type": "text",
+					"value": "Ne forcez pas un badge contre le t\u00e9l\u00e9phone"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Gardez le badge \u00e0 plat et immobile jusqu'\u00e0 ce que la feuille Scan affiche la barre de confirmation verte. Si l'\u00e9criture est interrompue, le badge conserve son contenu pr\u00e9c\u00e9dent : une \u00e9criture rat\u00e9e peut \u00eatre retent\u00e9e sans risque."
+				}
+			]
+		},
+		{
+			"type": "thematicBreak"
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "pour-aller-plus-loin",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Pour aller plus loin"
+				}
+			],
+			"aliases": [
+				"where-to-go-next"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Commencez par "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "guide/first-tag",
+					"children": [
+						{
+							"type": "text",
+							"value": "Scannez votre premier badge"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": ", qui traite une lecture et une \u00e9criture sur un NTAG215 vierge. Si un badge ne se lit pas du tout, rev\u00e9rifiez d'abord "
+				},
+				{
+					"type": "link",
+					"kind": "anchor",
+					"anchor": "what-you-need",
+					"children": [
+						{
+							"type": "text",
+							"value": "ce qu'il vous faut"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": ". La plupart des \u00e9checs viennent d'une puce que le lecteur ne sait pas adresser, pas d'un d\u00e9faut du badge."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Les num\u00e9ros de build et les notes de version sont publi\u00e9s sur le "
+				},
+				{
+					"type": "link",
+					"kind": "external",
+					"href": "https://example.com/fixture-app",
+					"children": [
+						{
+							"type": "text",
+							"value": "site de Fixture App"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": ". Envoyez vos corrections sur cette documentation \u00e0 "
+				},
+				{
+					"type": "link",
+					"kind": "mailto",
+					"address": "docs@example.com",
+					"children": [
+						{
+							"type": "text",
+							"value": "docs@example.com"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": "."
+				}
+			]
+		}
+	],
+	"translation": {
+		"state": "stale",
+		"sourceUpdated": "2026-01-05T09:00:00Z",
+		"translationUpdated": "2026-02-10T11:30:00Z"
+	},
+	"reading": {
+		"words": 482,
+		"minutes": 3
+	},
+	"snippets": [
+		"safety-note"
+	],
+	"sourceFile": "content/fr/index.md"
+}

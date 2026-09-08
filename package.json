@@ -1,0 +1,55 @@
+{
+	"name": "@hex-pro/docs",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "The hex-docs runtime: React renderer, search client, route derivation and UI strings. Zero runtime dependencies, consumed as TypeScript source through a tsconfig paths entry.",
+	"license": "UNLICENSED",
+	"repository": {
+		"type": "git",
+		"url": "git+ssh://git@github.com/hexpro-dev/hex-docs.git"
+	},
+	"engines": {
+		"node": ">=22"
+	},
+	"packageManager": "pnpm@10.33.0",
+	"main": "./src/index.ts",
+	"types": "./src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./contracts": "./src/contracts/index.ts",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"src"
+	],
+	"scripts": {
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:coverage": "vitest run --coverage",
+		"test:kit": "pnpm --dir kit test",
+		"test:kit:coverage": "pnpm --dir kit test:coverage",
+		"typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p kit/tsconfig.json",
+		"typecheck:verbose": "tsc --noEmit --extendedDiagnostics && tsc --noEmit -p tsconfig.test.json --extendedDiagnostics && tsc --noEmit -p kit/tsconfig.json --extendedDiagnostics",
+		"lint": "node scripts/lint.mjs",
+		"check:deps": "node scripts/check-imports.mjs",
+		"schemas": "pnpm --dir kit schemas",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"format:check:verbose": "prettier --check . --log-level debug",
+		"verify": "node scripts/verify.mjs"
+	},
+	"peerDependencies": {
+		"react": "^19.0.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.0",
+		"@types/react": "^19.0.0",
+		"@vitest/coverage-v8": "^5.0.0",
+		"prettier": "^3.4.0",
+		"react": "^19.2.0",
+		"react-dom": "^19.2.0",
+		"typescript": "^5.7.0",
+		"vitest": "^5.0.0"
+	}
+}

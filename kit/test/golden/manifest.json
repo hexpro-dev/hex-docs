@@ -1,0 +1,1717 @@
+{
+	"manifest": 1,
+	"ast": 1,
+	"project": "fixture-app",
+	"commit": "fc2ef4dea95fb36e5201504e7d06fd2cd0c79b56",
+	"commitTimestamp": "2026-04-02T10:45:00Z",
+	"generator": "@hex-pro/docs-kit@0.1.0",
+	"locales": [
+		"en",
+		"zh",
+		"ar",
+		"es",
+		"ja",
+		"fr",
+		"pt-BR"
+	],
+	"sourceLocale": "en",
+	"pages": {
+		"developer/architecture": {
+			"audience": "developer",
+			"since": "1.1.0",
+			"locales": {
+				"en": {
+					"digest": "5716c93d29e25cf190ea3e3f2be4eabb6ae4facc6ab8b7c5421b6413b1daf177",
+					"bytes": 11965,
+					"rawDigest": "3af884fc7b1387a2e19103b5eaa6480c7409afe5c78db1b9c71d360f733cbbe0",
+					"rawBytes": 4709,
+					"title": "How the app is put together",
+					"description": "The package layout, and which module talks to CoreNFC.",
+					"updatedAt": "2026-01-05T09:00:00Z",
+					"state": "source",
+					"words": 648,
+					"headings": [
+						{
+							"id": "module-graph",
+							"depth": 2
+						},
+						{
+							"id": "where-a-scan-happens",
+							"depth": 2
+						},
+						{
+							"id": "what-was-removed",
+							"depth": 2
+						},
+						{
+							"id": "adding-a-package",
+							"depth": 2
+						}
+					]
+				}
+			}
+		},
+		"guide/first-tag": {
+			"audience": "user",
+			"since": "1.0.0",
+			"locales": {
+				"en": {
+					"digest": "64bc2406c233fa10e2d7b8aa3e1725c77ccdce9a20624faf3bb304fba3fe6b60",
+					"bytes": 8542,
+					"rawDigest": "541120e28cdacbb6cf7fec083dc6990a83eb2a3a1caa2627205e21c641090816",
+					"rawBytes": 4232,
+					"title": "Scan your first tag",
+					"description": "Read an NFC tag with Fixture App for the first time and save what it holds.",
+					"updatedAt": "2026-03-15T08:15:00Z",
+					"state": "source",
+					"words": 723,
+					"headings": [
+						{
+							"id": "before-you-start",
+							"depth": 2
+						},
+						{
+							"id": "read-the-tag",
+							"depth": 2
+						},
+						{
+							"id": "after-the-read",
+							"depth": 2
+						},
+						{
+							"id": "if-the-read-does-not-finish",
+							"depth": 2
+						}
+					]
+				},
+				"zh": {
+					"digest": "5a26283e3db873c4f1a4d97e2a8494bab9e0cbb00bfb45291cb50783d8d9a576",
+					"bytes": 8628,
+					"rawDigest": "b4edc3cad3cbfd79e3471ca8169854f582e08b2fd873a40d8da6280090820753",
+					"rawBytes": 4226,
+					"title": "\u626b\u63cf\u4f60\u7684\u7b2c\u4e00\u4e2a\u6807\u7b7e",
+					"description": "\u7b2c\u4e00\u6b21\u7528Fixture App\u8bfb\u53d6NFC\u6807\u7b7e\uff0c\u5e76\u4fdd\u5b58\u6807\u7b7e\u91cc\u7684\u5185\u5bb9\u3002",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "stale",
+					"words": 1122,
+					"headings": [
+						{
+							"id": "\u5f00\u59cb\u4e4b\u524d",
+							"depth": 2
+						},
+						{
+							"id": "\u8bfb\u53d6\u6807\u7b7e",
+							"depth": 2
+						},
+						{
+							"id": "\u8bfb\u53d6\u4e4b\u540e",
+							"depth": 2
+						},
+						{
+							"id": "\u5982\u679c\u8bfb\u53d6\u6ca1\u6709\u5b8c\u6210",
+							"depth": 2
+						}
+					]
+				},
+				"ar": {
+					"digest": "dc88a1ba39097a00ae1dcfec6e92d889ec89f2b1304fc400a6f71e45dee4b2c0",
+					"bytes": 11026,
+					"rawDigest": "6417456291707dcffeb098c4abfe8bbcd2fe67f9daec68eebb81d822b96680d4",
+					"rawBytes": 6399,
+					"title": "\u0627\u0645\u0633\u062d \u0628\u0637\u0627\u0642\u062a\u0643 \u0627\u0644\u0623\u0648\u0644\u0649",
+					"description": "\u0627\u0642\u0631\u0623 \u0628\u0637\u0627\u0642\u0629 NFC \u0628\u0627\u0633\u062a\u062e\u062f\u0627\u0645 Fixture App \u0644\u0623\u0648\u0644 \u0645\u0631\u0629 \u0648\u0627\u062d\u0641\u0638 \u0645\u0627 \u062a\u062d\u0645\u0644\u0647.",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "stale",
+					"words": 584,
+					"headings": [
+						{
+							"id": "\u0642\u0628\u0644-\u0623\u0646-\u062a\u0628\u062f\u0623",
+							"depth": 2
+						},
+						{
+							"id": "\u0627\u0642\u0631\u0623-\u0627\u0644\u0628\u0637\u0627\u0642\u0629",
+							"depth": 2
+						},
+						{
+							"id": "\u0628\u0639\u062f-\u0627\u0644\u0642\u0631\u0627\u0621\u0629",
+							"depth": 2
+						},
+						{
+							"id": "\u0625\u0630\u0627-\u0644\u0645-\u062a\u0643\u062a\u0645\u0644-\u0627\u0644\u0642\u0631\u0627\u0621\u0629",
+							"depth": 2
+						}
+					]
+				},
+				"es": {
+					"digest": "f0d28724f27fa85388b2bf6ef235d63f5651bfa0aa6e7d91f46cf880b0c4f5eb",
+					"bytes": 9487,
+					"rawDigest": "09759d9025dc5c6e140167df3f9e8a86c73ebc100e89a8b4b19c79009542b1eb",
+					"rawBytes": 4958,
+					"title": "Escanea tu primera etiqueta",
+					"description": "Lee una etiqueta NFC con Fixture App por primera vez y guarda lo que contiene.",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "stale",
+					"words": 789,
+					"headings": [
+						{
+							"id": "antes-de-empezar",
+							"depth": 2
+						},
+						{
+							"id": "lee-la-etiqueta",
+							"depth": 2
+						},
+						{
+							"id": "despu\u00e9s-de-la-lectura",
+							"depth": 2
+						},
+						{
+							"id": "si-la-lectura-no-termina",
+							"depth": 2
+						}
+					]
+				},
+				"ja": {
+					"digest": "e11812c863af24ba279f39d9f6f716c91bb1aebe83b062d32bc13ee0b6be9c9f",
+					"bytes": 10395,
+					"rawDigest": "dc858b058799a98bb1a65bd0b1e5bc5b5c2aeeb4fc922a438570594110b0d649",
+					"rawBytes": 5870,
+					"title": "\u6700\u521d\u306e\u30bf\u30b0\u3092\u30b9\u30ad\u30e3\u30f3\u3059\u308b",
+					"description": "Fixture App \u3067\u521d\u3081\u3066 NFC \u30bf\u30b0\u3092\u8aad\u307f\u53d6\u308a\u3001\u305d\u306e\u5185\u5bb9\u3092\u4fdd\u5b58\u3057\u307e\u3059\u3002",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "stale",
+					"words": 1624,
+					"headings": [
+						{
+							"id": "\u59cb\u3081\u308b\u524d\u306b",
+							"depth": 2
+						},
+						{
+							"id": "\u30bf\u30b0\u3092\u8aad\u307f\u53d6\u308b",
+							"depth": 2
+						},
+						{
+							"id": "\u8aad\u307f\u53d6\u3063\u305f\u3042\u3068",
+							"depth": 2
+						},
+						{
+							"id": "\u8aad\u307f\u53d6\u308a\u304c\u7d42\u308f\u3089\u306a\u3044\u3068\u304d",
+							"depth": 2
+						}
+					]
+				},
+				"fr": {
+					"digest": "2647cb30546c498773be64d6a382afb6cf27db7b1161e7d27fe769c6ac958ee8",
+					"bytes": 9607,
+					"rawDigest": "a744c45848a96bd5d0512e69f76d08b413f93f808db19a2cdf625a69ae39230d",
+					"rawBytes": 5077,
+					"title": "Scannez votre premier badge",
+					"description": "Lisez un badge NFC avec Fixture App pour la premi\u00e8re fois et enregistrez ce qu'il contient.",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "stale",
+					"words": 809,
+					"headings": [
+						{
+							"id": "avant-de-commencer",
+							"depth": 2
+						},
+						{
+							"id": "lire-le-badge",
+							"depth": 2
+						},
+						{
+							"id": "apr\u00e8s-la-lecture",
+							"depth": 2
+						},
+						{
+							"id": "si-la-lecture-n-aboutit-pas",
+							"depth": 2
+						}
+					]
+				},
+				"pt-BR": {
+					"digest": "baedf1738b56b1c7c4a0011add83f6510dcdb487e57a5345898f84968fa521c8",
+					"bytes": 9369,
+					"rawDigest": "96938a1d342c7c1aa956e422f55571f0c4f111d6b6c7107a30ef26d48cc1179d",
+					"rawBytes": 4835,
+					"title": "Leia sua primeira etiqueta",
+					"description": "Leia uma etiqueta NFC com o Fixture App pela primeira vez e salve o que ela cont\u00e9m.",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "stale",
+					"words": 774,
+					"headings": [
+						{
+							"id": "antes-de-come\u00e7ar",
+							"depth": 2
+						},
+						{
+							"id": "leia-a-etiqueta",
+							"depth": 2
+						},
+						{
+							"id": "depois-da-leitura",
+							"depth": 2
+						},
+						{
+							"id": "se-a-leitura-n\u00e3o-terminar",
+							"depth": 2
+						}
+					]
+				}
+			}
+		},
+		"guide/index": {
+			"audience": "both",
+			"since": null,
+			"locales": {
+				"en": {
+					"digest": "84df590d719a277566251c55f4e9e74c8fd17a72caac03eddd4f409a1a1f5179",
+					"bytes": 4443,
+					"rawDigest": "8bda3cb830ea298a68cbbf3ed89e459bafed01300a788bbd439b7079ce85caec",
+					"rawBytes": 2384,
+					"title": "Guide",
+					"description": "How to scan, write and organise NFC tags with Fixture App, from the first scan to a tag that survives a wash cycle.",
+					"updatedAt": "2026-01-05T09:00:00Z",
+					"state": "source",
+					"words": 416,
+					"headings": [
+						{
+							"id": "where-to-start",
+							"depth": 2
+						},
+						{
+							"id": "what-the-guide-does-not-cover",
+							"depth": 2
+						},
+						{
+							"id": "reading-order-for-a-new-deployment",
+							"depth": 2
+						}
+					]
+				},
+				"zh": {
+					"digest": "7906e9fff762f1fba52e18e3c344b706f4b7d4c175a91050f35471be06f8a07d",
+					"bytes": 4484,
+					"rawDigest": "efe4c95178268bff05f0c3542b320aae675b45b814219f47dca293da6868b507",
+					"rawBytes": 2310,
+					"title": "\u6307\u5357",
+					"description": "\u5982\u4f55\u7528Fixture App\u626b\u63cf\u3001\u5199\u5165\u548c\u6574\u7406NFC\u6807\u7b7e\uff0c\u4ece\u7b2c\u4e00\u6b21\u626b\u63cf\u5230\u4e00\u679a\u80fd\u625b\u4f4f\u4e00\u8f6e\u6d17\u8863\u7684\u6807\u7b7e\u3002",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 652,
+					"headings": [
+						{
+							"id": "\u4ece\u54ea\u91cc\u5f00\u59cb",
+							"depth": 2
+						},
+						{
+							"id": "\u672c\u6307\u5357\u4e0d\u6d89\u53ca\u7684\u5185\u5bb9",
+							"depth": 2
+						},
+						{
+							"id": "\u65b0\u90e8\u7f72\u7684\u9605\u8bfb\u987a\u5e8f",
+							"depth": 2
+						}
+					]
+				},
+				"ar": {
+					"digest": "0aa7638400000a945716b5d583fbae0162dfe00ff8f44fa1c7f5a228a05f3028",
+					"bytes": 5990,
+					"rawDigest": "f1168cc11c36dbe6ad7ba04949f5d97a61c514ed7b2e11d3b4a056188760b250",
+					"rawBytes": 3550,
+					"title": "\u0627\u0644\u062f\u0644\u064a\u0644",
+					"description": "\u0643\u064a\u0641\u064a\u0629 \u0645\u0633\u062d \u0628\u0637\u0627\u0642\u0627\u062a NFC \u0648\u0627\u0644\u0643\u062a\u0627\u0628\u0629 \u0639\u0644\u064a\u0647\u0627 \u0648\u062a\u0646\u0638\u064a\u0645\u0647\u0627 \u0628\u0627\u0633\u062a\u062e\u062f\u0627\u0645 Fixture App\u060c \u0645\u0646 \u0623\u0648\u0644 \u0639\u0645\u0644\u064a\u0629 \u0645\u0633\u062d \u0625\u0644\u0649 \u0628\u0637\u0627\u0642\u0629 \u062a\u0635\u0645\u062f \u0623\u0645\u0627\u0645 \u062f\u0648\u0631\u0629 \u063a\u0633\u064a\u0644.",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 324,
+					"headings": [
+						{
+							"id": "\u0645\u0646-\u0623\u064a\u0646-\u062a\u0628\u062f\u0623",
+							"depth": 2
+						},
+						{
+							"id": "\u0645\u0627-\u0644\u0627-\u064a\u063a\u0637\u064a\u0647-\u0627\u0644\u062f\u0644\u064a\u0644",
+							"depth": 2
+						},
+						{
+							"id": "\u062a\u0631\u062a\u064a\u0628-\u0627\u0644\u0642\u0631\u0627\u0621\u0629-\u0639\u0646\u062f-\u0646\u0634\u0631-\u062c\u062f\u064a\u062f",
+							"depth": 2
+						}
+					]
+				},
+				"es": {
+					"digest": "dc82983dd79bb7a309d9c828551784817e0fdc246da57dec7028c27578a514a0",
+					"bytes": 5086,
+					"rawDigest": "0fcd8f55ab44f816cd1be0483271f37bd78cd390f35289513a2cd817e87fe5a1",
+					"rawBytes": 2829,
+					"title": "Gu\u00eda",
+					"description": "C\u00f3mo escanear, escribir y organizar etiquetas NFC con Fixture App, desde el primer escaneo hasta una etiqueta que aguanta un lavado.",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 478,
+					"headings": [
+						{
+							"id": "por-d\u00f3nde-empezar",
+							"depth": 2
+						},
+						{
+							"id": "lo-que-la-gu\u00eda-no-cubre",
+							"depth": 2
+						},
+						{
+							"id": "orden-de-lectura-para-un-despliegue-nuevo",
+							"depth": 2
+						}
+					]
+				},
+				"ja": {
+					"digest": "fcc657ad63148de25becb7e8aa6bed2a9e783d220211c012c9e6a8e82abc1ff4",
+					"bytes": 5562,
+					"rawDigest": "8327726d85a7eb9c43ed819e78f8e24810610f59ee7224b1b5d0d6dea0cbac93",
+					"rawBytes": 3338,
+					"title": "\u30ac\u30a4\u30c9",
+					"description": "\u6700\u521d\u306e\u30b9\u30ad\u30e3\u30f3\u304b\u3089\u6d17\u6fef\u306b\u3082\u8010\u3048\u308b\u30bf\u30b0\u307e\u3067\u3001Fixture App \u3067 NFC \u30bf\u30b0\u3092\u30b9\u30ad\u30e3\u30f3\u3057\u3001\u66f8\u304d\u8fbc\u307f\u3001\u6574\u7406\u3059\u308b\u65b9\u6cd5\u3002",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 979,
+					"headings": [
+						{
+							"id": "\u3069\u3053\u304b\u3089\u59cb\u3081\u308b\u304b",
+							"depth": 2
+						},
+						{
+							"id": "\u30ac\u30a4\u30c9\u3067\u6271\u308f\u306a\u3044\u3053\u3068",
+							"depth": 2
+						},
+						{
+							"id": "\u65b0\u3057\u304f\u5c0e\u5165\u3059\u308b\u3068\u304d\u306e\u8aad\u307f\u65b9",
+							"depth": 2
+						}
+					]
+				},
+				"fr": {
+					"digest": "d8a450b4ff6dad66084b3f77737451e49c3b26fcc507beb5e8b9c2fb56b3064e",
+					"bytes": 5162,
+					"rawDigest": "bc723eebc23591debfd5de5b79ffbb245b597e85fd276659d325ed6eb9cb7fb8",
+					"rawBytes": 2881,
+					"title": "Guide",
+					"description": "Comment scanner, \u00e9crire et organiser des badges NFC avec Fixture App, du premier scan \u00e0 un badge qui survit \u00e0 un passage en machine.",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 471,
+					"headings": [
+						{
+							"id": "par-o\u00f9-commencer",
+							"depth": 2
+						},
+						{
+							"id": "ce-que-le-guide-ne-couvre-pas",
+							"depth": 2
+						},
+						{
+							"id": "ordre-de-lecture-pour-un-nouveau-d\u00e9ploiement",
+							"depth": 2
+						}
+					]
+				},
+				"pt-BR": {
+					"digest": "6aa8c2a625c27017501b9b929d280180c583b7a37bd87a69bfd8a9ce8e3cbe45",
+					"bytes": 4967,
+					"rawDigest": "bee408a5489da213755f7b0fb948a3b28965df10e162ce2359292dd6a95d1de3",
+					"rawBytes": 2707,
+					"title": "Guia",
+					"description": "Como ler, gravar e organizar etiquetas NFC com o Fixture App, da primeira leitura at\u00e9 uma etiqueta que sobrevive a uma lavagem.",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 449,
+					"headings": [
+						{
+							"id": "por-onde-come\u00e7ar",
+							"depth": 2
+						},
+						{
+							"id": "o-que-o-guia-n\u00e3o-cobre",
+							"depth": 2
+						},
+						{
+							"id": "ordem-de-leitura-para-uma-nova-implanta\u00e7\u00e3o",
+							"depth": 2
+						}
+					]
+				}
+			}
+		},
+		"guide/troubleshooting": {
+			"audience": "user",
+			"since": null,
+			"locales": {
+				"en": {
+					"digest": "155d76dca8eb621502b971e87a528a4dcbc7cbd5cb336bd8756b3fb3853c0876",
+					"bytes": 8344,
+					"rawDigest": "d7137ad7467f78e727333c3982f36a7151f7c529d5469847d199977133585085",
+					"rawBytes": 4169,
+					"title": "When a scan does not work",
+					"description": "Common reasons a scan fails, and what to do about each one.",
+					"updatedAt": "2026-01-05T09:00:00Z",
+					"state": "source",
+					"words": 746,
+					"headings": [
+						{
+							"id": "why-does-nothing-happen-when-i-hold-a-tag-to-my-phone",
+							"depth": 2
+						},
+						{
+							"id": "check-the-tag-before-you-blame-the-phone",
+							"depth": 3
+						},
+						{
+							"id": "tags-that-read-once-and-then-go-quiet",
+							"depth": 4
+						},
+						{
+							"id": "why-does-the-scan-stop-halfway-through",
+							"depth": 2
+						},
+						{
+							"id": "why-can-i-read-a-tag-but-not-write-to-it",
+							"depth": 2
+						},
+						{
+							"id": "why-does-the-app-say-unsupported-tag-type",
+							"depth": 2
+						},
+						{
+							"id": "what-should-i-send-in-when-i-report-a-scan-problem",
+							"depth": 2
+						}
+					]
+				},
+				"ar": {
+					"digest": "2325366bd5dcbdb8a0f52d8ea5968f5cf439f3e2e3729bc5ed07574e7c89c02f",
+					"bytes": 11400,
+					"rawDigest": "e17251559e1eee06de5d37af9cb8d5ed4ca02ff31b60d9cb16104e5991369772",
+					"rawBytes": 6258,
+					"title": "\u0639\u0646\u062f\u0645\u0627 \u0644\u0627 \u064a\u0646\u062c\u062d \u0627\u0644\u0645\u0633\u062d",
+					"description": "\u0627\u0644\u0623\u0633\u0628\u0627\u0628 \u0627\u0644\u0634\u0627\u0626\u0639\u0629 \u0644\u0641\u0634\u0644 \u0639\u0645\u0644\u064a\u0629 \u0627\u0644\u0645\u0633\u062d\u060c \u0648\u0645\u0627 \u064a\u0646\u0628\u063a\u064a \u0641\u0639\u0644\u0647 \u0641\u064a \u0643\u0644 \u062d\u0627\u0644\u0629.",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 578,
+					"headings": [
+						{
+							"id": "\u0644\u0645\u0627\u0630\u0627-\u0644\u0627-\u064a\u062d\u062f\u062b-\u0634\u064a\u0621-\u0639\u0646\u062f\u0645\u0627-\u0623\u0636\u0639-\u0628\u0637\u0627\u0642\u0629-\u0639\u0644\u0649-\u0647\u0627\u062a\u0641\u064a",
+							"depth": 2
+						},
+						{
+							"id": "\u0627\u0641\u062d\u0635-\u0627\u0644\u0628\u0637\u0627\u0642\u0629-\u0642\u0628\u0644-\u0623\u0646-\u062a\u0644\u0648\u0645-\u0627\u0644\u0647\u0627\u062a\u0641",
+							"depth": 3
+						},
+						{
+							"id": "\u0628\u0637\u0627\u0642\u0627\u062a-\u062a-\u0642\u0631\u0623-\u0645\u0631\u0629-\u0648\u0627\u062d\u062f\u0629-\u062b\u0645-\u062a\u0635\u0645\u062a",
+							"depth": 4
+						},
+						{
+							"id": "\u0644\u0645\u0627\u0630\u0627-\u064a\u062a\u0648\u0642\u0641-\u0627\u0644\u0645\u0633\u062d-\u0641\u064a-\u0645\u0646\u062a\u0635\u0641\u0647",
+							"depth": 2
+						},
+						{
+							"id": "\u0644\u0645\u0627\u0630\u0627-\u0623\u0633\u062a\u0637\u064a\u0639-\u0642\u0631\u0627\u0621\u0629-\u0628\u0637\u0627\u0642\u0629-\u062f\u0648\u0646-\u0627\u0644\u0643\u062a\u0627\u0628\u0629-\u0639\u0644\u064a\u0647\u0627",
+							"depth": 2
+						},
+						{
+							"id": "\u0644\u0645\u0627\u0630\u0627-\u064a\u0642\u0648\u0644-\u0627\u0644\u062a\u0637\u0628\u064a\u0642-\u0646\u0648\u0639-\u0627\u0644\u0628\u0637\u0627\u0642\u0629-\u063a\u064a\u0631-\u0645\u062f\u0639\u0648\u0645",
+							"depth": 2
+						},
+						{
+							"id": "\u0645\u0627\u0630\u0627-\u0623\u0631\u0633\u0644-\u0639\u0646\u062f\u0645\u0627-\u0623\u0628\u0644-\u063a-\u0639\u0646-\u0645\u0634\u0643\u0644\u0629-\u0641\u064a-\u0627\u0644\u0645\u0633\u062d",
+							"depth": 2
+						}
+					]
+				},
+				"ja": {
+					"digest": "e08e1acfbdc6d145088c9eb4f4577d42b77191052a494ea2e73739098523fdd5",
+					"bytes": 10944,
+					"rawDigest": "69a0a4c9085defa2e6eff8f41771b41eb94d0c3c9c8ec41b521bb45f4c76617e",
+					"rawBytes": 5948,
+					"title": "\u30b9\u30ad\u30e3\u30f3\u3067\u304d\u306a\u3044\u3068\u304d",
+					"description": "\u30b9\u30ad\u30e3\u30f3\u304c\u5931\u6557\u3059\u308b\u3088\u304f\u3042\u308b\u539f\u56e0\u3068\u3001\u305d\u308c\u305e\u308c\u3078\u306e\u5bfe\u51e6\u65b9\u6cd5\u3002",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 1724,
+					"headings": [
+						{
+							"id": "\u30bf\u30b0\u3092\u7aef\u672b\u306b\u5f53\u3066\u3066\u3082\u4f55\u3082\u8d77\u304d\u306a\u3044\u306e\u306f\u306a\u305c\u3067\u3059\u304b",
+							"depth": 2
+						},
+						{
+							"id": "\u7aef\u672b\u3092\u7591\u3046\u524d\u306b\u30bf\u30b0\u3092\u78ba\u304b\u3081\u308b",
+							"depth": 3
+						},
+						{
+							"id": "\u4e00\u5ea6\u8aad\u3081\u305f\u3042\u3068\u7121\u53cd\u5fdc\u306b\u306a\u308b\u30bf\u30b0",
+							"depth": 4
+						},
+						{
+							"id": "\u30b9\u30ad\u30e3\u30f3\u304c\u9014\u4e2d\u3067\u6b62\u307e\u308b\u306e\u306f\u306a\u305c\u3067\u3059\u304b",
+							"depth": 2
+						},
+						{
+							"id": "\u30bf\u30b0\u3092\u8aad\u3081\u308b\u306e\u306b\u66f8\u304d\u8fbc\u3081\u306a\u3044\u306e\u306f\u306a\u305c\u3067\u3059\u304b",
+							"depth": 2
+						},
+						{
+							"id": "\u30a2\u30d7\u30ea\u306b-\u30b5\u30dd\u30fc\u30c8\u3055\u308c\u3066\u3044\u306a\u3044\u30bf\u30b0\u306e\u7a2e\u985e-\u3068\u8868\u793a\u3055\u308c\u308b\u306e\u306f\u306a\u305c\u3067\u3059\u304b",
+							"depth": 2
+						},
+						{
+							"id": "\u30b9\u30ad\u30e3\u30f3\u306e\u554f\u984c\u3092\u5831\u544a\u3059\u308b\u3068\u304d-\u4f55\u3092\u9001\u308c\u3070\u3088\u3044\u3067\u3059\u304b",
+							"depth": 2
+						}
+					]
+				}
+			}
+		},
+		"index": {
+			"audience": "both",
+			"since": null,
+			"locales": {
+				"en": {
+					"digest": "efe3811721613fbf90668c771e0c15dcf54a13681a9a63d4f2b7a93af91e9160",
+					"bytes": 5579,
+					"rawDigest": "211d5614a08613c299307b3a46bf98a99961b81b650b2e274bbcb2b9328a439b",
+					"rawBytes": 2468,
+					"title": "Fixture App documentation",
+					"description": "Read and rewrite the NDEF records on an NFC tag from an iPhone, with nothing leaving the device.",
+					"updatedAt": "2026-01-05T09:00:00Z",
+					"state": "source",
+					"words": 410,
+					"headings": [
+						{
+							"id": "what-fixture-app-does",
+							"depth": 2
+						},
+						{
+							"id": "what-you-need",
+							"depth": 2
+						},
+						{
+							"id": "where-to-go-next",
+							"depth": 2
+						}
+					]
+				},
+				"zh": {
+					"digest": "2abfb659c9734c47c51fee614b1106ac43d5be69ba36bff982a8fbb817a94917",
+					"bytes": 5768,
+					"rawDigest": "48886906935b4615f653af1617e30fd1eb88e7d3d94923f20e10870c19e35cca",
+					"rawBytes": 2555,
+					"title": "Fixture App\u6587\u6863",
+					"description": "\u5728iPhone\u4e0a\u8bfb\u53d6\u5e76\u91cd\u5199NFC\u6807\u7b7e\u4e0a\u7684NDEF\u8bb0\u5f55\uff0c\u6240\u6709\u6570\u636e\u90fd\u4e0d\u4f1a\u79bb\u5f00\u8bbe\u5907\u3002",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 686,
+					"headings": [
+						{
+							"id": "fixture-app\u80fd\u505a\u4ec0\u4e48",
+							"depth": 2
+						},
+						{
+							"id": "\u4f60\u9700\u8981\u4ec0\u4e48",
+							"depth": 2
+						},
+						{
+							"id": "\u63a5\u4e0b\u6765\u770b\u4ec0\u4e48",
+							"depth": 2
+						}
+					]
+				},
+				"ar": {
+					"digest": "85ad13a38748019894db9bc42837cc282ecfcab6b9e3d6d744527ddfa2d5a0b1",
+					"bytes": 7191,
+					"rawDigest": "71c38d2c5fc49b879f5f7d1167746677396dbdddb378d2cf9447b4d916bfaa07",
+					"rawBytes": 3785,
+					"title": "\u062a\u0648\u062b\u064a\u0642 Fixture App",
+					"description": "\u0627\u0642\u0631\u0623 \u0633\u062c\u0644\u0627\u062a NDEF \u0639\u0644\u0649 \u0628\u0637\u0627\u0642\u0629 NFC \u0648\u0623\u0639\u062f \u0643\u062a\u0627\u0628\u062a\u0647\u0627 \u0645\u0646 iPhone\u060c \u062f\u0648\u0646 \u0623\u0646 \u064a\u063a\u0627\u062f\u0631 \u0627\u0644\u062c\u0647\u0627\u0632 \u0623\u064a \u0634\u064a\u0621.",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 361,
+					"headings": [
+						{
+							"id": "\u0645\u0627-\u0627\u0644\u0630\u064a-\u064a\u0641\u0639\u0644\u0647-fixture-app",
+							"depth": 2
+						},
+						{
+							"id": "\u0645\u0627-\u062a\u062d\u062a\u0627\u062c-\u0625\u0644\u064a\u0647",
+							"depth": 2
+						},
+						{
+							"id": "\u0625\u0644\u0649-\u0623\u064a\u0646-\u062a\u0630\u0647\u0628-\u0628\u0639\u062f-\u0630\u0644\u0643",
+							"depth": 2
+						}
+					]
+				},
+				"es": {
+					"digest": "c3c30feb1efe1911287ace5975c936afadd804ef3c1939fec2b4d7042c6b2ed3",
+					"bytes": 6196,
+					"rawDigest": "6c3aa28042ec6d842f4674e930b9df7546ff0cf10897e5b43dfff64febd8ed4d",
+					"rawBytes": 2952,
+					"title": "Documentaci\u00f3n de Fixture App",
+					"description": "Lee y reescribe los registros NDEF de una etiqueta NFC desde un iPhone, sin que nada salga del dispositivo.",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 468,
+					"headings": [
+						{
+							"id": "qu\u00e9-hace-fixture-app",
+							"depth": 2
+						},
+						{
+							"id": "qu\u00e9-necesitas",
+							"depth": 2
+						},
+						{
+							"id": "por-d\u00f3nde-seguir",
+							"depth": 2
+						}
+					]
+				},
+				"ja": {
+					"digest": "45bc3561853563b9ae349070eb6b9d8c62aea6bcf803d3a1cff9af15ba8e1516",
+					"bytes": 6846,
+					"rawDigest": "cef40e2d326771c8ef0b21b849b817e8bf1604b7ab449040b93987de8815b494",
+					"rawBytes": 3581,
+					"title": "Fixture App \u30c9\u30ad\u30e5\u30e1\u30f3\u30c8",
+					"description": "iPhone \u304b\u3089 NFC \u30bf\u30b0\u306e NDEF \u30ec\u30b3\u30fc\u30c9\u3092\u8aad\u307f\u66f8\u304d\u3057\u307e\u3059\u3002\u30c7\u30fc\u30bf\u304c\u7aef\u672b\u306e\u5916\u306b\u51fa\u308b\u3053\u3068\u306f\u3042\u308a\u307e\u305b\u3093\u3002",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 996,
+					"headings": [
+						{
+							"id": "fixture-app-\u3067\u3067\u304d\u308b\u3053\u3068",
+							"depth": 2
+						},
+						{
+							"id": "\u5fc5\u8981\u306a\u3082\u306e",
+							"depth": 2
+						},
+						{
+							"id": "\u6b21\u306b\u8aad\u3080\u3082\u306e",
+							"depth": 2
+						}
+					]
+				},
+				"fr": {
+					"digest": "adc0a8b1bf37a6ba3c620013048ba9b3c33f8ddd3c5e19941954d0f402b75541",
+					"bytes": 6318,
+					"rawDigest": "3b40df311aac9f19aa051326b989988627ea10fc95d91b0c3126b65481b360b5",
+					"rawBytes": 3030,
+					"title": "Documentation de Fixture App",
+					"description": "Lisez et r\u00e9\u00e9crivez les enregistrements NDEF d'un badge NFC depuis un iPhone, sans qu'aucune donn\u00e9e ne quitte l'appareil.",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 482,
+					"headings": [
+						{
+							"id": "ce-que-fait-fixture-app",
+							"depth": 2
+						},
+						{
+							"id": "ce-qu-il-vous-faut",
+							"depth": 2
+						},
+						{
+							"id": "pour-aller-plus-loin",
+							"depth": 2
+						}
+					]
+				},
+				"pt-BR": {
+					"digest": "bfbc9537cb7ea487a59686a96da60fc9610eef6fee84dbe9662e273862781456",
+					"bytes": 6181,
+					"rawDigest": "de3dbb7a1681bf5234f2fa59ca85106fbb5d149f027ba4535cddfbd478f7167f",
+					"rawBytes": 2906,
+					"title": "Documenta\u00e7\u00e3o do Fixture App",
+					"description": "Leia e regrave os registros NDEF de uma etiqueta NFC a partir de um iPhone, sem que nada saia do dispositivo.",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 462,
+					"headings": [
+						{
+							"id": "o-que-o-fixture-app-faz",
+							"depth": 2
+						},
+						{
+							"id": "o-que-voc\u00ea-precisa",
+							"depth": 2
+						},
+						{
+							"id": "para-onde-ir-agora",
+							"depth": 2
+						}
+					]
+				}
+			}
+		},
+		"reference/api": {
+			"audience": "developer",
+			"since": null,
+			"locales": {
+				"en": {
+					"digest": "de02fddbe45e89e81723a694f5c31870dc6545757c82fddffcffa1ed98a87ae2",
+					"bytes": 15213,
+					"rawDigest": "8bce0f662eb72712b018727ce204011225cccc18ffa29cb51797e3c72c9e6b59",
+					"rawBytes": 5861,
+					"title": "Tag session API",
+					"description": "The TagSession type, its delegate callbacks, error cases and the JSON payload Fixture App writes to a tag.",
+					"updatedAt": "2026-01-05T09:00:00Z",
+					"state": "source",
+					"words": 782,
+					"headings": [
+						{
+							"id": "starting-a-session",
+							"depth": 2
+						},
+						{
+							"id": "the-state-machine",
+							"depth": 2
+						},
+						{
+							"id": "delegate-callbacks",
+							"depth": 2
+						},
+						{
+							"id": "errors",
+							"depth": 2
+						},
+						{
+							"id": "the-payload",
+							"depth": 2
+						},
+						{
+							"id": "debug-output",
+							"depth": 2
+						},
+						{
+							"id": "driving-the-scan-ring",
+							"depth": 2
+						}
+					]
+				}
+			}
+		},
+		"reference/chip-support": {
+			"audience": "both",
+			"since": null,
+			"locales": {
+				"en": {
+					"digest": "30f871f15c0f483a270b49afa7a1e4bfa5e090a393a0afd576650dca321a7d16",
+					"bytes": 8873,
+					"rawDigest": "b540875ee9e4f24661225f2136d38855999d06f47e0d25586e8a03ebee3e224e",
+					"rawBytes": 3555,
+					"title": "Chip support matrix",
+					"description": "Which NFC chips Fixture App can read and write on iOS, and the caveats that apply to each one.",
+					"updatedAt": "2026-01-05T09:00:00Z",
+					"state": "source",
+					"words": 557,
+					"headings": [
+						{
+							"id": "what-the-caveats-mean",
+							"depth": 2
+						},
+						{
+							"id": "if-a-chip-is-not-listed",
+							"depth": 2
+						}
+					]
+				},
+				"zh": {
+					"digest": "b49da0a9d3c92da349a1f40fc608a99f6ec9888fef312c2d19f4bf553ffc3948",
+					"bytes": 9061,
+					"rawDigest": "0c6e8d174c44cd4ec928f3dfbc3d542b98fce8c81c1f8eb681c014e905c6fddc",
+					"rawBytes": 3589,
+					"title": "\u82af\u7247\u652f\u6301\u77e9\u9635",
+					"description": "Fixture App\u5728iOS\u4e0a\u80fd\u8bfb\u3001\u80fd\u5199\u54ea\u4e9bNFC\u82af\u7247\uff0c\u4ee5\u53ca\u6bcf\u4e00\u6b3e\u5404\u81ea\u7684\u6ce8\u610f\u4e8b\u9879\u3002",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 845,
+					"headings": [
+						{
+							"id": "\u8fd9\u4e9b\u6ce8\u610f\u4e8b\u9879\u662f\u4ec0\u4e48\u610f\u601d",
+							"depth": 2
+						},
+						{
+							"id": "\u5982\u679c\u67d0\u6b3e\u82af\u7247\u4e0d\u5728\u8868\u91cc",
+							"depth": 2
+						}
+					]
+				},
+				"ar": {
+					"digest": "2b44c50608e549fe13831b0e421c1ede3097bb3c37d10b6166031b64d0934434",
+					"bytes": 10685,
+					"rawDigest": "a58ab469d4e474924e77fc0746bbc6e2fede621e9dc715ca19020dfffd5b8b4a",
+					"rawBytes": 5054,
+					"title": "\u062c\u062f\u0648\u0644 \u062f\u0639\u0645 \u0627\u0644\u0634\u0631\u0627\u0626\u062d",
+					"description": "\u0623\u064a \u0634\u0631\u0627\u0626\u062d NFC \u064a\u0633\u062a\u0637\u064a\u0639 Fixture App \u0642\u0631\u0627\u0621\u062a\u0647\u0627 \u0648\u0627\u0644\u0643\u062a\u0627\u0628\u0629 \u0639\u0644\u064a\u0647\u0627 \u0639\u0644\u0649 iOS\u060c \u0648\u0627\u0644\u062a\u062d\u0641\u0638\u0627\u062a \u0627\u0644\u0645\u0646\u0637\u0628\u0642\u0629 \u0639\u0644\u0649 \u0643\u0644 \u0648\u0627\u062d\u062f\u0629.",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 480,
+					"headings": [
+						{
+							"id": "\u0645\u0627-\u0627\u0644\u0630\u064a-\u062a\u0639\u0646\u064a\u0647-\u0627\u0644\u062a\u062d\u0641\u0638\u0627\u062a",
+							"depth": 2
+						},
+						{
+							"id": "\u0625\u0630\u0627-\u0644\u0645-\u062a\u0643\u0646-\u0627\u0644\u0634\u0631\u064a\u062d\u0629-\u0645\u062f\u0631\u062c\u0629",
+							"depth": 2
+						}
+					]
+				},
+				"es": {
+					"digest": "7ffcf7a4e4f5fd8d12c3faab1e01fbcbd48ddc6aa8a06f5ba392d8d08ade40c0",
+					"bytes": 9039,
+					"rawDigest": "7dd31d8fc103522676a2ba628aa7d72c278143ac9b5ed4225b6a39449024dace",
+					"rawBytes": 3673,
+					"title": "Chip support matrix",
+					"description": "Which NFC chips Fixture App can read and write on iOS, and the caveats that apply to each one.",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "scaffolded",
+					"words": 573,
+					"headings": [
+						{
+							"id": "what-the-caveats-mean",
+							"depth": 2
+						},
+						{
+							"id": "if-a-chip-is-not-listed",
+							"depth": 2
+						}
+					]
+				},
+				"ja": {
+					"digest": "702339bd3ca629b26d5024c879ec214dc02749087bec1ffe9aec35fadf54bd9a",
+					"bytes": 10351,
+					"rawDigest": "e721ccecade2ce9e2256900aa497316e2a6f5b0811d8906b85b7562805109843",
+					"rawBytes": 4918,
+					"title": "\u30c1\u30c3\u30d7\u5bfe\u5fdc\u8868",
+					"description": "Fixture App \u304c iOS \u3067\u8aad\u307f\u66f8\u304d\u3067\u304d\u308b NFC \u30c1\u30c3\u30d7\u3068\u3001\u305d\u308c\u305e\u308c\u306b\u5f53\u3066\u306f\u307e\u308b\u6ce8\u610f\u70b9\u3002",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 1263,
+					"headings": [
+						{
+							"id": "\u6ce8\u610f\u70b9\u306e\u610f\u5473",
+							"depth": 2
+						},
+						{
+							"id": "\u4e00\u89a7\u306b\u306a\u3044\u30c1\u30c3\u30d7\u306e\u5834\u5408",
+							"depth": 2
+						}
+					]
+				}
+			}
+		},
+		"reference/index": {
+			"audience": "both",
+			"since": null,
+			"locales": {
+				"en": {
+					"digest": "295017b46e41fab9f2ff4e9d5cadb30f47dd6c4fd2e0041803752846d593280e",
+					"bytes": 3291,
+					"rawDigest": "fc0c7e5f3f8661b6e400d8731486ec1f0173bf77ada1291f383cbcf98b54b037",
+					"rawBytes": 1157,
+					"title": "Reference",
+					"description": "Lookup pages for tag hardware support and the Tag session API in Fixture App.",
+					"updatedAt": "2026-01-05T09:00:00Z",
+					"state": "source",
+					"words": 187,
+					"headings": [
+						{
+							"id": "what-is-here",
+							"depth": 2
+						},
+						{
+							"id": "conventions",
+							"depth": 2
+						}
+					]
+				},
+				"zh": {
+					"digest": "1b1f87a6fb13f22c3825a591fb112b6f6efab3924e01500f8bbf70f0e1c87946",
+					"bytes": 3362,
+					"rawDigest": "0230c330aac1ea389618e271368399637f95b9a67f18145c4c74ba3160d8528b",
+					"rawBytes": 1155,
+					"title": "\u53c2\u8003",
+					"description": "Fixture App\u4e2d\u6807\u7b7e\u786c\u4ef6\u652f\u6301\u548c\u6807\u7b7e\u4f1a\u8bddAPI\u7684\u901f\u67e5\u9875\u9762\u3002",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 306,
+					"headings": [
+						{
+							"id": "\u8fd9\u91cc\u6709\u4ec0\u4e48",
+							"depth": 2
+						},
+						{
+							"id": "\u7ea6\u5b9a",
+							"depth": 2
+						}
+					]
+				},
+				"ar": {
+					"digest": "02e7f29ac69f989e95285c8e8d3a0fd3f6706f9e17cf064912481706a8166892",
+					"bytes": 4159,
+					"rawDigest": "4ff84c7496c9aaf359be7172614c21cf952acf099bd10f5553a3cfd3670814d1",
+					"rawBytes": 1754,
+					"title": "\u0627\u0644\u0645\u0631\u062c\u0639",
+					"description": "\u0635\u0641\u062d\u0627\u062a \u0628\u062d\u062b \u0633\u0631\u064a\u0639 \u0639\u0646 \u062f\u0639\u0645 \u0639\u062a\u0627\u062f \u0627\u0644\u0628\u0637\u0627\u0642\u0627\u062a \u0648\u0639\u0646 \u0648\u0627\u062c\u0647\u0629 \u062c\u0644\u0633\u0629 \u0627\u0644\u0628\u0637\u0627\u0642\u0629 \u0641\u064a Fixture App.",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 157,
+					"headings": [
+						{
+							"id": "\u0645\u0627-\u0627\u0644\u0645\u0648\u062c\u0648\u062f-\u0647\u0646\u0627",
+							"depth": 2
+						},
+						{
+							"id": "\u0627\u0644\u0627\u0635\u0637\u0644\u0627\u062d\u0627\u062a",
+							"depth": 2
+						}
+					]
+				},
+				"es": {
+					"digest": "1a255a30257c794109bde8807776d4f208534d0d905f5df59edcfb0b4e77899a",
+					"bytes": 3705,
+					"rawDigest": "016e137406f768bb7516f6856689946e232da64a24eb149f0c6ad62b882c6a12",
+					"rawBytes": 1368,
+					"title": "Referencia",
+					"description": "P\u00e1ginas de consulta sobre la compatibilidad del hardware de etiquetas y la API de sesi\u00f3n de etiqueta de Fixture App.",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 216,
+					"headings": [
+						{
+							"id": "qu\u00e9-hay-aqu\u00ed",
+							"depth": 2
+						},
+						{
+							"id": "convenciones",
+							"depth": 2
+						}
+					]
+				},
+				"ja": {
+					"digest": "a2e613a32d08591c1dcfb5f9c0bfd10233f2b674073bf991c8a017dde95ef186",
+					"bytes": 3825,
+					"rawDigest": "60f63088679e23c081079d6f964f80cd2cb68df8a32b8391f4a5a25db7067585",
+					"rawBytes": 1587,
+					"title": "\u30ea\u30d5\u30a1\u30ec\u30f3\u30b9",
+					"description": "Fixture App \u306e\u30bf\u30b0\u30cf\u30fc\u30c9\u30a6\u30a7\u30a2\u5bfe\u5fdc\u72b6\u6cc1\u3068\u30bf\u30b0\u30bb\u30c3\u30b7\u30e7\u30f3 API \u306e\u53c2\u7167\u30da\u30fc\u30b8\u3002",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 441,
+					"headings": [
+						{
+							"id": "\u3053\u3053\u306b\u3042\u308b\u3082\u306e",
+							"depth": 2
+						},
+						{
+							"id": "\u8868\u8a18",
+							"depth": 2
+						}
+					]
+				},
+				"fr": {
+					"digest": "e37f8b12f298ce5ac559c2124f172007a6d4ac512b8923b8fa6b02b9e8ce0b8d",
+					"bytes": 3800,
+					"rawDigest": "a477a257a5bf5503e099d85463f7f4021bf910dcb7eaa9b8faac96593977a22b",
+					"rawBytes": 1459,
+					"title": "R\u00e9f\u00e9rence",
+					"description": "Pages de consultation sur la compatibilit\u00e9 mat\u00e9rielle des badges et sur l'API de session de badge dans Fixture App.",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 228,
+					"headings": [
+						{
+							"id": "ce-que-vous-trouverez-ici",
+							"depth": 2
+						},
+						{
+							"id": "conventions",
+							"depth": 2
+						}
+					]
+				},
+				"pt-BR": {
+					"digest": "739989cb2c54fc0403650b9d41416a68b6929b196c305e092fc05c8c3e4930fa",
+					"bytes": 3729,
+					"rawDigest": "2769f2cf494c15d5482318d0c1c1dc72328f09c66ff9ebf9b692c711e59ac097",
+					"rawBytes": 1386,
+					"title": "Refer\u00eancia",
+					"description": "P\u00e1ginas de consulta sobre a compatibilidade de hardware das etiquetas e a API de sess\u00e3o de etiqueta do Fixture App.",
+					"updatedAt": "2026-02-10T11:30:00Z",
+					"state": "current",
+					"words": 215,
+					"headings": [
+						{
+							"id": "o-que-h\u00e1-aqui",
+							"depth": 2
+						},
+						{
+							"id": "conven\u00e7\u00f5es",
+							"depth": 2
+						}
+					]
+				}
+			}
+		}
+	},
+	"nav": [
+		{
+			"slug": "index"
+		},
+		{
+			"slug": "guide/index"
+		},
+		{
+			"slug": "guide/first-tag"
+		},
+		{
+			"slug": "guide/troubleshooting"
+		},
+		{
+			"slug": "reference/index"
+		},
+		{
+			"slug": "reference/chip-support"
+		},
+		{
+			"slug": "reference/api"
+		},
+		{
+			"slug": "developer/architecture"
+		}
+	],
+	"redirects": {
+		"first-tag": "guide/first-tag"
+	},
+	"assets": [
+		{
+			"sha256": "b9922ff72601d007f508e4b11a31c7cd3215b8115dfd0ab2da6a584f98bbacb7",
+			"ext": "png",
+			"bytes": 421,
+			"width": 160,
+			"height": 200,
+			"colour": {
+				"space": "srgb",
+				"probe": "untagged"
+			},
+			"lqip": null
+		},
+		{
+			"sha256": "e58ff68f6c7bd6e46d20ea7549e3b2fd36a18753a219eac80b64b7cb1bce6949",
+			"ext": "svg",
+			"bytes": 336,
+			"width": 24,
+			"height": 24,
+			"colour": {
+				"space": "srgb",
+				"probe": "vector"
+			},
+			"lqip": null
+		}
+	],
+	"search": {
+		"en": {
+			"digest": "634122d8b0d56d71fb8f1d06c2011b5ff4cba856e8c2c89ddb095caa9886c68d",
+			"bytes": 39842,
+			"records": 40,
+			"terms": 1108
+		},
+		"zh": {
+			"digest": "083b5aae084c49531413254d6003efe20fe83d984a7d50fb3d72c1cf70238e53",
+			"bytes": 69703,
+			"records": 40,
+			"terms": 2581
+		},
+		"ar": {
+			"digest": "242bea76311c580e235d6606c82e1363449d0a2b5213f6a357e3f462a219f904",
+			"bytes": 53953,
+			"records": 40,
+			"terms": 1664
+		},
+		"es": {
+			"digest": "e11f479aa4ef27d8c1c02a498772328e5219dc2e7f04f26597f9217ea1efe8fa",
+			"bytes": 46052,
+			"records": 40,
+			"terms": 1435
+		},
+		"ja": {
+			"digest": "d898e01f4947ff02852fc67af7ff9365f59ea389915e56331025be2460fd4be2",
+			"bytes": 82956,
+			"records": 40,
+			"terms": 2836
+		},
+		"fr": {
+			"digest": "9cf29107ad50f7de674f76019fae36c6af54f1da343a5b9a8cd31fa0fff5f8f6",
+			"bytes": 46344,
+			"records": 40,
+			"terms": 1428
+		},
+		"pt-BR": {
+			"digest": "d1927528483277a94c941ed182f11ce7da16af7e7126d01320e077a6b7b75073",
+			"bytes": 45932,
+			"records": 40,
+			"terms": 1433
+		}
+	},
+	"llms": {
+		"en": {
+			"digest": "09c22e89a5047e85fba8552858b767c2dbe966c01f4a6556dc6204752373c359",
+			"bytes": 1173
+		},
+		"zh": {
+			"digest": "891a81fce4b074e7c72e8cc28c411e2959c65e4721bb664201aca73e68e70cf1",
+			"bytes": 1146
+		},
+		"ar": {
+			"digest": "c393d151cf6dff7cbd4d660aeed01f85c5c3b5acd25956a0115b72fc2d6cdf03",
+			"bytes": 1554
+		},
+		"es": {
+			"digest": "4d4cdf289d1d0b1cfdb701a4d279779b5856f6ecbcb7f2d6f728c5f5208a3379",
+			"bytes": 1270
+		},
+		"ja": {
+			"digest": "d4279f031aa560045963194b9cbb371c82b31b47f5df2a6dfb7cdd04fbaa594d",
+			"bytes": 1387
+		},
+		"fr": {
+			"digest": "56060462f1b1531c7fd7320562418ce6e42f202736dd25b263efa33d094db9d7",
+			"bytes": 1317
+		},
+		"pt-BR": {
+			"digest": "a8e743c5536aa356f7aa57875f7306504b2693c191ae468e31780f5b814d2408",
+			"bytes": 1273
+		}
+	},
+	"llmsOrder": [
+		"index",
+		"guide/index",
+		"guide/first-tag",
+		"guide/troubleshooting",
+		"reference/index",
+		"reference/chip-support",
+		"reference/api",
+		"developer/architecture"
+	],
+	"objects": [
+		{
+			"key": "assets/b9922ff72601d007f508e4b11a31c7cd3215b8115dfd0ab2da6a584f98bbacb7.png",
+			"digest": "b9922ff72601d007f508e4b11a31c7cd3215b8115dfd0ab2da6a584f98bbacb7",
+			"bytes": 421
+		},
+		{
+			"key": "assets/e58ff68f6c7bd6e46d20ea7549e3b2fd36a18753a219eac80b64b7cb1bce6949.svg",
+			"digest": "e58ff68f6c7bd6e46d20ea7549e3b2fd36a18753a219eac80b64b7cb1bce6949",
+			"bytes": 336
+		},
+		{
+			"key": "llms/ar.txt",
+			"digest": "c393d151cf6dff7cbd4d660aeed01f85c5c3b5acd25956a0115b72fc2d6cdf03",
+			"bytes": 1554
+		},
+		{
+			"key": "llms/en.txt",
+			"digest": "09c22e89a5047e85fba8552858b767c2dbe966c01f4a6556dc6204752373c359",
+			"bytes": 1173
+		},
+		{
+			"key": "llms/es.txt",
+			"digest": "4d4cdf289d1d0b1cfdb701a4d279779b5856f6ecbcb7f2d6f728c5f5208a3379",
+			"bytes": 1270
+		},
+		{
+			"key": "llms/fr.txt",
+			"digest": "56060462f1b1531c7fd7320562418ce6e42f202736dd25b263efa33d094db9d7",
+			"bytes": 1317
+		},
+		{
+			"key": "llms/ja.txt",
+			"digest": "d4279f031aa560045963194b9cbb371c82b31b47f5df2a6dfb7cdd04fbaa594d",
+			"bytes": 1387
+		},
+		{
+			"key": "llms/pt-BR.txt",
+			"digest": "a8e743c5536aa356f7aa57875f7306504b2693c191ae468e31780f5b814d2408",
+			"bytes": 1273
+		},
+		{
+			"key": "llms/zh.txt",
+			"digest": "891a81fce4b074e7c72e8cc28c411e2959c65e4721bb664201aca73e68e70cf1",
+			"bytes": 1146
+		},
+		{
+			"key": "pages/ar/guide/first-tag.json.gz",
+			"digest": "4bdb40ac81cc08fbd950452dbf146c64ee63df4a2cbe75998477a5042f882dae",
+			"bytes": 3376
+		},
+		{
+			"key": "pages/ar/guide/index.json.gz",
+			"digest": "a05a7f3461dc275a82a71604c5e77af49ec461f566f2580b701fe704a2ebc900",
+			"bytes": 2144
+		},
+		{
+			"key": "pages/ar/guide/troubleshooting.json.gz",
+			"digest": "604b98f699da538b223039742f2091320d6587e1d064acc3219973910411d1df",
+			"bytes": 3588
+		},
+		{
+			"key": "pages/ar/index.json.gz",
+			"digest": "7d24695be6320d0178ae4f9b28f88fca8df93ae88d7f5947da35cd1b0d3816d4",
+			"bytes": 2418
+		},
+		{
+			"key": "pages/ar/reference/chip-support.json.gz",
+			"digest": "c208c8a3aadbcc2dc58994a17a9dc81754107c5d516f28f00fefb2ba2e5616ae",
+			"bytes": 2825
+		},
+		{
+			"key": "pages/ar/reference/index.json.gz",
+			"digest": "f0a1a9618c3310487510bd04b3f6250f28c86db3e2e214006a80c446c6e7a06e",
+			"bytes": 1436
+		},
+		{
+			"key": "pages/en/developer/architecture.json.gz",
+			"digest": "d789f6ff1fb8238627d155c0a9b5ca5a611ee1f81ed96a6411f362cf5cc73f30",
+			"bytes": 3098
+		},
+		{
+			"key": "pages/en/guide/first-tag.json.gz",
+			"digest": "ce531864085fe00d4724cf9cb8b37eff5df94daf993400133c221e847397df18",
+			"bytes": 2653
+		},
+		{
+			"key": "pages/en/guide/index.json.gz",
+			"digest": "4a338ab50e59483c7466413be242c52656c1f1bccba94dcc479d6c1e47133a68",
+			"bytes": 1672
+		},
+		{
+			"key": "pages/en/guide/troubleshooting.json.gz",
+			"digest": "336fa866fa5c4d1814ccb36cf008720800daae51d9aeeec8bb5fde0c103a491a",
+			"bytes": 2754
+		},
+		{
+			"key": "pages/en/index.json.gz",
+			"digest": "6bc28aecdd01ddd0373fe300aa1446e22d26a094d50a7c869bf2eb45d6939e73",
+			"bytes": 1837
+		},
+		{
+			"key": "pages/en/reference/api.json.gz",
+			"digest": "68e1ca2cf3b0fd6a9d63aa4fecea243987aa425b6d85d32b267b96606d7f4759",
+			"bytes": 3767
+		},
+		{
+			"key": "pages/en/reference/chip-support.json.gz",
+			"digest": "82dfd1c8daa88d959adc1646f8758ee94a496f27c4207b789620829883c516cf",
+			"bytes": 2247
+		},
+		{
+			"key": "pages/en/reference/index.json.gz",
+			"digest": "d5db3a43b8cbb0f9414b9d5d0f7823e466ccea084e50b79765799d6a9df85951",
+			"bytes": 1104
+		},
+		{
+			"key": "pages/es/guide/first-tag.json.gz",
+			"digest": "324ba1396f14c1232ea9d8ad70db5257d615a36af43c65cc734940e6086ab970",
+			"bytes": 2968
+		},
+		{
+			"key": "pages/es/guide/index.json.gz",
+			"digest": "d171e455b14bcd19303ed18804a0504ccc93b31874d27c1e28c1070a2e669cae",
+			"bytes": 1952
+		},
+		{
+			"key": "pages/es/index.json.gz",
+			"digest": "13eb5e236949f7493af7f4795c23c3d404b57299070e3b5a26d72a6667e4f368",
+			"bytes": 2097
+		},
+		{
+			"key": "pages/es/reference/chip-support.json.gz",
+			"digest": "5cad0ee0aedfddbb7f856da3f904a8c2f9d6a1e88f89a0c99b8b1d9585105ecb",
+			"bytes": 2389
+		},
+		{
+			"key": "pages/es/reference/index.json.gz",
+			"digest": "7b681ca859052b2658b0391b5031409e6663df3192c3ac66c08fbb18c57572a6",
+			"bytes": 1258
+		},
+		{
+			"key": "pages/fr/guide/first-tag.json.gz",
+			"digest": "ebebb5880040806230fa1873ff655c5fea52f377f36ec41fe01d8fe389f0aab5",
+			"bytes": 3098
+		},
+		{
+			"key": "pages/fr/guide/index.json.gz",
+			"digest": "35f11797f85ad3398c24c8c61366b5506adada3d85eafcc3b8d544b7814a052b",
+			"bytes": 1995
+		},
+		{
+			"key": "pages/fr/index.json.gz",
+			"digest": "36807b616fbe85396a8995ba07dcd7eea9ac85414f0469a9cc1bb711c4aa288c",
+			"bytes": 2178
+		},
+		{
+			"key": "pages/fr/reference/index.json.gz",
+			"digest": "02391067e8d41db5ed4d7eac996b8349278bdf0f5149c238c5f23c197b93d566",
+			"bytes": 1302
+		},
+		{
+			"key": "pages/ja/guide/first-tag.json.gz",
+			"digest": "5c523964cdee7d588d553bc3d29019014cbee5cd75ecc53bce1e8c91fc787dca",
+			"bytes": 3352
+		},
+		{
+			"key": "pages/ja/guide/index.json.gz",
+			"digest": "759a248c8547bb8b12bbf826f9f9409b9bd2b3f3354343e7f0f67419be0b26f1",
+			"bytes": 2207
+		},
+		{
+			"key": "pages/ja/guide/troubleshooting.json.gz",
+			"digest": "6330ff26a0dbd2f7d8df45a19b461f22449800361a2ffc9bb8b7b7ab653dbb5a",
+			"bytes": 3585
+		},
+		{
+			"key": "pages/ja/index.json.gz",
+			"digest": "9be096e2ac44f0343ab33c2a73108c589bdb81e9854ac449fe3b47f712c92c15",
+			"bytes": 2477
+		},
+		{
+			"key": "pages/ja/reference/chip-support.json.gz",
+			"digest": "5ae319bef7ba7f8256f5e9357206f58fdeb6f6cbb46d070338d1951a782713bf",
+			"bytes": 2913
+		},
+		{
+			"key": "pages/ja/reference/index.json.gz",
+			"digest": "890c90e1f0dd59365c53553e926248205b6c9c5f5311c952e0557f63a75073fa",
+			"bytes": 1461
+		},
+		{
+			"key": "pages/pt-BR/guide/first-tag.json.gz",
+			"digest": "805018f6961d17b0264f0364a1315f7d425427b3add7eb2e364c506132c65265",
+			"bytes": 2966
+		},
+		{
+			"key": "pages/pt-BR/guide/index.json.gz",
+			"digest": "04210f97585d53a3184d9123fe069a55e6980a1f1be8604fbb3185e716a0603b",
+			"bytes": 1911
+		},
+		{
+			"key": "pages/pt-BR/index.json.gz",
+			"digest": "d1275d1eb81fcd7bdc9dff9265e4ced37b3683e6e3da91e4303611a18d685b9e",
+			"bytes": 2098
+		},
+		{
+			"key": "pages/pt-BR/reference/index.json.gz",
+			"digest": "fdfe1ae3beb0542ec3de9dd5caede0c6b81aeff0116664dcead86bc449df10e2",
+			"bytes": 1277
+		},
+		{
+			"key": "pages/zh/guide/first-tag.json.gz",
+			"digest": "b397185bc6880a9f5909745aa4672353cac6a7156ee578635ae8b90fb41e81e7",
+			"bytes": 3272
+		},
+		{
+			"key": "pages/zh/guide/index.json.gz",
+			"digest": "5964ada24c5d84b4ffdc0c6bf3960d6d08b8594b6102e50c09622fea2d9d200d",
+			"bytes": 2100
+		},
+		{
+			"key": "pages/zh/index.json.gz",
+			"digest": "4571619e23c988a50b09118b279ea2de928c4f1fc4d07086b35c3e637233eac9",
+			"bytes": 2362
+		},
+		{
+			"key": "pages/zh/reference/chip-support.json.gz",
+			"digest": "c5c263d0676144ab82d953ddf21e6aaacbc832fb64d0ffba54a5fe82a6c0caed",
+			"bytes": 2828
+		},
+		{
+			"key": "pages/zh/reference/index.json.gz",
+			"digest": "8bc309c99054eccde9046e5e215cf44a66ed244b64f4d6042477644473d72ee4",
+			"bytes": 1376
+		},
+		{
+			"key": "raw/ar/guide/first-tag.md.gz",
+			"digest": "add177916a688563386b1460f1a091cfd43c06ab1e07a16ee40edd7a74a60d73",
+			"bytes": 2499
+		},
+		{
+			"key": "raw/ar/guide/index.md.gz",
+			"digest": "7aaafe3c5a89bc5db080c944fe5030a2c34d879aa2f6a744278d7887c5d446dd",
+			"bytes": 1490
+		},
+		{
+			"key": "raw/ar/guide/troubleshooting.md.gz",
+			"digest": "7436e0bd890c703204891d222cd53b3e03f196f22769de10461dc371323f796b",
+			"bytes": 2499
+		},
+		{
+			"key": "raw/ar/index.md.gz",
+			"digest": "4bf6edd2d68b91349093ca588b6b6361cda0de583930212a20f5640e97f4230d",
+			"bytes": 1710
+		},
+		{
+			"key": "raw/ar/reference/chip-support.md.gz",
+			"digest": "be410cbbe2157053b7616628e58e7e4a17beef38c86b9b4efde7f21a207d9a93",
+			"bytes": 2129
+		},
+		{
+			"key": "raw/ar/reference/index.md.gz",
+			"digest": "99e8ab7ae100de577b16692a80c844b6763d5136870cb0ca89949e6c2734a368",
+			"bytes": 874
+		},
+		{
+			"key": "raw/en/developer/architecture.md.gz",
+			"digest": "9cd3c7a16db2b19cc0221abfbf8bbaaf001b70eb716d2f35b83475ceb517cec6",
+			"bytes": 2300
+		},
+		{
+			"key": "raw/en/guide/first-tag.md.gz",
+			"digest": "576f44d7df24765102461843cb7fdff4204c435dfe11235904b94ea615bcf429",
+			"bytes": 1951
+		},
+		{
+			"key": "raw/en/guide/index.md.gz",
+			"digest": "0468b80214f2d057658541edd486d18013a204edc392298b6bfc2479ee85412d",
+			"bytes": 1211
+		},
+		{
+			"key": "raw/en/guide/troubleshooting.md.gz",
+			"digest": "e3318ed56116499a744f8f9045321d6b899ecadfea7ae2f01e48482cc05bec83",
+			"bytes": 2044
+		},
+		{
+			"key": "raw/en/index.md.gz",
+			"digest": "1bc5bd86026097492fd8c37d310063ef93914742572f12f538e18c98d8cde8a1",
+			"bytes": 1282
+		},
+		{
+			"key": "raw/en/reference/api.md.gz",
+			"digest": "8db5fcc15de8d9b1c042a2311aa8c04e976881c46e5b165ad4eeee088ef78997",
+			"bytes": 2812
+		},
+		{
+			"key": "raw/en/reference/chip-support.md.gz",
+			"digest": "b72db9a13027d68c5110a73fd274cb1a7b96f1b4f0b3b38912a735a0984f32d4",
+			"bytes": 1744
+		},
+		{
+			"key": "raw/en/reference/index.md.gz",
+			"digest": "8c0916d952fcf911cb560e4d54fc163bfba6256ceb20470fb92b387fa3d4347c",
+			"bytes": 679
+		},
+		{
+			"key": "raw/es/guide/first-tag.md.gz",
+			"digest": "90f7ad8b8234eab848e5531b8bfb4fcf10856d5cfbbc3f053ebaab1135eff1a9",
+			"bytes": 2173
+		},
+		{
+			"key": "raw/es/guide/index.md.gz",
+			"digest": "b6bf4180803d70f77731957858547fbfcfd892252b8a8cceabc8cc720dc1d2e7",
+			"bytes": 1400
+		},
+		{
+			"key": "raw/es/index.md.gz",
+			"digest": "612a91d26439d2f5f1b0ea61ebe67a8f0f9c02b26f65aaf7e2b76055260257ef",
+			"bytes": 1478
+		},
+		{
+			"key": "raw/es/reference/chip-support.md.gz",
+			"digest": "4e0ea0557251617e9189c1df045546fa84fe2f115c9014acf650d834d1f35c6f",
+			"bytes": 1859
+		},
+		{
+			"key": "raw/es/reference/index.md.gz",
+			"digest": "f74fcb1f54bcfae262c54e12b9f834995da077f8f5e3fcf76db4a72031a8c142",
+			"bytes": 771
+		},
+		{
+			"key": "raw/fr/guide/first-tag.md.gz",
+			"digest": "53aa7a877531af4db68721eb2e7aa6cbc4c4e02b68b9a439f9ab37e4c30a5e68",
+			"bytes": 2311
+		},
+		{
+			"key": "raw/fr/guide/index.md.gz",
+			"digest": "349265e446c2950e5ecc6a56dbd426b17ed351025cb3e2949e27572abbd149a4",
+			"bytes": 1448
+		},
+		{
+			"key": "raw/fr/index.md.gz",
+			"digest": "0e4d163693f731afd162bc63f3d19eccc74d7083122edb71131bd9881d90c13b",
+			"bytes": 1544
+		},
+		{
+			"key": "raw/fr/reference/index.md.gz",
+			"digest": "d390e0effdb95537316b991147916d14e45968e0086d4671f31f9fe899e7f39e",
+			"bytes": 826
+		},
+		{
+			"key": "raw/ja/guide/first-tag.md.gz",
+			"digest": "38057c156e6420c12b73bfc521d90db9960c82e81863cca3bee2d3e4be88eb8a",
+			"bytes": 2590
+		},
+		{
+			"key": "raw/ja/guide/index.md.gz",
+			"digest": "3354bd2ba0e66af56704c5dad890aebb202cde3726a581e83d028c432d16ef33",
+			"bytes": 1654
+		},
+		{
+			"key": "raw/ja/guide/troubleshooting.md.gz",
+			"digest": "e7b1c112d20434b1fd4f813e05af45431861afeb7d9e1ca3fdf89e1c402bbf58",
+			"bytes": 2680
+		},
+		{
+			"key": "raw/ja/index.md.gz",
+			"digest": "4b683db9a2ed0558013bef0eaaad0198cb7e903686a362ca9e02b41268356af9",
+			"bytes": 1832
+		},
+		{
+			"key": "raw/ja/reference/chip-support.md.gz",
+			"digest": "40e0096da4b022e7557f1a3fcf5b4decb1bd498597aac3af0dbe255ccd151fa1",
+			"bytes": 2296
+		},
+		{
+			"key": "raw/ja/reference/index.md.gz",
+			"digest": "2e967660d00a701dae88d5a4831a70ff7716469fafeeceb9b4737d68d21b2980",
+			"bytes": 925
+		},
+		{
+			"key": "raw/pt-BR/guide/first-tag.md.gz",
+			"digest": "550ef32a74141c87526c02b08cb18b01d2aa724d1e2f45a87a54edeedcb79eab",
+			"bytes": 2168
+		},
+		{
+			"key": "raw/pt-BR/guide/index.md.gz",
+			"digest": "5b892d9142c96ea9ec016672214388d9fa2863e3d2d70df4b9bd46a1c8b53740",
+			"bytes": 1356
+		},
+		{
+			"key": "raw/pt-BR/index.md.gz",
+			"digest": "f05317f312576c520ab94fa0c7732f95b04bb43749b4f3419ab3736e035548db",
+			"bytes": 1475
+		},
+		{
+			"key": "raw/pt-BR/reference/index.md.gz",
+			"digest": "ea91153b61fe22dd31c3e1a3aec8cc1a29566c01c247398b7968cc99fe0763ea",
+			"bytes": 792
+		},
+		{
+			"key": "raw/zh/guide/first-tag.md.gz",
+			"digest": "b536f1417a0b835008af4666aeeba69e7ae3286da2288b528d63fe6bc104574c",
+			"bytes": 2449
+		},
+		{
+			"key": "raw/zh/guide/index.md.gz",
+			"digest": "9dadcbefd5d20168a4d9978e4fc08b5dbc37befd5e05b750135554f80c7bd373",
+			"bytes": 1484
+		},
+		{
+			"key": "raw/zh/index.md.gz",
+			"digest": "36f3e0f0f953d8802489c77ece67969004555f7dd3101214dc15f28e687e1a57",
+			"bytes": 1682
+		},
+		{
+			"key": "raw/zh/reference/chip-support.md.gz",
+			"digest": "115844e12bf1725b5c38f02e56071976862933e4d9931bf0d03412906f050d3e",
+			"bytes": 2147
+		},
+		{
+			"key": "raw/zh/reference/index.md.gz",
+			"digest": "d9db031ebc13bbb1e85964845f437fdc298d5d29b0edeb0c047afb3519e8f7ed",
+			"bytes": 841
+		},
+		{
+			"key": "search/ar.idx.json.gz",
+			"digest": "d3564d3b8b2717a3cd25187e5fe0e3119cb29400968b36ff9f9b6e5d90cbcb2a",
+			"bytes": 13034
+		},
+		{
+			"key": "search/en.idx.json.gz",
+			"digest": "bd17041259f3f9ffbd3f9542c50dc82eb0b1699ff7a38da4a3abd04bbd779d49",
+			"bytes": 9956
+		},
+		{
+			"key": "search/es.idx.json.gz",
+			"digest": "a674ac6a84720b78627f087d1e05132bf06d64835db96cafdcaeba47de521cd1",
+			"bytes": 11814
+		},
+		{
+			"key": "search/fr.idx.json.gz",
+			"digest": "84a8fbdac559abc8642eb2732b5cbfcb7c5100442427613248635a18531a2c81",
+			"bytes": 11947
+		},
+		{
+			"key": "search/ja.idx.json.gz",
+			"digest": "8fb7992e8002aa8f3bba97617dfe298e9910c6de45c701414f1d5a852a969cfc",
+			"bytes": 20802
+		},
+		{
+			"key": "search/pt-BR.idx.json.gz",
+			"digest": "4c629175bca88070548bcc854d7a3d2eb42bb50705ccf76454cae81e6929d917",
+			"bytes": 11805
+		},
+		{
+			"key": "search/zh.idx.json.gz",
+			"digest": "d4ccc6ff10ee1dca782243b0fabee8916a630303b6b9e20b28484ef53c4ced5a",
+			"bytes": 18749
+		}
+	],
+	"counts": {
+		"pages": 8,
+		"locales": 7,
+		"objects": 92,
+		"bytes": 263730
+	},
+	"coverage": {
+		"en": {
+			"pages": 8,
+			"translated": 8,
+			"stale": 0,
+			"scaffolded": 0
+		},
+		"zh": {
+			"pages": 5,
+			"translated": 4,
+			"stale": 1,
+			"scaffolded": 0
+		},
+		"ar": {
+			"pages": 6,
+			"translated": 5,
+			"stale": 1,
+			"scaffolded": 0
+		},
+		"es": {
+			"pages": 5,
+			"translated": 3,
+			"stale": 1,
+			"scaffolded": 1
+		},
+		"ja": {
+			"pages": 6,
+			"translated": 5,
+			"stale": 1,
+			"scaffolded": 0
+		},
+		"fr": {
+			"pages": 4,
+			"translated": 3,
+			"stale": 1,
+			"scaffolded": 0
+		},
+		"pt-BR": {
+			"pages": 4,
+			"translated": 3,
+			"stale": 1,
+			"scaffolded": 0
+		}
+	}
+}

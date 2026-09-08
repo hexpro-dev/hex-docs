@@ -1,0 +1,75 @@
+{
+	"$id": "frontmatter-1.json",
+	"title": "frontmatter-1",
+	"description": "Page front matter: everything about a page that is not the page itself.",
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"type": "object",
+	"properties": {
+		"title": {
+			"type": "string",
+			"minLength": 1
+		},
+		"description": {
+			"type": "string",
+			"minLength": 1
+		},
+		"audience": {
+			"type": "string",
+			"enum": [
+				"user",
+				"developer",
+				"both"
+			]
+		},
+		"pageKind": {
+			"type": "string",
+			"enum": [
+				"article",
+				"howto",
+				"faq"
+			]
+		},
+		"navTitle": {
+			"type": "string",
+			"minLength": 2,
+			"maxLength": 30
+		},
+		"tags": {
+			"maxItems": 8,
+			"type": "array",
+			"items": {
+				"type": "string",
+				"minLength": 1
+			}
+		},
+		"since": {
+			"type": "string",
+			"pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$"
+		},
+		"redirectFrom": {
+			"maxItems": 10,
+			"type": "array",
+			"items": {
+				"type": "string",
+				"minLength": 1,
+				"maxLength": 260
+			}
+		},
+		"draft": {
+			"type": "boolean"
+		},
+		"toc": {
+			"type": "boolean",
+			"const": false
+		},
+		"translated": {
+			"type": "boolean",
+			"const": false
+		}
+	},
+	"required": [
+		"title",
+		"description"
+	],
+	"additionalProperties": false
+}

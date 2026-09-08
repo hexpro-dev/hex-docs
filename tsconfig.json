@@ -1,0 +1,47 @@
+{
+	// The runtime half. Consumed by Vite through a tsconfig `paths` entry in each
+	// website, so this file describes how that source is read, not how it is built:
+	// nothing here emits.
+	"compilerOptions": {
+		"target": "ES2022",
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"jsx": "react-jsx",
+		// Empty on purpose. The runtime half must compile with no ambient node types,
+		// because it runs in a browser inside somebody else's build. Reaching for
+		// `process`, `Buffer` or `__dirname` here is a type error at the point of use
+		// rather than a runtime crash on a page nobody tested with JavaScript enabled.
+		// Tests and the toolchain add node types back in their own configs.
+		"types": [],
+
+		"strict": true,
+		// A compiler and a renderer both index arrays and records constantly. Without
+		// this, `pages[i]` types as the element rather than `element | undefined` and a
+		// missing locale reads as a present one all the way to a blank page in
+		// production.
+		"noUncheckedIndexedAccess": true,
+		"noImplicitOverride": true,
+		"noFallthroughCasesInSwitch": true,
+		// Deliberately OFF. Zod infers an optional field as `foo?: T | undefined`, and
+		// with exactOptionalPropertyTypes on, the hand-written `foo?: T` in src/ is a
+		// different type. The compile-time drift check between the two halves is the
+		// thing that keeps them honest, and it can only be exactly satisfiable if both
+		// sides agree on what "optional" means. Turning this on means writing
+		// `| undefined` on every optional field in every contract or losing the check.
+		"exactOptionalPropertyTypes": false,
+
+		// Every relative import in this repo carries a `.js` extension, matching
+		// @hex-pro/i18n. `bundler` tolerates it; kit/ runs on node and requires it. One
+		// style across both halves means a file can move between them unedited.
+		"verbatimModuleSyntax": true,
+		"isolatedModules": true,
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"resolveJsonModule": true,
+		"skipLibCheck": true,
+		"noEmit": true
+	},
+	"include": ["src"],
+	"exclude": ["node_modules", "kit", "dist", "coverage", "test"]
+}

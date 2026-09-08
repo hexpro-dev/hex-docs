@@ -1,0 +1,784 @@
+{
+	"ast": 1,
+	"project": "fixture-app",
+	"slug": "reference/chip-support",
+	"locale": "ja",
+	"title": "\u30c1\u30c3\u30d7\u5bfe\u5fdc\u8868",
+	"description": "Fixture App \u304c iOS \u3067\u8aad\u307f\u66f8\u304d\u3067\u304d\u308b NFC \u30c1\u30c3\u30d7\u3068\u3001\u305d\u308c\u305e\u308c\u306b\u5f53\u3066\u306f\u307e\u308b\u6ce8\u610f\u70b9\u3002",
+	"navTitle": "\u30c1\u30c3\u30d7\u5bfe\u5fdc",
+	"audience": "both",
+	"pageKind": "article",
+	"tags": [
+		"chips"
+	],
+	"toc": false,
+	"headings": [
+		{
+			"id": "\u6ce8\u610f\u70b9\u306e\u610f\u5473",
+			"depth": 2,
+			"text": "\u6ce8\u610f\u70b9\u306e\u610f\u5473"
+		},
+		{
+			"id": "\u4e00\u89a7\u306b\u306a\u3044\u30c1\u30c3\u30d7\u306e\u5834\u5408",
+			"depth": 2,
+			"text": "\u4e00\u89a7\u306b\u306a\u3044\u30c1\u30c3\u30d7\u306e\u5834\u5408"
+		}
+	],
+	"body": [
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Fixture App \u306f Core NFC \u3092\u901a\u3057\u3066\u30bf\u30b0\u3068\u901a\u4fe1\u3059\u308b\u305f\u3081\u3001\u30c1\u30c3\u30d7\u304c\u52d5\u4f5c\u3059\u308b\u306e\u306f\u3001iOS \u304c\u516c\u958b\u3057\u3066\u3044\u308b\u30bf\u30b0\u30bf\u30a4\u30d7\u306e\u3044\u305a\u308c\u304b\u3068\u3057\u3066\u5fdc\u7b54\u3059\u308b\u5834\u5408\u3060\u3051\u3067\u3059\u3002 ISO 14443A \u4e0a\u306e Type 2\u3001ISO 7816 \u4e0a\u306e Type 4\u3001 ISO 15693 \u4e0a\u306e Type 5 \u306e\u3044\u305a\u308c\u304b\u3067\u3059\u3002\u72ec\u81ea\u30d7\u30ed\u30c8\u30b3\u30eb\u3067\u3057\u304b\u5fdc\u7b54\u3057\u306a\u3044\u30c1\u30c3\u30d7\u306f\u3001\u8b58\u5225\u5b50\u3060\u3051\u304c\u8868\u793a\u3055\u308c\u3001\u305d\u308c\u4ee5\u4e0a\u306e\u3053\u3068\u306f\u3067\u304d\u307e\u305b\u3093\u3002"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "\u4ee5\u4e0b\u306e\u7d50\u679c\u306f\u3059\u3079\u3066\u3001iOS 18.2 \u304c\u52d5\u4f5c\u3059\u308b iPhone 13 \u3068 iPhone 15 Pro \u3067\u30013 \u793e\u304b\u3089\u4ed5\u5165\u308c\u305f\u7a7a\u306e\u30bf\u30b0\u306b\u5bfe\u3057\u3066\u6e2c\u5b9a\u3057\u305f\u3082\u306e\u3067\u3059\u3002\u300c\u8aad\u307f\u53d6\u308a\u300d\u306f\u3001\u8ffd\u52a0\u306e\u8a2d\u5b9a\u306a\u3057\u306b\u30b9\u30ad\u30e3\u30f3\u30b7\u30fc\u30c8\u304c\u30bf\u30b0\u304b\u3089 NDEF \u30e1\u30c3\u30bb\u30fc\u30b8\u3092\u53d6\u308a\u51fa\u305b\u308b\u3053\u3068\u3092\u6307\u3057\u307e\u3059\u3002\u300c\u66f8\u304d\u8fbc\u307f\u300d\u306f\u3001\u66f8\u304d\u8fbc\u307f\u30b7\u30fc\u30c8\u304c\u65b0\u3057\u3044\u30e1\u30c3\u30bb\u30fc\u30b8\u3092\u66f8\u304d\u623b\u3057\u3001\u305d\u306e\u5f8c\u306e\u7a7a\u304d\u30d0\u30a4\u30c8\u6570\u3092\u5831\u544a\u3067\u304d\u308b\u3053\u3068\u3092\u6307\u3057\u307e\u3059\u3002\u30e6\u30fc\u30b6\u30fc\u30e1\u30e2\u30ea\u306f NDEF \u30e1\u30c3\u30bb\u30fc\u30b8\u304c\u5360\u3081\u3089\u308c\u308b\u9818\u57df\u3067\u3001\u30c0\u30a4\u4e0a\u306e\u7dcf\u30e1\u30e2\u30ea\u3088\u308a\u5e38\u306b\u5c0f\u3055\u304f\u306a\u308a\u307e\u3059\u3002"
+				}
+			]
+		},
+		{
+			"type": "table",
+			"align": [
+				null,
+				null
+			],
+			"header": [
+				{
+					"type": "tableCell",
+					"children": [
+						{
+							"type": "text",
+							"value": "\u72b6\u614b"
+						}
+					]
+				},
+				{
+					"type": "tableCell",
+					"children": [
+						{
+							"type": "text",
+							"value": "\u610f\u5473"
+						}
+					]
+				}
+			],
+			"rows": [
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "yes"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "\u30cf\u30fc\u30c9\u30a6\u30a7\u30a2\u3067\u691c\u8a3c\u6e08\u307f\u3002\u30ed\u30c3\u30af\u3055\u308c\u305f NDEF \u30da\u30fc\u30b8\u3092\u542b\u3081\u3001\u305d\u306e\u30c1\u30c3\u30d7\u304c\u5bfe\u5fdc\u3059\u308b\u3059\u3079\u3066\u306e\u30ec\u30b3\u30fc\u30c9\u7a2e\u5225\u3092 Fixture App \u304c\u8aad\u307f\u66f8\u304d\u3057\u307e\u3059\u3002"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "partial"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "\u4e00\u90e8\u306e\u307f\u3002\u8aad\u307f\u53d6\u308a\u306f\u3067\u304d\u307e\u3059\u304c\u66f8\u304d\u8fbc\u307f\u306f\u3067\u304d\u307e\u305b\u3093\u3002\u591a\u304f\u306f\u3001Fixture App \u3067\u306f\u8a2d\u5b9a\u3067\u304d\u306a\u3044\u30d9\u30f3\u30c0\u30fc\u306e\u30d1\u30b9\u30ef\u30fc\u30c9\u304c\u30c1\u30c3\u30d7\u306b\u8a2d\u5b9a\u3055\u308c\u3066\u3044\u308b\u305f\u3081\u3067\u3059\u3002"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "no"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "\u975e\u5bfe\u5fdc\u3002\u30c1\u30c3\u30d7\u306f\u691c\u51fa\u6642\u306b\u8a8d\u8b58\u3055\u308c\u3001\u66f8\u304d\u8fbc\u307f\u304c\u884c\u308f\u308c\u308b\u524d\u306b\u30bb\u30c3\u30b7\u30e7\u30f3\u304c\u7d42\u308f\u308b\u305f\u3081\u3001\u30bf\u30b0\u306f\u305d\u306e\u307e\u307e\u6b8b\u308a\u307e\u3059\u3002"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "na"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "\u8a72\u5f53\u306a\u3057\u3002\u3053\u306e\u30c1\u30c3\u30d7\u306b\u306f Fixture App \u304c\u4f7f\u3048\u308b NDEF \u306e\u9818\u57df\u304c\u3042\u308a\u307e\u305b\u3093\u3002"
+							}
+						]
+					}
+				]
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "\u72b6\u614b\u306f\u30c1\u30c3\u30d7\u306e\u30ea\u30d3\u30b8\u30e7\u30f3\u3054\u3068\u306b\u8a18\u9332\u3057\u3066\u3044\u308b\u305f\u3081\u3001\u30d1\u30c3\u30b1\u30fc\u30b8\u306e\u30d5\u30a1\u30df\u30ea\u30fc\u540d\u3067\u306f\u306a\u304f\u3001\u884c\u306b\u8a18\u8f09\u3055\u308c\u305f\u30ea\u30d3\u30b8\u30e7\u30f3\u3092\u78ba\u8a8d\u3057\u3066\u304f\u3060\u3055\u3044\u3002"
+				}
+			]
+		},
+		{
+			"type": "table",
+			"align": [
+				"left",
+				null,
+				"center",
+				null,
+				"right"
+			],
+			"header": [
+				{
+					"type": "tableCell",
+					"children": [
+						{
+							"type": "text",
+							"value": "\u30c1\u30c3\u30d7"
+						}
+					]
+				},
+				{
+					"type": "tableCell",
+					"children": [
+						{
+							"type": "text",
+							"value": "\u578b\u756a"
+						}
+					]
+				},
+				{
+					"type": "tableCell",
+					"children": [
+						{
+							"type": "text",
+							"value": "\u8aad\u307f\u53d6\u308a"
+						}
+					]
+				},
+				{
+					"type": "tableCell",
+					"children": [
+						{
+							"type": "text",
+							"value": "\u66f8\u304d\u8fbc\u307f"
+						}
+					]
+				},
+				{
+					"type": "tableCell",
+					"children": [
+						{
+							"type": "text",
+							"value": "\u30e6\u30fc\u30b6\u30fc\u30e1\u30e2\u30ea\uff08\u30d0\u30a4\u30c8\uff09"
+						}
+					]
+				}
+			],
+			"rows": [
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "NTAG213"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "NT2H1311"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "yes"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "yes"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "144"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "NTAG215"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "NT2H1511"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "yes"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "yes"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "504"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "NTAG216"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "NT2H1611"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "yes"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "yes"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "888"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "link",
+								"kind": "external",
+								"href": "https://example.com/chips/nt4h2421gx",
+								"children": [
+									{
+										"type": "text",
+										"value": "NTAG424 DNA"
+									}
+								]
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "NT4H2421Gx"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "yes"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "partial"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "416"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "MIFARE Ultralight EV1"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "MF0UL1101"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "yes"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "yes"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "48"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "MIFARE Ultralight C"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "MF0ICU2"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "yes"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "partial"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "144"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "ICODE SLIX2"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "SL2S2602"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "yes"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "partial"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "316"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "link",
+								"kind": "external",
+								"href": "https://example.com/chips/mf3d8x3",
+								"children": [
+									{
+										"type": "text",
+										"value": "MIFARE DESFire EV3"
+									}
+								]
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "MF3D8X3"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "partial"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "no"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "na"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "MIFARE Classic 1K"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "MF1S503x"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "no"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "na"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "status",
+								"value": "na"
+							}
+						]
+					}
+				]
+			],
+			"caption": [
+				{
+					"type": "text",
+					"value": "iOS 18.2 \u3067\u6e2c\u5b9a\u3057\u305f\u3001\u30c1\u30c3\u30d7\u5225\u306e Core NFC \u5bfe\u5fdc\u72b6\u6cc1"
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "\u6ce8\u610f\u70b9\u306e\u610f\u5473",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "\u6ce8\u610f\u70b9\u306e\u610f\u5473"
+				}
+			],
+			"aliases": [
+				"what-the-caveats-mean"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "\u300c\u66f8\u304d\u8fbc\u307f\u300d\u5217\u306e "
+				},
+				{
+					"type": "status",
+					"value": "partial"
+				},
+				{
+					"type": "text",
+					"value": " \u306f\u3001\u305d\u306e\u30c1\u30c3\u30d7\u304c\u8ffd\u52a0\u306e\u624b\u9806\u3092\u7d4c\u3066\u306f\u3058\u3081\u3066\u66f8\u304d\u8fbc\u307f\u3092\u53d7\u3051\u4ed8\u3051\u308b\u3068\u3044\u3046\u610f\u5473\u3067\u3042\u308a\u3001\u66f8\u304d\u8fbc\u307f\u304c\u59cb\u307e\u3063\u305f\u3042\u3068\u306e\u52d5\u4f5c\u304c\u4e0d\u5b89\u5b9a\u3060\u3068\u3044\u3046\u610f\u5473\u3067\u306f\u3042\u308a\u307e\u305b\u3093\u3002"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "NTAG424 DNA \u306f NDEF \u30d5\u30a1\u30a4\u30eb\u304c AES \u8a8d\u8a3c\u3067\u4fdd\u8b77\u3055\u308c\u305f\u72b6\u614b\u3067\u51fa\u8377\u3055\u308c\u308b\u305f\u3081\u3001\u66f8\u304d\u8fbc\u307f\u30b7\u30fc\u30c8\u306f\u5185\u5bb9\u3092\u5909\u66f4\u3059\u308b\u524d\u306b\u30a2\u30d7\u30ea\u30b1\u30fc\u30b7\u30e7\u30f3\u30ad\u30fc\u3092\u6c42\u3081\u307e\u3059\u3002 Ultralight C \u306f\u30ab\u30a6\u30f3\u30bf\u30fc\u3088\u308a\u4e0a\u306e\u30da\u30fc\u30b8\u3067 3DES \u3092\u4f7f\u3044\u3001\u300c\u8a2d\u5b9a\u300d\u300c\u8a73\u7d30\u300d\u300c\u30bf\u30b0\u306e\u30ad\u30fc\u300d\u306b\u30ad\u30fc\u3092\u8cbc\u308a\u4ed8\u3051\u306a\u3044\u304b\u304e\u308a\u3001Fixture App \u306f\u30ed\u30c3\u30af\u30d0\u30a4\u30c8\u3088\u308a\u4e0b\u306b\u66f8\u304d\u8fbc\u307f\u307e\u3059\u3002ICODE SLIX2 \u306f ISO 15693 \u3067\u5fdc\u7b54\u3057\u3001\u30e1\u30c3\u30bb\u30fc\u30b8\u3092 4 \u30d0\u30a4\u30c8\u306e\u30d6\u30ed\u30c3\u30af\u5358\u4f4d\u3067\u683c\u7d0d\u3059\u308b\u305f\u3081\u3001\u7a7a\u304d\u30d0\u30a4\u30c8\u6570\u306f 4 \u305a\u3064\u6e1b\u308a\u307e\u3059\u3002"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "DESFire EV3 \u306f\u8aad\u307f\u53d6\u308a\u3060\u3051\u304c\u3067\u304d\u307e\u3059\u3002\u7aef\u672b\u306f NDEF \u30a2\u30d7\u30ea\u30b1\u30fc\u30b7\u30e7\u30f3\u3092\u9078\u629e\u3057\u3066\u4e2d\u8eab\u3092\u8aad\u3081\u307e\u3059\u304c\u3001\u30d5\u30a1\u30a4\u30eb\u306e\u4f5c\u6210\u3084\u30b5\u30a4\u30ba\u5909\u66f4\u306b\u306f\u3001\u5229\u7528\u8005\u306b\u6301\u305f\u305b\u308b\u3064\u3082\u308a\u306e\u306a\u3044\u30ad\u30fc\u304c\u5fc5\u8981\u3067\u3059\u3002\u305d\u306e\u305f\u3081\u66f8\u304d\u8fbc\u307f\u30dc\u30bf\u30f3\u306f\u6697\u3044\u307e\u307e\u3067\u3001\u300c\u3053\u306e\u30bf\u30b0\u306f iPhone \u3067\u306f\u8aad\u307f\u53d6\u308a\u5c02\u7528\u3067\u3059\u300d\u3068\u8868\u793a\u3055\u308c\u307e\u3059\u3002MIFARE Classic 1K \u306f\u307e\u3063\u305f\u304f\u8aad\u307f\u53d6\u308c\u307e\u305b\u3093\u3002iOS \u306f\u8b58\u5225\u5b50\u3092\u8fd4\u3057\u3066\u305d\u3053\u3067\u6b62\u307e\u308a\u3001\u30b9\u30ad\u30e3\u30f3\u30b7\u30fc\u30c8\u306f\u30a8\u30e9\u30fc 2001\u300c\u30bf\u30b0\u304c NDEF \u306b\u6e96\u62e0\u3057\u3066\u3044\u307e\u305b\u3093\u300d\u3092\u5831\u544a\u3057\u307e\u3059\u3002\u3069\u3061\u3089\u306e\u30c1\u30c3\u30d7\u3082\u30e1\u30e2\u30ea\u306e\u5217\u306b\u6570\u5024\u304c\u3042\u308a\u307e\u305b\u3093\u3002DESFire \u3067\u306f\u30d5\u30a1\u30a4\u30eb\u306e\u4f5c\u6210\u6642\u306b\u30b5\u30a4\u30ba\u304c\u6c7a\u307e\u308a\u3001Classic \u306b\u306f\u6e2c\u5b9a\u3067\u304d\u308b NDEF \u30d5\u30a1\u30a4\u30eb\u304c\u306a\u3044\u304b\u3089\u3067\u3059\u3002"
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "\u4e00\u89a7\u306b\u306a\u3044\u30c1\u30c3\u30d7\u306e\u5834\u5408",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "\u4e00\u89a7\u306b\u306a\u3044\u30c1\u30c3\u30d7\u306e\u5834\u5408"
+				}
+			],
+			"aliases": [
+				"if-a-chip-is-not-listed"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "\u30b9\u30ad\u30e3\u30f3\u30b7\u30fc\u30c8\u306b\u8868\u793a\u3055\u308c\u308b\u30bf\u30b0\u8b58\u5225\u5b50\u3068\u3001\u30d1\u30c3\u30b1\u30fc\u30b8\u306b\u5370\u5b57\u3055\u308c\u305f\u8868\u8a18\u3092 "
+				},
+				{
+					"type": "link",
+					"kind": "mailto",
+					"address": "docs@example.com",
+					"children": [
+						{
+							"type": "text",
+							"value": "docs@example.com"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " \u307e\u3067\u304a\u9001\u308a\u3044\u305f\u3060\u3051\u308c\u3070\u3001\u3053\u3061\u3089\u3067\u691c\u8a3c\u3057\u307e\u3059\u3002\u3053\u306e\u4e00\u89a7\u306b\u3042\u308b\u30c1\u30c3\u30d7\u3067\u3082\u3001\u91d1\u5c5e\u677f\u306e\u5165\u3063\u305f\u30b1\u30fc\u30b9\u3084\u6c7a\u6e08\u30ab\u30fc\u30c9\u306e\u80cc\u5f8c\u3067\u306f\u5931\u6557\u3059\u308b\u3053\u3068\u304c\u3042\u308a\u307e\u3059\u3002\u305d\u308c\u306b\u3064\u3044\u3066\u306f "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "guide/troubleshooting",
+					"children": [
+						{
+							"type": "text",
+							"value": "\u30b9\u30ad\u30e3\u30f3\u3067\u304d\u306a\u3044\u3068\u304d"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " \u3067\u6271\u3063\u3066\u3044\u307e\u3059\u3002"
+				}
+			]
+		}
+	],
+	"translation": {
+		"state": "current",
+		"sourceUpdated": "2026-01-05T09:00:00Z",
+		"translationUpdated": "2026-02-10T11:30:00Z"
+	},
+	"reading": {
+		"words": 1263,
+		"minutes": 7
+	},
+	"snippets": [
+		"legend"
+	],
+	"sourceFile": "content/ja/reference/chip-support.md"
+}

@@ -1,0 +1,409 @@
+{
+	"ast": 1,
+	"project": "fixture-app",
+	"slug": "index",
+	"locale": "pt-BR",
+	"title": "Documenta\u00e7\u00e3o do Fixture App",
+	"description": "Leia e regrave os registros NDEF de uma etiqueta NFC a partir de um iPhone, sem que nada saia do dispositivo.",
+	"navTitle": "Vis\u00e3o geral",
+	"audience": "both",
+	"pageKind": "article",
+	"tags": [
+		"scanning"
+	],
+	"toc": true,
+	"headings": [
+		{
+			"id": "o-que-o-fixture-app-faz",
+			"depth": 2,
+			"text": "O que o Fixture App faz"
+		},
+		{
+			"id": "o-que-voc\u00ea-precisa",
+			"depth": 2,
+			"text": "O que voc\u00ea precisa"
+		},
+		{
+			"id": "para-onde-ir-agora",
+			"depth": 2,
+			"text": "Para onde ir agora"
+		}
+	],
+	"body": [
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "O Fixture App transforma um iPhone em leitor e gravador de etiquetas. Ele funciona sobre o hardware NFC que a Apple exp\u00f5e a apps de terceiros, o que significa uma etiqueta por vez, com o painel de Leitura aberto."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "o-que-o-fixture-app-faz",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "O que o Fixture App faz"
+				}
+			],
+			"aliases": [
+				"what-fixture-app-does"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Encoste a borda superior do telefone em uma etiqueta e o app decodifica a mensagem NDEF gravada nela. A partir da\u00ed, voc\u00ea pode editar um registro no lugar ou substituir a etiqueta por uma mensagem nova. Nada \u00e9 enviado para fora do aparelho, e nenhum hist\u00f3rico de leituras sobrevive ao fechamento do app."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "O leitor entende estes payloads:"
+				}
+			]
+		},
+		{
+			"type": "list",
+			"style": "bullet",
+			"tight": true,
+			"children": [
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "registros de texto, com o c\u00f3digo de idioma que a etiqueta declara"
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "registros URI, incluindo os atalhos "
+								},
+								{
+									"type": "inlineCode",
+									"value": "tel:"
+								},
+								{
+									"type": "text",
+									"value": " e "
+								},
+								{
+									"type": "inlineCode",
+									"value": "mailto:"
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "registros de transfer\u00eancia de Wi-Fi gravados por um telefone Android"
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "payloads vCard, exibidos como um cart\u00e3o de contato"
+								}
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "A grava\u00e7\u00e3o \u00e9 "
+				},
+				{
+					"type": "emphasis",
+					"children": [
+						{
+							"type": "text",
+							"value": "destrutiva"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": ". O app substitui a mensagem NDEF inteira em vez de acrescentar dados a ela, ent\u00e3o tudo o que estava na etiqueta desaparece no momento em que voc\u00ea toca em "
+				},
+				{
+					"type": "strong",
+					"children": [
+						{
+							"type": "text",
+							"value": "Gravar"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": ". Uma etiqueta bloqueada continua leg\u00edvel, e o gravador para com "
+				},
+				{
+					"type": "inlineCode",
+					"value": "Tag is permanently locked"
+				},
+				{
+					"type": "text",
+					"value": " em vez de informar sucesso."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "o-que-voc\u00ea-precisa",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "O que voc\u00ea precisa"
+				}
+			],
+			"aliases": [
+				"what-you-need"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Hardware compat\u00edvel: iPhone 7 ou posterior, com iOS 16 ou posterior."
+				},
+				{
+					"type": "break"
+				},
+				{
+					"type": "text",
+					"value": "Etiquetas compat\u00edveis: chips ISO 14443 Tipo A formatados para NDEF."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "A "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "reference/chip-support",
+					"children": [
+						{
+							"type": "text",
+							"value": "Matriz de compatibilidade de chips"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " lista todos os chips com os quais o leitor foi testado e quanta mem\u00f3ria grav\u00e1vel cada um tem. Um NTAG213 comporta 132 bytes, o que d\u00e1 uma URL curta e pouco mais."
+				}
+			]
+		},
+		{
+			"type": "callout",
+			"kind": "note",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "O iOS entrega uma etiqueta a um app em segundo plano apenas quando a etiqueta carrega um registro de URL correspondente ao dom\u00ednio associado do app. Todo o resto exige o painel de Leitura aberto em primeiro plano."
+						}
+					]
+				}
+			],
+			"title": [
+				{
+					"type": "text",
+					"value": "Leitura em segundo plano"
+				}
+			]
+		},
+		{
+			"type": "callout",
+			"kind": "caution",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "O Fixture App precisa de cerca de dois segundos de contato para concluir uma grava\u00e7\u00e3o. Apertar com mais for\u00e7a n\u00e3o reduz esse tempo, e uma etiqueta amassada contra uma capa de metal pode quebrar a antena dentro do inlay."
+						}
+					]
+				}
+			],
+			"title": [
+				{
+					"type": "text",
+					"value": "N\u00e3o force a etiqueta contra o telefone"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Mantenha a etiqueta plana e parada at\u00e9 o painel de Leitura mostrar a barra verde de confirma\u00e7\u00e3o. Se a grava\u00e7\u00e3o for interrompida, a etiqueta mant\u00e9m o conte\u00fado anterior, ent\u00e3o uma grava\u00e7\u00e3o que falhou pode ser repetida sem risco."
+				}
+			]
+		},
+		{
+			"type": "thematicBreak"
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "para-onde-ir-agora",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Para onde ir agora"
+				}
+			],
+			"aliases": [
+				"where-to-go-next"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Comece por "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "guide/first-tag",
+					"children": [
+						{
+							"type": "text",
+							"value": "Leia sua primeira etiqueta"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": ", que cobre uma leitura e uma grava\u00e7\u00e3o em um NTAG215 vazio. Se uma etiqueta n\u00e3o for lida de jeito nenhum, revise antes "
+				},
+				{
+					"type": "link",
+					"kind": "anchor",
+					"anchor": "what-you-need",
+					"children": [
+						{
+							"type": "text",
+							"value": "o que voc\u00ea precisa"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": ". A maioria das falhas \u00e9 um chip que o leitor n\u00e3o consegue endere\u00e7ar, e n\u00e3o um defeito na etiqueta."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Os n\u00fameros de build e as notas de vers\u00e3o ficam no "
+				},
+				{
+					"type": "link",
+					"kind": "external",
+					"href": "https://example.com/fixture-app",
+					"children": [
+						{
+							"type": "text",
+							"value": "site do Fixture App"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": ". Envie corre\u00e7\u00f5es desta documenta\u00e7\u00e3o para "
+				},
+				{
+					"type": "link",
+					"kind": "mailto",
+					"address": "docs@example.com",
+					"children": [
+						{
+							"type": "text",
+							"value": "docs@example.com"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": "."
+				}
+			]
+		}
+	],
+	"translation": {
+		"state": "stale",
+		"sourceUpdated": "2026-01-05T09:00:00Z",
+		"translationUpdated": "2026-02-10T11:30:00Z"
+	},
+	"reading": {
+		"words": 462,
+		"minutes": 3
+	},
+	"snippets": [
+		"safety-note"
+	],
+	"sourceFile": "content/pt-BR/index.md"
+}

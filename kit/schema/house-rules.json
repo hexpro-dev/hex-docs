@@ -1,0 +1,148 @@
+{
+	"bannedCharacters": [
+		{
+			"codePoint": 8211,
+			"name": "en dash"
+		},
+		{
+			"codePoint": 8212,
+			"name": "em dash"
+		},
+		{
+			"codePoint": 8213,
+			"name": "horizontal bar"
+		},
+		{
+			"codePoint": 8594,
+			"name": "rightwards arrow"
+		},
+		{
+			"codePoint": 8658,
+			"name": "rightwards double arrow"
+		},
+		{
+			"codePoint": 8226,
+			"name": "bullet"
+		},
+		{
+			"codePoint": 10024,
+			"name": "sparkles"
+		},
+		{
+			"codePoint": 9989,
+			"name": "white heavy check mark"
+		},
+		{
+			"codePoint": 10060,
+			"name": "cross mark"
+		},
+		{
+			"codePoint": 128640,
+			"name": "rocket"
+		},
+		{
+			"codePoint": 128293,
+			"name": "fire"
+		},
+		{
+			"codePoint": 128161,
+			"name": "light bulb"
+		},
+		{
+			"codePoint": 127919,
+			"name": "direct hit"
+		}
+	],
+	"emDashCodePoints": [
+		8212,
+		8213
+	],
+	"protectedRules": [
+		"no-em-dash",
+		"no-en-dash-prose",
+		"no-decorative-unicode",
+		"no-banned-phrase",
+		"no-competitor-name",
+		"internal-leak",
+		"no-raw-html",
+		"unsupported-syntax",
+		"asset-svg-unsafe"
+	],
+	"houseStyleRules": [
+		"no-em-dash",
+		"no-en-dash-prose",
+		"no-decorative-unicode",
+		"no-banned-phrase",
+		"no-filler-verb-stack",
+		"no-hedging-stack",
+		"no-rhetorical-opener",
+		"no-triad",
+		"no-symmetric-pairs",
+		"no-bolded-bullet-leadins",
+		"australian-spelling"
+	],
+	"lintRuleIds": [
+		"no-h1-in-body",
+		"heading-depth",
+		"heading-order",
+		"no-raw-html",
+		"code-fence-language",
+		"table-header-required",
+		"page-size",
+		"unsupported-syntax",
+		"front-matter-invalid",
+		"title-length",
+		"description-length",
+		"description-is-a-sentence",
+		"link-resolves",
+		"anchor-resolves",
+		"snippet-resolves",
+		"orphan-page",
+		"nav-duplicate",
+		"nav-depth",
+		"slug-reserved",
+		"translation-missing",
+		"translation-stale",
+		"translation-is-source-text",
+		"heading-set-matches-source",
+		"glossary-term-translated",
+		"bidi-balance",
+		"no-em-dash",
+		"no-en-dash-prose",
+		"no-decorative-unicode",
+		"no-banned-phrase",
+		"no-filler-verb-stack",
+		"no-hedging-stack",
+		"no-rhetorical-opener",
+		"no-triad",
+		"no-symmetric-pairs",
+		"no-bolded-bullet-leadins",
+		"australian-spelling",
+		"no-competitor-name",
+		"internal-leak",
+		"alt-text-required",
+		"asset-colour-space",
+		"asset-size",
+		"asset-svg-unsafe"
+	],
+	"checkIds": [
+		"wiring-submodule",
+		"wiring-workspace-exclusion",
+		"wiring-tsconfig-path",
+		"wiring-deploy-hash-dirs",
+		"wiring-prebuild-hook",
+		"wiring-routes",
+		"wiring-localised-paths",
+		"wiring-sitemap",
+		"wiring-mcp",
+		"wiring-allow-paths",
+		"wiring-forbidden-agent-files",
+		"source-layout",
+		"bundle-ast-major",
+		"bundle-missing-object",
+		"bundle-digest-mismatch",
+		"bundle-label-unknown-sha",
+		"bundle-shallow-clone",
+		"bundle-file-undated"
+	]
+}

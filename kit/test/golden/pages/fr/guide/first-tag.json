@@ -1,0 +1,568 @@
+{
+	"ast": 1,
+	"project": "fixture-app",
+	"slug": "guide/first-tag",
+	"locale": "fr",
+	"title": "Scannez votre premier badge",
+	"description": "Lisez un badge NFC avec Fixture App pour la premi\u00e8re fois et enregistrez ce qu'il contient.",
+	"navTitle": "Premier scan",
+	"audience": "user",
+	"pageKind": "howto",
+	"tags": [
+		"scanning"
+	],
+	"since": "1.0.0",
+	"toc": true,
+	"headings": [
+		{
+			"id": "avant-de-commencer",
+			"depth": 2,
+			"text": "Avant de commencer"
+		},
+		{
+			"id": "lire-le-badge",
+			"depth": 2,
+			"text": "Lire le badge"
+		},
+		{
+			"id": "apr\u00e8s-la-lecture",
+			"depth": 2,
+			"text": "Apr\u00e8s la lecture"
+		},
+		{
+			"id": "si-la-lecture-n-aboutit-pas",
+			"depth": 2,
+			"text": "Si la lecture n'aboutit pas"
+		}
+	],
+	"body": [
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Une premi\u00e8re lecture prend une dizaine de secondes, badge en main. L'essentiel de ce temps sert \u00e0 trouver l'endroit o\u00f9 se loge l'antenne, plus haut au dos du t\u00e9l\u00e9phone qu'on ne l'imagine."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "avant-de-commencer",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Avant de commencer"
+				}
+			],
+			"aliases": [
+				"before-you-start"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Fixture App utilise le lecteur NFC du t\u00e9l\u00e9phone : il n'y a rien \u00e0 appairer ni \u00e0 recharger. Tout iPhone \u00e0 partir de l'iPhone 7, sous iOS 16 ou une version ult\u00e9rieure, peut lire un badge."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Il vous faut un badge auquel le lecteur sait parler, et un acc\u00e8s d\u00e9gag\u00e9 jusqu'\u00e0 lui :"
+				}
+			]
+		},
+		{
+			"type": "list",
+			"style": "bullet",
+			"tight": true,
+			"children": [
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Un iPhone 7 ou plus r\u00e9cent sous iOS 16 ou une version ult\u00e9rieure"
+								}
+							]
+						}
+					],
+					"checked": true
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Fixture App 1.0 ou plus r\u00e9cent, install\u00e9 depuis l'App Store"
+								}
+							]
+						}
+					],
+					"checked": true
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Un badge NTAG 213, NTAG 215 ou MIFARE Ultralight"
+								}
+							]
+						}
+					],
+					"checked": false
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Une coque de moins de 3 mm d'\u00e9paisseur, ou pas de coque du tout"
+								}
+							]
+						}
+					],
+					"checked": false
+				}
+			]
+		},
+		{
+			"type": "callout",
+			"kind": "caution",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "Fixture App a besoin d'environ deux secondes de contact pour terminer une \u00e9criture. Appuyer plus fort ne raccourcit pas ce d\u00e9lai, et un badge pli\u00e9 contre une coque m\u00e9tallique peut fissurer l'antenne log\u00e9e dans l'inlay."
+						}
+					]
+				}
+			],
+			"title": [
+				{
+					"type": "text",
+					"value": "Ne forcez pas un badge contre le t\u00e9l\u00e9phone"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Gardez le badge \u00e0 plat et immobile jusqu'\u00e0 ce que la feuille Scan affiche la barre de confirmation verte. Si l'\u00e9criture est interrompue, le badge conserve son contenu pr\u00e9c\u00e9dent : une \u00e9criture rat\u00e9e peut \u00eatre retent\u00e9e sans risque."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Tous les badges ne r\u00e9pondent pas. Les badges MIFARE Classic restent muets sur iPhone parce que le lecteur ne parle pas leur protocole, et certains badges de contr\u00f4le d'acc\u00e8s ne r\u00e9pondent qu'apr\u00e8s un \u00e9change de mot de passe. La "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "reference/chip-support",
+					"children": [
+						{
+							"type": "text",
+							"value": "matrice de compatibilit\u00e9 des puces"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " r\u00e9pertorie les puces test\u00e9es avec la version 1.0."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "lire-le-badge",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Lire le badge"
+				}
+			],
+			"aliases": [
+				"read-the-tag"
+			]
+		},
+		{
+			"type": "steps",
+			"children": [
+				{
+					"type": "step",
+					"id": "ouvrir-la-feuille-scan",
+					"title": [
+						{
+							"type": "text",
+							"value": "Ouvrir la feuille Scan"
+						}
+					],
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Touchez le grand cercle au milieu de l'\u00e9cran Biblioth\u00e8que, ou maintenez le doigt sur l'ic\u00f4ne de l'app sur l'\u00e9cran d'accueil et choisissez Scan. La feuille remonte et la ligne d'\u00e9tat indique \u00ab Pr\u00eat pour un badge \u00bb."
+								}
+							]
+						},
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Le lecteur reste actif pendant 60 secondes. Si rien n'entre dans son champ, la feuille se referme d'elle-m\u00eame et rien n'est ajout\u00e9 \u00e0 la Biblioth\u00e8que."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "step",
+					"id": "tenir-le-badge-contre-le-haut-du-t\u00e9l\u00e9phone",
+					"title": [
+						{
+							"type": "text",
+							"value": "Tenir le badge contre le haut du t\u00e9l\u00e9phone"
+						}
+					],
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Posez le bord sup\u00e9rieur du t\u00e9l\u00e9phone \u00e0 plat contre le badge et gardez les deux immobiles. La ligne d'\u00e9tat passe \u00e0 \u00ab Badge d\u00e9tect\u00e9 \u00bb et le t\u00e9l\u00e9phone \u00e9met un bref tic."
+								}
+							]
+						},
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "La position compte davantage que la pression :"
+								}
+							]
+						},
+						{
+							"type": "list",
+							"style": "bullet",
+							"tight": true,
+							"children": [
+								{
+									"type": "listItem",
+									"children": [
+										{
+											"type": "paragraph",
+											"children": [
+												{
+													"type": "text",
+													"value": "L'antenne court le long du bord sup\u00e9rieur, \u00e0 environ un centim\u00e8tre sous le bloc photo."
+												}
+											]
+										}
+									]
+								},
+								{
+									"type": "listItem",
+									"children": [
+										{
+											"type": "paragraph",
+											"children": [
+												{
+													"type": "text",
+													"value": "Gardez le badge parall\u00e8le au t\u00e9l\u00e9phone plut\u00f4t qu'en biais."
+												}
+											]
+										}
+									]
+								},
+								{
+									"type": "listItem",
+									"children": [
+										{
+											"type": "paragraph",
+											"children": [
+												{
+													"type": "text",
+													"value": "\u00c9cartez d'abord un portefeuille MagSafe ou une carte m\u00e9tallique."
+												}
+											]
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "step",
+					"id": "v\u00e9rifier-les-enregistrements-et-enregistrer",
+					"title": [
+						{
+							"type": "text",
+							"value": "V\u00e9rifier les enregistrements et enregistrer"
+						}
+					],
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Une fois la lecture termin\u00e9e, la feuille liste tous les enregistrements NDEF du badge, dans leur ordre de stockage. Fixture App reconna\u00eet les enregistrements URL, texte et Wi-Fi, et affiche un aper\u00e7u de chacun. Le reste est pr\u00e9sent\u00e9 sous forme d'octets bruts."
+								}
+							]
+						},
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Touchez Enregistrer pour conserver le badge, ou Ignorer pour fermer la feuille sans rien inscrire dans la Biblioth\u00e8que."
+								}
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "figure",
+			"image": {
+				"type": "image",
+				"src": "assets/b9922ff72601d007f508e4b11a31c7cd3215b8115dfd0ab2da6a584f98bbacb7.png",
+				"alt": "La feuille Scan en attente d'un badge",
+				"width": 160,
+				"height": 200
+			},
+			"caption": [
+				{
+					"type": "text",
+					"value": "La feuille Scan, en attente d'un badge \u00e0 port\u00e9e"
+				}
+			]
+		},
+		{
+			"type": "callout",
+			"kind": "warning",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "Les badges dot\u00e9s d'une zone prot\u00e9g\u00e9e par mot de passe r\u00e9pondent \u00e0 la premi\u00e8re partie de la lecture et refusent le reste. Fixture App affiche ce qu'il a obtenu et indique \u00ab Enregistrements incomplets \u00bb sous le nom du badge. Cherchez cette mention avant de vous fier \u00e0 la lecture d'un badge de contr\u00f4le d'acc\u00e8s."
+						}
+					]
+				}
+			],
+			"title": [
+				{
+					"type": "text",
+					"value": "Une lecture partielle ressemble \u00e0 une r\u00e9ussite"
+				}
+			]
+		},
+		{
+			"type": "callout",
+			"kind": "tip",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "Activez R\u00e9glages > Scan > Garder la feuille ouverte pour lire plusieurs badges \u00e0 la suite. La Biblioth\u00e8que regroupe tout ce qui provient de cette session sous un m\u00eame titre."
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "apr\u00e8s-la-lecture",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Apr\u00e8s la lecture"
+				}
+			],
+			"aliases": [
+				"after-the-read"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Les badges enregistr\u00e9s arrivent dans la Biblioth\u00e8que, du plus r\u00e9cent au plus ancien, avec le type de puce et l'heure de la lecture sous le nom. En toucher un ouvre D\u00e9tail du badge, qui affiche les octets bruts \u00e0 c\u00f4t\u00e9 des enregistrements d\u00e9cod\u00e9s."
+				}
+			]
+		},
+		{
+			"type": "figure",
+			"image": {
+				"type": "image",
+				"src": "assets/b9922ff72601d007f508e4b11a31c7cd3215b8115dfd0ab2da6a584f98bbacb7.png",
+				"alt": "Une lecture termin\u00e9e affichant trois enregistrements NDEF",
+				"width": 160,
+				"height": 200
+			}
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Renommer un badge ne change que ce que vous voyez dans la Biblioth\u00e8que. Rien n'est r\u00e9\u00e9crit sur le badge lui-m\u00eame tant que vous n'utilisez pas la feuille \u00c9criture, qui est une proc\u00e9dure distincte."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "si-la-lecture-n-aboutit-pas",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Si la lecture n'aboutit pas"
+				}
+			],
+			"aliases": [
+				"if-the-read-does-not-finish"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Le lecteur r\u00e9essaie de lui-m\u00eame. Les deux premi\u00e8res tentatives passent inaper\u00e7ues, \u00e0 environ une seconde d'intervalle. \u00c0 partir de la troisi\u00e8me, la feuille rend compte de ce qu'elle fait :"
+				}
+			]
+		},
+		{
+			"type": "list",
+			"style": "ordered",
+			"tight": true,
+			"children": [
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "\u00ab Recherche en cours \u00bb s'affiche dans la ligne d'\u00e9tat et le tic s'arr\u00eate."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Le lecteur repasse \u00e0 une fr\u00e9quence d'interrogation plus lente."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "La session se termine sur \u00ab Badge perdu avant la fin de la lecture \u00bb."
+								}
+							]
+						}
+					]
+				}
+			],
+			"start": 3
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Une lecture qui atteint la cinqui\u00e8me tentative deux fois de suite vient en g\u00e9n\u00e9ral du badge, pas du t\u00e9l\u00e9phone. "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "guide/troubleshooting",
+					"children": [
+						{
+							"type": "text",
+							"value": "Quand un scan \u00e9choue"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " passe en revue les causes dans l'ordre o\u00f9 il vaut la peine de les v\u00e9rifier."
+				}
+			]
+		}
+	],
+	"translation": {
+		"state": "stale",
+		"sourceUpdated": "2026-03-15T08:15:00Z",
+		"translationUpdated": "2026-02-10T11:30:00Z"
+	},
+	"reading": {
+		"words": 809,
+		"minutes": 5
+	},
+	"snippets": [
+		"safety-note"
+	],
+	"sourceFile": "content/fr/guide/first-tag.md"
+}

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="Contactless waves">
+	<g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+		<path d="M7 8.5a6 6 0 0 1 0 7" />
+		<path d="M10.5 6a10 10 0 0 1 0 12" />
+		<path d="M14 3.5a14 14 0 0 1 0 17" />
+	</g>
+</svg>

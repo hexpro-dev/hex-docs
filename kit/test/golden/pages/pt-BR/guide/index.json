@@ -1,0 +1,239 @@
+{
+	"ast": 1,
+	"project": "fixture-app",
+	"slug": "guide/index",
+	"locale": "pt-BR",
+	"title": "Guia",
+	"description": "Como ler, gravar e organizar etiquetas NFC com o Fixture App, da primeira leitura at\u00e9 uma etiqueta que sobrevive a uma lavagem.",
+	"navTitle": "Guia",
+	"audience": "both",
+	"pageKind": "article",
+	"tags": [
+		"scanning"
+	],
+	"toc": true,
+	"headings": [
+		{
+			"id": "por-onde-come\u00e7ar",
+			"depth": 2,
+			"text": "Por onde come\u00e7ar"
+		},
+		{
+			"id": "o-que-o-guia-n\u00e3o-cobre",
+			"depth": 2,
+			"text": "O que o guia n\u00e3o cobre"
+		},
+		{
+			"id": "ordem-de-leitura-para-uma-nova-implanta\u00e7\u00e3o",
+			"depth": 2,
+			"text": "Ordem de leitura para uma nova implanta\u00e7\u00e3o"
+		}
+	],
+	"body": [
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "O guia cobre as partes do Fixture App que voc\u00ea usa todo dia: ler uma etiqueta, gravar um payload nela e descobrir o que deu errado quando o telefone n\u00e3o responde. Ele pressup\u00f5e um iPhone com suporte a leitura de etiquetas em segundo plano, ou seja, todos os modelos a partir do iPhone XS."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Duas p\u00e1ginas ficam abaixo desta. Na primeira vez, leia-as na ordem."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "por-onde-come\u00e7ar",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Por onde come\u00e7ar"
+				}
+			],
+			"aliases": [
+				"where-to-start"
+			]
+		},
+		{
+			"type": "list",
+			"style": "ordered",
+			"tight": false,
+			"children": [
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "link",
+									"kind": "internal",
+									"slug": "guide/first-tag",
+									"children": [
+										{
+											"type": "text",
+											"value": "Leia sua primeira etiqueta"
+										}
+									]
+								},
+								{
+									"type": "text",
+									"value": " percorre o painel de Leitura, o retorno t\u00e1til que dispara em uma leitura bem-sucedida e a lista de registros que aparece assim que a etiqueta \u00e9 decodificada. Ela usa um adesivo NTAG213, que \u00e9 o chip da maioria dos pacotes de etiquetas baratas."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "link",
+									"kind": "internal",
+									"slug": "guide/troubleshooting",
+									"children": [
+										{
+											"type": "text",
+											"value": "Quando a leitura n\u00e3o funciona"
+										}
+									]
+								},
+								{
+									"type": "text",
+									"value": " lista os erros que o r\u00e1dio NFC pode retornar e o que cada um significa na pr\u00e1tica. Tempos limite de sess\u00e3o, etiquetas que s\u00e3o lidas uma vez e nunca mais, e o problema de posi\u00e7\u00e3o da antena que responde pela maioria dos relatos est\u00e3o todos l\u00e1."
+								}
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "As duas p\u00e1ginas pressup\u00f5em que voc\u00ea concedeu ao app a permiss\u00e3o de NFC pedida na primeira execu\u00e7\u00e3o. Se voc\u00ea recusou, o bot\u00e3o Ler fica desativado e um aviso com o texto \"NFC indispon\u00edvel\" aparece no topo da tela Etiquetas. Apagar e reinstalar o app \u00e9 a \u00fanica forma de ver esse pedido de novo."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "o-que-o-guia-n\u00e3o-cobre",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "O que o guia n\u00e3o cobre"
+				}
+			],
+			"aliases": [
+				"what-the-guide-does-not-cover"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Capacidades dos chips, layouts de mem\u00f3ria e os tipos exatos de registro que cada chip aceita ficam na se\u00e7\u00e3o de refer\u00eancia, e n\u00e3o aqui. Se voc\u00ea est\u00e1 escolhendo etiquetas para comprar, comece pela matriz de compatibilidade de chips em vez deste guia."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "O esquema de URL do Fixture App, as a\u00e7\u00f5es de atalhos e os callbacks de sess\u00e3o de etiqueta s\u00e3o material para desenvolvedores. Eles n\u00e3o se repetem no guia, porque o guia foi escrito para quem est\u00e1 com um telefone e um adesivo na m\u00e3o."
+				}
+			]
+		},
+		{
+			"type": "blockquote",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "Uma etiqueta que falha na grava\u00e7\u00e3o normalmente n\u00e3o est\u00e1 com defeito. A grava\u00e7\u00e3o exige que a etiqueta permane\u00e7a no campo durante toda a opera\u00e7\u00e3o, e uma m\u00e3o que se afasta depois do tom de leitura aborta a grava\u00e7\u00e3o, deixando a etiqueta leg\u00edvel, por\u00e9m inalterada. Fique parado at\u00e9 o segundo tom."
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "ordem-de-leitura-para-uma-nova-implanta\u00e7\u00e3o",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Ordem de leitura para uma nova implanta\u00e7\u00e3o"
+				}
+			],
+			"aliases": [
+				"reading-order-for-a-new-deployment"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Se voc\u00ea vai configurar mais do que um punhado de etiquetas, fa\u00e7a o processo completo em uma delas antes de mexer nas outras. Grave, leia de volta em um segundo telefone e ent\u00e3o bloqueie. Um NTAG213 bloqueado n\u00e3o pode ser regravado, ent\u00e3o um erro descoberto na primeira etiqueta custa um adesivo, e um erro descoberto na etiqueta duzentos custa uma tarde."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "A "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "index",
+					"children": [
+						{
+							"type": "text",
+							"value": "p\u00e1gina inicial da documenta\u00e7\u00e3o"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " leva \u00e0s se\u00e7\u00f5es de refer\u00eancia e de desenvolvedor quando voc\u00ea precisar delas."
+				}
+			]
+		}
+	],
+	"translation": {
+		"state": "current",
+		"sourceUpdated": "2026-01-05T09:00:00Z",
+		"translationUpdated": "2026-02-10T11:30:00Z"
+	},
+	"reading": {
+		"words": 449,
+		"minutes": 3
+	},
+	"snippets": [],
+	"sourceFile": "content/pt-BR/guide/index.md"
+}

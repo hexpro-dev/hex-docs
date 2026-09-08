@@ -1,0 +1,11 @@
+{
+	// Tests and the vitest config. Separate from `tsconfig.json` so the runtime half
+	// keeps compiling with no ambient node types: a test may read a fixture off disk,
+	// the code under test may not.
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"types": ["node"],
+		"noEmit": true
+	},
+	"include": ["test", "vitest.config.ts", "src", "fixtures"]
+}

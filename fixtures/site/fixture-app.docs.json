@@ -1,0 +1,39 @@
+{
+	"$schema": "../../kit/schema/site-1.json",
+	"site": 1,
+	"project": "fixture-app",
+	"basePath": "/fixture-app/docs",
+	"themeClass": "app-fixture",
+	"navLabel": {
+		"en": "Docs",
+		"zh": "文档",
+		"ar": "التوثيق",
+		"es": "Documentación",
+		"ja": "ドキュメント",
+		"fr": "Documentation",
+		"pt-BR": "Documentação"
+	},
+	"versions": [
+		{
+			"label": "1.1.0",
+			"commit": "67a7f22c66619693ab861f82cd1cc5fb2f1788a6",
+			"released": "2026-04-08",
+			"default": true
+		},
+		{
+			"label": "1.0.0",
+			"commit": "bec42b4a2f4d59371ae29e19d9e8b441165b186b",
+			"released": "2026-01-12"
+		}
+	],
+	"pages": [
+		"index",
+		"guide/index",
+		"guide/first-tag",
+		"guide/troubleshooting",
+		"reference/index",
+		"reference/chip-support",
+		"reference/api",
+		"developer/architecture"
+	]
+}

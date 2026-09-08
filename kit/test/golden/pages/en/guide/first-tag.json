@@ -1,0 +1,555 @@
+{
+	"ast": 1,
+	"project": "fixture-app",
+	"slug": "guide/first-tag",
+	"locale": "en",
+	"title": "Scan your first tag",
+	"description": "Read an NFC tag with Fixture App for the first time and save what it holds.",
+	"navTitle": "First scan",
+	"audience": "user",
+	"pageKind": "howto",
+	"tags": [
+		"scanning"
+	],
+	"since": "1.0.0",
+	"toc": true,
+	"headings": [
+		{
+			"id": "before-you-start",
+			"depth": 2,
+			"text": "Before you start"
+		},
+		{
+			"id": "read-the-tag",
+			"depth": 2,
+			"text": "Read the tag"
+		},
+		{
+			"id": "after-the-read",
+			"depth": 2,
+			"text": "After the read"
+		},
+		{
+			"id": "if-the-read-does-not-finish",
+			"depth": 2,
+			"text": "If the read does not finish"
+		}
+	],
+	"body": [
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "A first read takes about ten seconds once the tag is in your hand. Most of that is finding the spot on the phone where the antenna sits, which is further up the back than people expect."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "before-you-start",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Before you start"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Fixture App uses the NFC reader in the phone, so there is nothing to pair and nothing to charge. Any iPhone from the iPhone 7 onwards, running iOS 16 or later, can read a tag."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "You need a tag the reader can talk to, and a clear path to it:"
+				}
+			]
+		},
+		{
+			"type": "list",
+			"style": "bullet",
+			"tight": true,
+			"children": [
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "An iPhone 7 or later running iOS 16 or newer"
+								}
+							]
+						}
+					],
+					"checked": true
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Fixture App 1.0 or later, installed from the App Store"
+								}
+							]
+						}
+					],
+					"checked": true
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "An NTAG 213, NTAG 215 or MIFARE Ultralight tag"
+								}
+							]
+						}
+					],
+					"checked": false
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "A case thinner than 3 mm, or no case at all"
+								}
+							]
+						}
+					],
+					"checked": false
+				}
+			]
+		},
+		{
+			"type": "callout",
+			"kind": "caution",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "Fixture App needs about two seconds of contact to finish a write. Pressing harder does not shorten that, and a tag creased against a metal case can crack the antenna inside the inlay."
+						}
+					]
+				}
+			],
+			"title": [
+				{
+					"type": "text",
+					"value": "Do not force a tag against the phone"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Keep the tag flat and still until the Scan sheet shows the green confirm bar. If the write is interrupted the tag keeps its previous contents, so a failed write is safe to retry."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Not every tag answers. MIFARE Classic tags stay silent on iPhone because the reader does not speak their protocol, and some access control tags answer only after a password exchange. The "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "reference/chip-support",
+					"children": [
+						{
+							"type": "text",
+							"value": "Chip support matrix"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " lists the chips that have been tested against version 1.0."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "read-the-tag",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Read the tag"
+				}
+			]
+		},
+		{
+			"type": "steps",
+			"children": [
+				{
+					"type": "step",
+					"id": "open-the-scan-sheet",
+					"title": [
+						{
+							"type": "text",
+							"value": "Open the Scan sheet"
+						}
+					],
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Tap the large circle in the middle of the Library screen, or press and hold the app icon on the Home Screen and choose Scan. The sheet slides up and the status line reads \"Ready for a tag\"."
+								}
+							]
+						},
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "The reader stays awake for 60 seconds. If nothing comes within range the sheet closes itself, and nothing is added to the Library."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "step",
+					"id": "hold-the-tag-against-the-top-of-the-phone",
+					"title": [
+						{
+							"type": "text",
+							"value": "Hold the tag against the top of the phone"
+						}
+					],
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Rest the top edge of the phone flat against the tag and keep both still. The status line changes to \"Tag detected\" and the phone plays a short tick."
+								}
+							]
+						},
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Position matters more than pressure:"
+								}
+							]
+						},
+						{
+							"type": "list",
+							"style": "bullet",
+							"tight": true,
+							"children": [
+								{
+									"type": "listItem",
+									"children": [
+										{
+											"type": "paragraph",
+											"children": [
+												{
+													"type": "text",
+													"value": "The antenna runs across the top edge, about a centimetre below the camera bar."
+												}
+											]
+										}
+									]
+								},
+								{
+									"type": "listItem",
+									"children": [
+										{
+											"type": "paragraph",
+											"children": [
+												{
+													"type": "text",
+													"value": "Keep the tag square to the phone rather than at an angle."
+												}
+											]
+										}
+									]
+								},
+								{
+									"type": "listItem",
+									"children": [
+										{
+											"type": "paragraph",
+											"children": [
+												{
+													"type": "text",
+													"value": "Move a MagSafe wallet or a metal card out of the way first."
+												}
+											]
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "step",
+					"id": "check-the-records-and-save",
+					"title": [
+						{
+							"type": "text",
+							"value": "Check the records and save"
+						}
+					],
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "When the read finishes the sheet lists every NDEF record on the tag, in the order they are stored. Fixture App recognises URL, text and Wi-Fi records and shows a preview of each one. Anything else is listed as raw bytes."
+								}
+							]
+						},
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Tap Save to keep the tag, or Discard to close the sheet without writing anything to the Library."
+								}
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "figure",
+			"image": {
+				"type": "image",
+				"src": "assets/b9922ff72601d007f508e4b11a31c7cd3215b8115dfd0ab2da6a584f98bbacb7.png",
+				"alt": "The Scan sheet waiting for a tag",
+				"width": 160,
+				"height": 200
+			},
+			"caption": [
+				{
+					"type": "text",
+					"value": "The Scan sheet, waiting for a tag to come within range"
+				}
+			]
+		},
+		{
+			"type": "callout",
+			"kind": "warning",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "Tags with a password-protected area answer the first part of a read and refuse the rest. Fixture App shows what it got and puts \"Records incomplete\" under the tag name. Look for that line before you trust a read of an access control tag."
+						}
+					]
+				}
+			],
+			"title": [
+				{
+					"type": "text",
+					"value": "A partial read looks like a success"
+				}
+			]
+		},
+		{
+			"type": "callout",
+			"kind": "tip",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "Turn on Settings > Scanning > Keep sheet open to read several tags in one go. The Library groups everything from that session under a single heading."
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "after-the-read",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "After the read"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Saved tags land in the Library, newest first, with the chip type and the time of the read under the name. Tapping one opens Tag detail, which shows the raw bytes beside the decoded records."
+				}
+			]
+		},
+		{
+			"type": "figure",
+			"image": {
+				"type": "image",
+				"src": "assets/b9922ff72601d007f508e4b11a31c7cd3215b8115dfd0ab2da6a584f98bbacb7.png",
+				"alt": "A completed read listing three NDEF records",
+				"width": 160,
+				"height": 200
+			}
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Renaming a tag changes only what you see in the Library. Nothing is written back to the tag itself unless you use the Write sheet, which is a separate procedure."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "if-the-read-does-not-finish",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "If the read does not finish"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "The reader retries on its own. The first two attempts happen quietly, within about a second of each other. From the third attempt the sheet starts reporting what it is doing:"
+				}
+			]
+		},
+		{
+			"type": "list",
+			"style": "ordered",
+			"tight": true,
+			"children": [
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "\"Still looking\" appears in the status line and the tick stops."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "The reader falls back to a slower polling rate."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "The session ends with \"Tag lost before the read finished\"."
+								}
+							]
+						}
+					]
+				}
+			],
+			"start": 3
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "A read that reaches the fifth attempt twice in a row is usually the tag, not the phone. "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "guide/troubleshooting",
+					"children": [
+						{
+							"type": "text",
+							"value": "When a scan does not work"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " walks through the causes in the order worth checking them."
+				}
+			]
+		}
+	],
+	"translation": {
+		"state": "source",
+		"sourceUpdated": "2026-03-15T08:15:00Z"
+	},
+	"reading": {
+		"words": 723,
+		"minutes": 4
+	},
+	"snippets": [
+		"safety-note"
+	],
+	"sourceFile": "content/en/guide/first-tag.md"
+}

@@ -1,0 +1,290 @@
+{
+	"ast": 1,
+	"project": "fixture-app",
+	"slug": "reference/index",
+	"locale": "fr",
+	"title": "R\u00e9f\u00e9rence",
+	"description": "Pages de consultation sur la compatibilit\u00e9 mat\u00e9rielle des badges et sur l'API de session de badge dans Fixture App.",
+	"navTitle": "R\u00e9f\u00e9rence",
+	"audience": "both",
+	"pageKind": "article",
+	"tags": [
+		"chips"
+	],
+	"toc": false,
+	"headings": [
+		{
+			"id": "ce-que-vous-trouverez-ici",
+			"depth": 2,
+			"text": "Ce que vous trouverez ici"
+		},
+		{
+			"id": "conventions",
+			"depth": 2,
+			"text": "Conventions"
+		}
+	],
+	"body": [
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Les pages de r\u00e9f\u00e9rence r\u00e9pondent vite \u00e0 une question pr\u00e9cise. Elles ne vous guident pas pas \u00e0 pas dans une t\u00e2che : c'est le r\u00f4le "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "guide/index",
+					"children": [
+						{
+							"type": "text",
+							"value": "du guide"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": "."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "ce-que-vous-trouverez-ici",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Ce que vous trouverez ici"
+				}
+			],
+			"aliases": [
+				"what-is-here"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "La "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "reference/chip-support",
+					"children": [
+						{
+							"type": "text",
+							"value": "matrice de compatibilit\u00e9 des puces"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " r\u00e9pertorie toutes les familles de badges que Fixture App reconna\u00eet, avec la m\u00e9moire utilisable, les modes d'\u00e9criture accept\u00e9s par chacune et le caract\u00e8re irr\u00e9versible ou non de leurs bits de verrouillage. Consultez-la avant d'acheter un lot de badges."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "L'"
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "reference/api",
+					"children": [
+						{
+							"type": "text",
+							"value": "API de session de badge"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " documente le type "
+				},
+				{
+					"type": "inlineCode",
+					"value": "TagSession"
+				},
+				{
+					"type": "text",
+					"value": ", les enregistrements qu'il renvoie et toutes les erreurs qu'il peut lever. Elle est \u00e9crite pour les d\u00e9veloppeurs qui int\u00e8grent le lecteur de Fixture App dans une autre app."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "conventions",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Conventions"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Les deux pages emploient la m\u00eame notation. Les tailles correspondent aux octets qui vous restent une fois l'en-t\u00eate propre au badge d\u00e9duit, pas au chiffre imprim\u00e9 sur l'emballage."
+				}
+			]
+		},
+		{
+			"type": "table",
+			"align": [
+				null,
+				null
+			],
+			"header": [
+				{
+					"type": "tableCell",
+					"children": [
+						{
+							"type": "text",
+							"value": "Notation"
+						}
+					]
+				},
+				{
+					"type": "tableCell",
+					"children": [
+						{
+							"type": "text",
+							"value": "Signification"
+						}
+					]
+				}
+			],
+			"rows": [
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "0x04"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "Un octet unique en hexad\u00e9cimal, tel que l'app l'affiche"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "216 B"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "M\u00e9moire utilisateur utilisable, en-t\u00eate exclu"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "n/a"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "Le champ ne s'applique pas \u00e0 cette famille de badges"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "RO"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "Lecture seule, parce que les bits de verrouillage ont \u00e9t\u00e9 pos\u00e9s"
+							}
+						]
+					}
+				]
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Un champ marqu\u00e9 "
+				},
+				{
+					"type": "inlineCode",
+					"value": "n/a"
+				},
+				{
+					"type": "text",
+					"value": " est absent, et non nul. Un badge qui annonce "
+				},
+				{
+					"type": "inlineCode",
+					"value": "0 B"
+				},
+				{
+					"type": "text",
+					"value": " a \u00e9t\u00e9 verrouill\u00e9 avec une charge utile vide, ce qui est un autre probl\u00e8me."
+				}
+			]
+		}
+	],
+	"translation": {
+		"state": "current",
+		"sourceUpdated": "2026-01-05T09:00:00Z",
+		"translationUpdated": "2026-02-10T11:30:00Z"
+	},
+	"reading": {
+		"words": 228,
+		"minutes": 2
+	},
+	"snippets": [],
+	"sourceFile": "content/fr/reference/index.md"
+}

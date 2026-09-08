@@ -1,0 +1,239 @@
+{
+	"ast": 1,
+	"project": "fixture-app",
+	"slug": "guide/index",
+	"locale": "es",
+	"title": "Gu\u00eda",
+	"description": "C\u00f3mo escanear, escribir y organizar etiquetas NFC con Fixture App, desde el primer escaneo hasta una etiqueta que aguanta un lavado.",
+	"navTitle": "Gu\u00eda",
+	"audience": "both",
+	"pageKind": "article",
+	"tags": [
+		"scanning"
+	],
+	"toc": true,
+	"headings": [
+		{
+			"id": "por-d\u00f3nde-empezar",
+			"depth": 2,
+			"text": "Por d\u00f3nde empezar"
+		},
+		{
+			"id": "lo-que-la-gu\u00eda-no-cubre",
+			"depth": 2,
+			"text": "Lo que la gu\u00eda no cubre"
+		},
+		{
+			"id": "orden-de-lectura-para-un-despliegue-nuevo",
+			"depth": 2,
+			"text": "Orden de lectura para un despliegue nuevo"
+		}
+	],
+	"body": [
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "La gu\u00eda cubre las partes de Fixture App que usas a diario: leer una etiqueta, escribir contenido en ella y averiguar qu\u00e9 ha fallado cuando el tel\u00e9fono no reacciona. Da por supuesto un iPhone compatible con la lectura de etiquetas en segundo plano, que son todos los modelos a partir del iPhone XS."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Por debajo de esta hay dos p\u00e1ginas. La primera vez, l\u00e9elas en orden."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "por-d\u00f3nde-empezar",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Por d\u00f3nde empezar"
+				}
+			],
+			"aliases": [
+				"where-to-start"
+			]
+		},
+		{
+			"type": "list",
+			"style": "ordered",
+			"tight": false,
+			"children": [
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "link",
+									"kind": "internal",
+									"slug": "guide/first-tag",
+									"children": [
+										{
+											"type": "text",
+											"value": "Escanea tu primera etiqueta"
+										}
+									]
+								},
+								{
+									"type": "text",
+									"value": " recorre la hoja de escaneo, la vibraci\u00f3n que se dispara en una lectura correcta y la lista de registros que aparece una vez descodificada la etiqueta. Usa un adhesivo NTAG213, que es el chip de la mayor\u00eda de los packs de etiquetas baratos."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "link",
+									"kind": "internal",
+									"slug": "guide/troubleshooting",
+									"children": [
+										{
+											"type": "text",
+											"value": "Cuando un escaneo no funciona"
+										}
+									]
+								},
+								{
+									"type": "text",
+									"value": " enumera los errores que puede devolver la radio NFC y qu\u00e9 significa cada uno en la pr\u00e1ctica. All\u00ed se tratan los tiempos de espera de la sesi\u00f3n, las etiquetas que se leen una vez y nunca m\u00e1s, y el problema de posici\u00f3n de la antena que explica la mayor\u00eda de los avisos."
+								}
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Ambas p\u00e1ginas dan por hecho que concediste el permiso de NFC que la app pide al abrirse por primera vez. Si lo rechazaste, el bot\u00f3n Escanear queda desactivado y aparece un aviso que dice \"NFC no est\u00e1 disponible\" en la parte superior de la pantalla Etiquetas. Borrar la app y volver a instalarla es la \u00fanica forma de ver esa petici\u00f3n otra vez."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "lo-que-la-gu\u00eda-no-cubre",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Lo que la gu\u00eda no cubre"
+				}
+			],
+			"aliases": [
+				"what-the-guide-does-not-cover"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Las capacidades de los chips, la distribuci\u00f3n de la memoria y los tipos de registro exactos que acepta cada chip est\u00e1n en la secci\u00f3n de referencia, no aqu\u00ed. Si est\u00e1s eligiendo qu\u00e9 etiquetas comprar, empieza por la matriz de chips compatibles en lugar de por esta gu\u00eda."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "El esquema de URL de Fixture App, las acciones de Atajos y las retrollamadas de sesi\u00f3n de etiqueta son material para desarrolladores. No se repiten en la gu\u00eda, porque la gu\u00eda est\u00e1 escrita para alguien que tiene en la mano un tel\u00e9fono y un adhesivo."
+				}
+			]
+		},
+		{
+			"type": "blockquote",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "Una etiqueta en la que falla la escritura no suele estar defectuosa. Las operaciones de escritura necesitan que la etiqueta siga dentro del campo durante toda la operaci\u00f3n, y una mano que se aparta tras el tono de lectura aborta la escritura y deja la etiqueta legible pero sin cambios. No te muevas hasta el segundo tono."
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "orden-de-lectura-para-un-despliegue-nuevo",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Orden de lectura para un despliegue nuevo"
+				}
+			],
+			"aliases": [
+				"reading-order-for-a-new-deployment"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Si vas a preparar m\u00e1s de un pu\u00f1ado de etiquetas, haz una pasada completa con una sola antes de tocar el resto. Escr\u00edbela, vuelve a leerla con un segundo tel\u00e9fono y luego bloqu\u00e9ala. Un NTAG213 bloqueado no se puede reescribir, as\u00ed que un error detectado en la etiqueta uno cuesta un adhesivo y un error detectado en la etiqueta doscientas cuesta una tarde."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "La "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "index",
+					"children": [
+						{
+							"type": "text",
+							"value": "portada de la documentaci\u00f3n"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " enlaza con las secciones de referencia y de desarrollo cuando las necesites."
+				}
+			]
+		}
+	],
+	"translation": {
+		"state": "current",
+		"sourceUpdated": "2026-01-05T09:00:00Z",
+		"translationUpdated": "2026-02-10T11:30:00Z"
+	},
+	"reading": {
+		"words": 478,
+		"minutes": 3
+	},
+	"snippets": [],
+	"sourceFile": "content/es/guide/index.md"
+}

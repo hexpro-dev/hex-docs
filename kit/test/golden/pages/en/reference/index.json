@@ -1,0 +1,278 @@
+{
+	"ast": 1,
+	"project": "fixture-app",
+	"slug": "reference/index",
+	"locale": "en",
+	"title": "Reference",
+	"description": "Lookup pages for tag hardware support and the Tag session API in Fixture App.",
+	"navTitle": "Reference",
+	"audience": "both",
+	"pageKind": "article",
+	"tags": [
+		"chips"
+	],
+	"toc": false,
+	"headings": [
+		{
+			"id": "what-is-here",
+			"depth": 2,
+			"text": "What is here"
+		},
+		{
+			"id": "conventions",
+			"depth": 2,
+			"text": "Conventions"
+		}
+	],
+	"body": [
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Reference pages answer a narrow question quickly. They do not walk you through a task, which is what "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "guide/index",
+					"children": [
+						{
+							"type": "text",
+							"value": "the guide"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " is for."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "what-is-here",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "What is here"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "reference/chip-support",
+					"children": [
+						{
+							"type": "text",
+							"value": "Chip support matrix"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " lists every tag family Fixture App recognises, with usable memory, the write modes each one accepts and whether its lock bits are one way. Check it before you buy a batch of tags."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "reference/api",
+					"children": [
+						{
+							"type": "text",
+							"value": "Tag session API"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " documents the "
+				},
+				{
+					"type": "inlineCode",
+					"value": "TagSession"
+				},
+				{
+					"type": "text",
+					"value": " type, the records it returns and every error it can throw. It is written for developers embedding the Fixture App reader in another app."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "conventions",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Conventions"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Both pages use the same notation. Sizes are the bytes available to you after the tag's own header, not the figure printed on the packaging."
+				}
+			]
+		},
+		{
+			"type": "table",
+			"align": [
+				null,
+				null
+			],
+			"header": [
+				{
+					"type": "tableCell",
+					"children": [
+						{
+							"type": "text",
+							"value": "Notation"
+						}
+					]
+				},
+				{
+					"type": "tableCell",
+					"children": [
+						{
+							"type": "text",
+							"value": "Meaning"
+						}
+					]
+				}
+			],
+			"rows": [
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "0x04"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "A single byte in hexadecimal, as the app prints it"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "216 B"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "Usable user memory, header excluded"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "n/a"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "The field does not apply to that tag family"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "RO"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "Read only, because the lock bits have been set"
+							}
+						]
+					}
+				]
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "A field marked "
+				},
+				{
+					"type": "inlineCode",
+					"value": "n/a"
+				},
+				{
+					"type": "text",
+					"value": " is absent rather than zero. A tag that reports "
+				},
+				{
+					"type": "inlineCode",
+					"value": "0 B"
+				},
+				{
+					"type": "text",
+					"value": " has been locked with an empty payload, which is a different problem."
+				}
+			]
+		}
+	],
+	"translation": {
+		"state": "source",
+		"sourceUpdated": "2026-01-05T09:00:00Z"
+	},
+	"reading": {
+		"words": 187,
+		"minutes": 1
+	},
+	"snippets": [],
+	"sourceFile": "content/en/reference/index.md"
+}

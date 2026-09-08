@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 120" width="240" height="120">
+	<rect width="240" height="120" fill="#101114" />
+	<text x="16" y="40" fill="#e8e8ea" font-size="14">Module graph</text>
+	<a href="https://example.com/not-a-diagram"><text x="16" y="70" fill="#0b76d9">Open</text></a>
+	<script type="text/javascript">document.title = 'this ran in the site origin';</script>
+	<foreignObject x="16" y="80" width="200" height="30">
+		<div xmlns="http://www.w3.org/1999/xhtml">Arbitrary XHTML, which is the classic bypass.</div>
+	</foreignObject>
+	<image href="https://example.com/tracker.png" x="0" y="100" width="1" height="1" onload="fetch('https://example.com/beacon')" />
+</svg>

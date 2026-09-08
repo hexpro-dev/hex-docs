@@ -1,0 +1,229 @@
+{
+	"ast": 1,
+	"project": "fixture-app",
+	"slug": "guide/index",
+	"locale": "en",
+	"title": "Guide",
+	"description": "How to scan, write and organise NFC tags with Fixture App, from the first scan to a tag that survives a wash cycle.",
+	"navTitle": "Guide",
+	"audience": "both",
+	"pageKind": "article",
+	"tags": [
+		"scanning"
+	],
+	"toc": true,
+	"headings": [
+		{
+			"id": "where-to-start",
+			"depth": 2,
+			"text": "Where to start"
+		},
+		{
+			"id": "what-the-guide-does-not-cover",
+			"depth": 2,
+			"text": "What the guide does not cover"
+		},
+		{
+			"id": "reading-order-for-a-new-deployment",
+			"depth": 2,
+			"text": "Reading order for a new deployment"
+		}
+	],
+	"body": [
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "The guide covers the parts of Fixture App you touch every day: reading a tag, writing a payload to it, and working out what went wrong when the phone stays silent. It assumes an iPhone that supports background tag reading, which is every model from the iPhone XS onward."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Two pages sit under this one. Read them in order the first time."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "where-to-start",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Where to start"
+				}
+			]
+		},
+		{
+			"type": "list",
+			"style": "ordered",
+			"tight": false,
+			"children": [
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "link",
+									"kind": "internal",
+									"slug": "guide/first-tag",
+									"children": [
+										{
+											"type": "text",
+											"value": "Scan your first tag"
+										}
+									]
+								},
+								{
+									"type": "text",
+									"value": " walks through the Scan sheet, the haptic that fires on a successful read, and the record list that appears once the tag is decoded. It uses an NTAG213 sticker, which is the chip in most cheap tag packs."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "link",
+									"kind": "internal",
+									"slug": "guide/troubleshooting",
+									"children": [
+										{
+											"type": "text",
+											"value": "When a scan does not work"
+										}
+									]
+								},
+								{
+									"type": "text",
+									"value": " lists the errors the NFC radio can return and what each one means in practice. Session timeouts, tags that read once and never again, and the antenna position problem that accounts for most reports are all covered there."
+								}
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Both pages assume you have granted the app the NFC entitlement prompt on first launch. If you declined it, the Scan button is disabled and a banner reading \"NFC is unavailable\" sits at the top of the Tags screen. Deleting and reinstalling the app is the only way to see that prompt again."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "what-the-guide-does-not-cover",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "What the guide does not cover"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Chip capacities, memory layouts and the exact record types each chip accepts live in the reference section rather than here. If you are choosing tags to buy, start with the chip support matrix instead of this guide."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "The Fixture App URL scheme, the shortcuts actions and the tag session callbacks are developer material. They are not repeated in the guide, because the guide is written for someone holding a phone and a sticker."
+				}
+			]
+		},
+		{
+			"type": "blockquote",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "A tag that fails to write is usually not faulty. Write operations need the tag to stay in the field for the whole operation, and a hand that moves away after the read tone will abort the write with the tag left readable but unchanged. Hold still until the second tone."
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "reading-order-for-a-new-deployment",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Reading order for a new deployment"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "If you are setting up more than a handful of tags, do a full pass on one tag before you touch the rest. Write it, read it back on a second phone, then lock it. A locked NTAG213 cannot be rewritten, so a mistake caught on tag one costs a sticker and a mistake caught on tag two hundred costs an afternoon."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "The "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "index",
+					"children": [
+						{
+							"type": "text",
+							"value": "documentation home"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " links to the reference and developer sections when you need them."
+				}
+			]
+		}
+	],
+	"translation": {
+		"state": "source",
+		"sourceUpdated": "2026-01-05T09:00:00Z"
+	},
+	"reading": {
+		"words": 416,
+		"minutes": 3
+	},
+	"snippets": [],
+	"sourceFile": "content/en/guide/index.md"
+}

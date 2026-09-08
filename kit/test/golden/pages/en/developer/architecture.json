@@ -1,0 +1,1041 @@
+{
+	"ast": 1,
+	"project": "fixture-app",
+	"slug": "developer/architecture",
+	"locale": "en",
+	"title": "How the app is put together",
+	"description": "The package layout, and which module talks to CoreNFC.",
+	"navTitle": "Architecture",
+	"audience": "developer",
+	"pageKind": "article",
+	"tags": [
+		"architecture"
+	],
+	"since": "1.1.0",
+	"toc": true,
+	"headings": [
+		{
+			"id": "module-graph",
+			"depth": 2,
+			"text": "Module graph"
+		},
+		{
+			"id": "where-a-scan-happens",
+			"depth": 2,
+			"text": "Where a scan happens"
+		},
+		{
+			"id": "what-was-removed",
+			"depth": 2,
+			"text": "What was removed"
+		},
+		{
+			"id": "adding-a-package",
+			"depth": 2,
+			"text": "Adding a package"
+		}
+	],
+	"body": [
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Fixture App is one Xcode project plus five local Swift packages under "
+				},
+				{
+					"type": "inlineCode",
+					"value": "Packages/"
+				},
+				{
+					"type": "text",
+					"value": ". The app target, "
+				},
+				{
+					"type": "inlineCode",
+					"value": "AppShell"
+				},
+				{
+					"type": "text",
+					"value": ", is thin. It owns the window and the deep link handler, and every screen it presents comes out of a package."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Dependencies point one way. No package imports the app target, and nothing below "
+				},
+				{
+					"type": "inlineCode",
+					"value": "Design"
+				},
+				{
+					"type": "text",
+					"value": " knows that a view exists."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "module-graph",
+			"idSource": "explicit",
+			"children": [
+				{
+					"type": "text",
+					"value": "Module graph"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Read the tree as \"depends on\". AppShell -> Design -> Shaders means the app links "
+				},
+				{
+					"type": "inlineCode",
+					"value": "Design"
+				},
+				{
+					"type": "text",
+					"value": ", and "
+				},
+				{
+					"type": "inlineCode",
+					"value": "Design"
+				},
+				{
+					"type": "text",
+					"value": " links "
+				},
+				{
+					"type": "inlineCode",
+					"value": "Shaders"
+				},
+				{
+					"type": "text",
+					"value": "."
+				}
+			]
+		},
+		{
+			"lang": "text",
+			"type": "code",
+			"highlighted": false,
+			"lines": [
+				{
+					"tokens": [
+						{
+							"text": "AppShell"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "\u251c\u2500 TagSession \u2500\u252c\u2500 ChipProfiles"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "\u2502              \u2514\u2500 TagCodec"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "\u251c\u2500 Design \u2500\u2500\u2500\u2500\u2500\u2500\u2500 Shaders"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "\u2514\u2500 Storage \u2500\u2500\u2500\u2500\u252c\u2500 KeychainVault"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "               \u2514\u2500 ScanLog"
+						}
+					]
+				}
+			],
+			"showLineNumbers": false
+		},
+		{
+			"type": "list",
+			"style": "bullet",
+			"tight": true,
+			"children": [
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "inlineCode",
+									"value": "TagSession"
+								},
+								{
+									"type": "text",
+									"value": " is the only package that imports CoreNFC. It opens the reader session, hands raw NDEF payloads to "
+								},
+								{
+									"type": "inlineCode",
+									"value": "TagCodec"
+								},
+								{
+									"type": "text",
+									"value": ", and publishes the state machine the Scan sheet observes."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "inlineCode",
+									"value": "TagCodec"
+								},
+								{
+									"type": "text",
+									"value": " turns NDEF records into "
+								},
+								{
+									"type": "inlineCode",
+									"value": "TagRecord"
+								},
+								{
+									"type": "text",
+									"value": " values and back. It needs nothing from Apple beyond Foundation, so the "
+								},
+								{
+									"type": "inlineCode",
+									"value": "fixturectl"
+								},
+								{
+									"type": "text",
+									"value": " command line tool links it directly."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "inlineCode",
+									"value": "ChipProfiles"
+								},
+								{
+									"type": "text",
+									"value": " holds the per-chip capability table: memory size, password support, lock byte layout and default capacity container. The published version of that table is the "
+								},
+								{
+									"type": "link",
+									"kind": "internal",
+									"slug": "reference/chip-support",
+									"children": [
+										{
+											"type": "text",
+											"value": "chip support matrix"
+										}
+									]
+								},
+								{
+									"type": "text",
+									"value": "."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "inlineCode",
+									"value": "Design"
+								},
+								{
+									"type": "text",
+									"value": " holds the colour tokens and the two custom views the Scan sheet uses."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "inlineCode",
+									"value": "Shaders"
+								},
+								{
+									"type": "text",
+									"value": " is a Metal package with one fragment shader in it, the halo that pulses while a session is open."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "inlineCode",
+									"value": "Storage"
+								},
+								{
+									"type": "text",
+									"value": " appends scan history to a SQLite file and keeps tag passwords in the keychain behind "
+								},
+								{
+									"type": "inlineCode",
+									"value": "KeychainVault"
+								},
+								{
+									"type": "text",
+									"value": "."
+								}
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "where-a-scan-happens",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Where a scan happens"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Tapping Scan on the home screen calls "
+				},
+				{
+					"type": "inlineCode",
+					"value": "begin(_:)"
+				},
+				{
+					"type": "text",
+					"value": " with a "
+				},
+				{
+					"type": "inlineCode",
+					"value": "ScanIntent"
+				},
+				{
+					"type": "text",
+					"value": ". That call is the boundary. Above it there are views. Below it there is CoreNFC and nothing else."
+				}
+			]
+		},
+		{
+			"lang": "swift",
+			"langLabel": "Swift",
+			"type": "code",
+			"highlighted": true,
+			"lines": [
+				{
+					"tokens": [
+						{
+							"text": "func",
+							"scope": "keyword"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "begin",
+							"scope": "function"
+						},
+						{
+							"text": "(",
+							"scope": "punctuation"
+						},
+						{
+							"text": "_ intent"
+						},
+						{
+							"text": ":",
+							"scope": "punctuation"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "ScanIntent",
+							"scope": "type"
+						},
+						{
+							"text": ")",
+							"scope": "punctuation"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "throws",
+							"scope": "keyword"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "{",
+							"scope": "punctuation"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "    "
+						},
+						{
+							"text": "guard",
+							"scope": "keyword"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "NFCNDEFReaderSession",
+							"scope": "type"
+						},
+						{
+							"text": ".",
+							"scope": "punctuation"
+						},
+						{
+							"text": "readingAvailable",
+							"scope": "property"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "else",
+							"scope": "keyword"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "{",
+							"scope": "punctuation"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "        "
+						},
+						{
+							"text": "throw",
+							"scope": "keyword"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "TagError",
+							"scope": "type"
+						},
+						{
+							"text": ".",
+							"scope": "punctuation"
+						},
+						{
+							"text": "radioUnavailable",
+							"scope": "property"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "    "
+						},
+						{
+							"text": "}",
+							"scope": "punctuation"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "    "
+						},
+						{
+							"text": "let",
+							"scope": "keyword"
+						},
+						{
+							"text": " session "
+						},
+						{
+							"text": "=",
+							"scope": "operator"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "NFCNDEFReaderSession",
+							"scope": "function"
+						},
+						{
+							"text": "(",
+							"scope": "punctuation"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "        delegate"
+						},
+						{
+							"text": ":",
+							"scope": "punctuation"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "self",
+							"scope": "keyword"
+						},
+						{
+							"text": ",",
+							"scope": "punctuation"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "        queue"
+						},
+						{
+							"text": ":",
+							"scope": "punctuation"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": ".",
+							"scope": "punctuation"
+						},
+						{
+							"text": "main",
+							"scope": "property"
+						},
+						{
+							"text": ",",
+							"scope": "punctuation"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "        invalidateAfterFirstRead"
+						},
+						{
+							"text": ":",
+							"scope": "punctuation"
+						},
+						{
+							"text": " intent "
+						},
+						{
+							"text": "==",
+							"scope": "operator"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": ".",
+							"scope": "punctuation"
+						},
+						{
+							"text": "readOnce",
+							"scope": "property"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "    "
+						},
+						{
+							"text": ")",
+							"scope": "punctuation"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "    session"
+						},
+						{
+							"text": ".",
+							"scope": "punctuation"
+						},
+						{
+							"text": "alertMessage",
+							"scope": "property"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "=",
+							"scope": "operator"
+						},
+						{
+							"text": " strings"
+						},
+						{
+							"text": ".",
+							"scope": "punctuation"
+						},
+						{
+							"text": "holdTagPrompt",
+							"scope": "property"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "    session"
+						},
+						{
+							"text": ".",
+							"scope": "punctuation"
+						},
+						{
+							"text": "begin",
+							"scope": "function"
+						},
+						{
+							"text": "()",
+							"scope": "punctuation"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "}",
+							"scope": "punctuation"
+						}
+					]
+				}
+			],
+			"showLineNumbers": true,
+			"filename": "TagSession.swift",
+			"startLine": 48,
+			"highlight": [
+				3,
+				9
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "inlineCode",
+					"value": "TagSession"
+				},
+				{
+					"type": "text",
+					"value": " owns the radio \u2013 "
+				},
+				{
+					"type": "inlineCode",
+					"value": "TagCodec"
+				},
+				{
+					"type": "text",
+					"value": " owns the bytes, and neither reaches across. Passing a payload between them is seamless because both sides already speak "
+				},
+				{
+					"type": "inlineCode",
+					"value": "TagRecord"
+				},
+				{
+					"type": "text",
+					"value": ", so the codec can be tested with no device attached."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "If the tag leaves the field before the read finishes, CoreNFC calls back with a user-cancelled invalidation or, more often, a timeout. Both map to one message on screen: \"Tag was moved away too quickly. Hold it against the top of the phone until the tick appears.\" The mapping table lives in "
+				},
+				{
+					"type": "inlineCode",
+					"value": "TagError+Message.swift"
+				},
+				{
+					"type": "text",
+					"value": ", and the "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "reference/api",
+					"anchor": "errors",
+					"children": [
+						{
+							"type": "text",
+							"value": "Tag session API"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " lists every case."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "inlineCode",
+					"value": "ChipProfiles"
+				},
+				{
+					"type": "text",
+					"value": " ships the public capability table in the App Store build. Our internal builds add station-pack-alpha, the profile set for the reader hardware on the test bench, through a separate package target that the release scheme excludes."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Contoso Tap keeps its codec inside the app target, which is a reasonable choice if there is never going to be a command line tool. We split ours out in 1.1.0 and got the fuzz tests for free."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "what-was-removed",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "What was removed"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "strikethrough",
+					"children": [
+						{
+							"type": "text",
+							"value": "SyncEngine"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " came out in 1.1.0. It mirrored scan history to a server account, and it was the only package that opened a network connection. Removing it dropped the network entitlement and about four hundred lines of migration code. Scan history is local now, and the export button in Settings writes a JSON file."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "The name still appears in the 1.0 tag. Do not revive it for something smaller, because the entitlement comes back with it."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "adding-a-package",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Adding a package"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "New code goes in an existing package unless it needs a dependency that package cannot take. When it does need one, place the package in the "
+				},
+				{
+					"type": "link",
+					"kind": "anchor",
+					"anchor": "module-graph",
+					"children": [
+						{
+							"type": "text",
+							"value": "module graph"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " before writing any code, because its position decides what it is allowed to import."
+				}
+			]
+		},
+		{
+			"type": "list",
+			"style": "ordered",
+			"tight": true,
+			"children": [
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Create it with "
+								},
+								{
+									"type": "inlineCode",
+									"value": "swift package init --type library"
+								},
+								{
+									"type": "text",
+									"value": "."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Add it to "
+								},
+								{
+									"type": "inlineCode",
+									"value": "Fixture.xcworkspace"
+								},
+								{
+									"type": "text",
+									"value": " and to the app target."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Add a row to "
+								},
+								{
+									"type": "inlineCode",
+									"value": "Docs/module-graph.txt"
+								},
+								{
+									"type": "text",
+									"value": ", the source of the tree above."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Run "
+								},
+								{
+									"type": "inlineCode",
+									"value": "make graph-check"
+								},
+								{
+									"type": "text",
+									"value": " and fix whatever it names."
+								}
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "callout",
+			"kind": "note",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "inlineCode",
+							"value": "make graph-check"
+						},
+						{
+							"type": "text",
+							"value": " reads every "
+						},
+						{
+							"type": "inlineCode",
+							"value": "import"
+						},
+						{
+							"type": "text",
+							"value": " statement under "
+						},
+						{
+							"type": "inlineCode",
+							"value": "Packages/*/Sources"
+						},
+						{
+							"type": "text",
+							"value": " and fails on an upward edge. A package that imports "
+						},
+						{
+							"type": "inlineCode",
+							"value": "AppShell"
+						},
+						{
+							"type": "text",
+							"value": " will not reach review."
+						}
+					]
+				}
+			],
+			"title": [
+				{
+					"type": "text",
+					"value": "Import direction is checked"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "When a scan misbehaves on device, the state machine in "
+				},
+				{
+					"type": "inlineCode",
+					"value": "TagSession"
+				},
+				{
+					"type": "text",
+					"value": " is the first place to look. The symptoms users report are listed in "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "guide/troubleshooting",
+					"children": [
+						{
+							"type": "text",
+							"value": "When a scan does not work"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": "."
+				}
+			]
+		}
+	],
+	"translation": {
+		"state": "source",
+		"sourceUpdated": "2026-01-05T09:00:00Z"
+	},
+	"reading": {
+		"words": 648,
+		"minutes": 4
+	},
+	"snippets": [],
+	"sourceFile": "content/en/developer/architecture.md"
+}

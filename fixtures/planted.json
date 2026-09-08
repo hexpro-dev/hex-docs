@@ -1,0 +1,49 @@
+{
+	"why": "Characters this repository bans that the fixture corpus carries on purpose. The house lint reads this file, allows exactly these pairs of file and code point, and fails on any other hit. It also fails when a declared pair is absent, because a planted character that has quietly gone is a rule the corpus has stopped exercising while every row stays green.",
+	"scope": "Every path must be under fixtures/. This mechanism must never be able to exempt real source, and refusing anything outside the corpus is what keeps that true rather than conventional. The exemption is per file and per code point, not per occurrence: a file declared for a status glyph could carry another of the same glyph in prose and the house lint would not see it. That is deliberate rather than overlooked, because the corpus is small and both suites read its content directly, but it is the reason a declaration lists the narrowest file set that works rather than a directory.",
+	"groups": [
+		{
+			"id": "status-glyphs",
+			"kind": "data",
+			"rule": "status",
+			"codePoints": ["U+2705", "U+274C", "U+2014"],
+			"why": "The support matrix and its legend. These glyphs are data rather than decoration: the compiler turns each one into a status node before any prose rule runs, which is what stops a screen reader announcing \"white heavy check mark\" in seven languages and what lets a search for \"supported\" match a row. The em dash is recognised only as a whole table cell, which is why it is not a loophole: the legend is a table for exactly that reason, because as a bullet list its em dash was ordinary prose and this exemption was claiming otherwise.",
+			"files": [
+				"fixtures/app/docs/site/content/ar/reference/chip-support.md",
+				"fixtures/app/docs/site/content/en/reference/chip-support.md",
+				"fixtures/app/docs/site/content/es/reference/chip-support.md",
+				"fixtures/app/docs/site/content/ja/reference/chip-support.md",
+				"fixtures/app/docs/site/content/zh/reference/chip-support.md",
+				"fixtures/app/docs/site/snippets/ar/legend.md",
+				"fixtures/app/docs/site/snippets/en/legend.md",
+				"fixtures/app/docs/site/snippets/es/legend.md",
+				"fixtures/app/docs/site/snippets/ja/legend.md",
+				"fixtures/app/docs/site/snippets/zh/legend.md"
+			]
+		},
+		{
+			"id": "em-dash-in-a-draft",
+			"kind": "violation",
+			"rule": "no-em-dash",
+			"codePoints": ["U+2014"],
+			"why": "One em dash in a page marked draft. A draft is excluded from a bundle and still read by the linter, so this single character is what proves those two facts do not contradict each other.",
+			"files": ["fixtures/app/docs/site/content/en/notes/scratch.md"]
+		},
+		{
+			"id": "en-dash-in-prose",
+			"kind": "violation",
+			"rule": "no-en-dash-prose",
+			"codePoints": ["U+2013"],
+			"why": "An en dash with a letter on each side, which is the form the rule refuses. A numeric range is the one place it is correct and the rule permits that, so a planted violation has to be the prose form or it proves nothing.",
+			"files": ["fixtures/app/docs/site/content/en/developer/architecture.md"]
+		},
+		{
+			"id": "decorative-arrow",
+			"kind": "violation",
+			"rule": "no-decorative-unicode",
+			"codePoints": ["U+2192"],
+			"why": "A rightwards arrow used to mean \"becomes\" in a sentence. Four of these are in the real hex-nfc public documents today, so this is the migration case rather than an invented one.",
+			"files": ["fixtures/app/docs/site/content/en/reference/api.md"]
+		}
+	]
+}

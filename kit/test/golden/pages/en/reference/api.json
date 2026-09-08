@@ -1,0 +1,1347 @@
+{
+	"ast": 1,
+	"project": "fixture-app",
+	"slug": "reference/api",
+	"locale": "en",
+	"title": "Tag session API",
+	"description": "The TagSession type, its delegate callbacks, error cases and the JSON payload Fixture App writes to a tag.",
+	"navTitle": "Tag session API",
+	"audience": "developer",
+	"pageKind": "article",
+	"tags": [
+		"architecture"
+	],
+	"toc": true,
+	"headings": [
+		{
+			"id": "starting-a-session",
+			"depth": 2,
+			"text": "Starting a session"
+		},
+		{
+			"id": "the-state-machine",
+			"depth": 2,
+			"text": "The state machine"
+		},
+		{
+			"id": "delegate-callbacks",
+			"depth": 2,
+			"text": "Delegate callbacks"
+		},
+		{
+			"id": "errors",
+			"depth": 2,
+			"text": "Errors"
+		},
+		{
+			"id": "the-payload",
+			"depth": 2,
+			"text": "The payload"
+		},
+		{
+			"id": "debug-output",
+			"depth": 2,
+			"text": "Debug output"
+		},
+		{
+			"id": "driving-the-scan-ring",
+			"depth": 2,
+			"text": "Driving the scan ring"
+		}
+	],
+	"body": [
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "inlineCode",
+					"value": "TagSession"
+				},
+				{
+					"type": "text",
+					"value": " wraps Core NFC and is the only type in Fixture App that holds an "
+				},
+				{
+					"type": "inlineCode",
+					"value": "NFCTagReaderSession"
+				},
+				{
+					"type": "text",
+					"value": ". The Scan sheet, the home screen widget and the share extension all go through it. Reading this page is enough to add a new tag operation without touching Core NFC directly."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "If you have not run a scan on a device yet, start with "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "guide/first-tag",
+					"children": [
+						{
+							"type": "text",
+							"value": "Scan your first tag"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": ". The API below assumes you know what the system sheet looks like."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "starting-a-session",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Starting a session"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "inlineCode",
+					"value": "begin(_:)"
+				},
+				{
+					"type": "text",
+					"value": " takes an "
+				},
+				{
+					"type": "inlineCode",
+					"value": "Intent"
+				},
+				{
+					"type": "text",
+					"value": ", which names the operation and carries the prompt string iOS shows in the sheet. It throws before any hardware is touched when the device cannot read tags, so a simulator build fails at the call site instead of waiting on a sheet that never appears."
+				}
+			]
+		},
+		{
+			"lang": "swift",
+			"langLabel": "Swift",
+			"type": "code",
+			"highlighted": true,
+			"lines": [
+				{
+					"tokens": [
+						{
+							"text": "public",
+							"scope": "keyword"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "func",
+							"scope": "keyword"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "begin",
+							"scope": "function"
+						},
+						{
+							"text": "(",
+							"scope": "punctuation"
+						},
+						{
+							"text": "_ intent"
+						},
+						{
+							"text": ":",
+							"scope": "punctuation"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "Intent",
+							"scope": "type"
+						},
+						{
+							"text": ")",
+							"scope": "punctuation"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "throws",
+							"scope": "keyword"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "{",
+							"scope": "punctuation"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "    "
+						},
+						{
+							"text": "guard",
+							"scope": "keyword"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "NFCTagReaderSession",
+							"scope": "type"
+						},
+						{
+							"text": ".",
+							"scope": "punctuation"
+						},
+						{
+							"text": "readingAvailable",
+							"scope": "property"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "else",
+							"scope": "keyword"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "{",
+							"scope": "punctuation"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "        "
+						},
+						{
+							"text": "throw",
+							"scope": "keyword"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "TagSessionError",
+							"scope": "type"
+						},
+						{
+							"text": ".",
+							"scope": "punctuation"
+						},
+						{
+							"text": "readerUnavailable",
+							"scope": "property"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "    "
+						},
+						{
+							"text": "}",
+							"scope": "punctuation"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "    "
+						},
+						{
+							"text": "let",
+							"scope": "keyword"
+						},
+						{
+							"text": " session "
+						},
+						{
+							"text": "=",
+							"scope": "operator"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "NFCTagReaderSession",
+							"scope": "function"
+						},
+						{
+							"text": "(",
+							"scope": "punctuation"
+						},
+						{
+							"text": "pollingOption"
+						},
+						{
+							"text": ":",
+							"scope": "punctuation"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "[.",
+							"scope": "punctuation"
+						},
+						{
+							"text": "iso14443",
+							"scope": "property"
+						},
+						{
+							"text": ",",
+							"scope": "punctuation"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": ".",
+							"scope": "punctuation"
+						},
+						{
+							"text": "iso15693",
+							"scope": "property"
+						},
+						{
+							"text": "],",
+							"scope": "punctuation"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "                                      delegate"
+						},
+						{
+							"text": ":",
+							"scope": "punctuation"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "self",
+							"scope": "keyword"
+						},
+						{
+							"text": ",",
+							"scope": "punctuation"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "                                      queue"
+						},
+						{
+							"text": ":",
+							"scope": "punctuation"
+						},
+						{
+							"text": " queue"
+						},
+						{
+							"text": ")",
+							"scope": "punctuation"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "    session"
+						},
+						{
+							"text": ".",
+							"scope": "punctuation"
+						},
+						{
+							"text": "alertMessage",
+							"scope": "property"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "=",
+							"scope": "operator"
+						},
+						{
+							"text": " intent"
+						},
+						{
+							"text": ".",
+							"scope": "punctuation"
+						},
+						{
+							"text": "promptText",
+							"scope": "property"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "    session"
+						},
+						{
+							"text": ".",
+							"scope": "punctuation"
+						},
+						{
+							"text": "begin",
+							"scope": "function"
+						},
+						{
+							"text": "()",
+							"scope": "punctuation"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "}",
+							"scope": "punctuation"
+						}
+					]
+				}
+			],
+			"showLineNumbers": true,
+			"filename": "TagSession.swift",
+			"startLine": 12,
+			"highlight": [
+				2,
+				5,
+				6,
+				7
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "The polling option set is fixed. Fixture App polls ISO 14443 and ISO 15693 together because the chip families it recognises are split across the two, and picking one at call time would make a mistyped intent look like a dead tag. The "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "reference/chip-support",
+					"children": [
+						{
+							"type": "text",
+							"value": "chip support matrix"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " lists which part number answers on which protocol, and the "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "developer/architecture",
+					"anchor": "module-graph",
+					"children": [
+						{
+							"type": "text",
+							"value": "module graph"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " shows where "
+				},
+				{
+					"type": "inlineCode",
+					"value": "TagSession"
+				},
+				{
+					"type": "text",
+					"value": " sits."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "inlineCode",
+					"value": "alertMessage"
+				},
+				{
+					"type": "text",
+					"value": " can be rewritten while the session is live. The sheet re-renders in place and the radio link survives, which is how the write path swaps \"Hold your iPhone near the tag\" for \"Writing, keep holding\"."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "The store listing calls this \"tap and go\", and the phrase sets a budget the API has to meet: 700 ms from "
+				},
+				{
+					"type": "inlineCode",
+					"value": "begin(_:)"
+				},
+				{
+					"type": "text",
+					"value": " to a written tag on a NTAG215 at 137 bytes. Anything slower and a user lifts the phone early."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "the-state-machine",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "The state machine"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "There are four states: "
+				},
+				{
+					"type": "inlineCode",
+					"value": ".idle"
+				},
+				{
+					"type": "text",
+					"value": ", "
+				},
+				{
+					"type": "inlineCode",
+					"value": ".polling"
+				},
+				{
+					"type": "text",
+					"value": ", "
+				},
+				{
+					"type": "inlineCode",
+					"value": ".connected"
+				},
+				{
+					"type": "text",
+					"value": " and "
+				},
+				{
+					"type": "inlineCode",
+					"value": ".finished"
+				},
+				{
+					"type": "text",
+					"value": ". On a successful connect the state is "
+				},
+				{
+					"type": "inlineCode",
+					"value": ".polling"
+				},
+				{
+					"type": "text",
+					"value": " \u2192 "
+				},
+				{
+					"type": "inlineCode",
+					"value": ".connected"
+				},
+				{
+					"type": "text",
+					"value": ", and every callback from that point runs on the session queue rather than on the main queue. Publishing to SwiftUI therefore needs an explicit hop; "
+				},
+				{
+					"type": "inlineCode",
+					"value": "TagSessionStore"
+				},
+				{
+					"type": "text",
+					"value": " does that hop once so view code never has to."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "A session that ends for any reason, including the user cancelling the sheet, lands in "
+				},
+				{
+					"type": "inlineCode",
+					"value": ".finished"
+				},
+				{
+					"type": "text",
+					"value": " and cannot be restarted. Create a new "
+				},
+				{
+					"type": "inlineCode",
+					"value": "TagSession"
+				},
+				{
+					"type": "text",
+					"value": " per operation. Holding one and calling "
+				},
+				{
+					"type": "inlineCode",
+					"value": "begin(_:)"
+				},
+				{
+					"type": "text",
+					"value": " twice throws "
+				},
+				{
+					"type": "inlineCode",
+					"value": "TagSessionError.sessionSpent"
+				},
+				{
+					"type": "text",
+					"value": "."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "delegate-callbacks",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Delegate callbacks"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "inlineCode",
+					"value": "TagSessionDelegate"
+				},
+				{
+					"type": "text",
+					"value": " has three methods and none of them is optional."
+				}
+			]
+		},
+		{
+			"type": "list",
+			"style": "bullet",
+			"tight": true,
+			"children": [
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "inlineCode",
+									"value": "session(_:didConnect:)"
+								},
+								{
+									"type": "text",
+									"value": " gives you the detected tag and the chip identity the app resolved from its UID and capability container."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "inlineCode",
+									"value": "session(_:didFinish:)"
+								},
+								{
+									"type": "text",
+									"value": " reports a completed read or write, with the byte count and the elapsed time."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "inlineCode",
+									"value": "session(_:didFail:)"
+								},
+								{
+									"type": "text",
+									"value": " reports a "
+								},
+								{
+									"type": "inlineCode",
+									"value": "TagSessionError"
+								},
+								{
+									"type": "text",
+									"value": ". It is the only place the app surfaces error copy, so the strings live beside the cases rather than in the view layer."
+								}
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Do not call UIKit or SwiftUI from any of the three without dispatching to the main queue first."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "errors",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Errors"
+				}
+			]
+		},
+		{
+			"type": "table",
+			"align": [
+				null,
+				null,
+				null
+			],
+			"header": [
+				{
+					"type": "tableCell",
+					"children": [
+						{
+							"type": "text",
+							"value": "Case"
+						}
+					]
+				},
+				{
+					"type": "tableCell",
+					"children": [
+						{
+							"type": "text",
+							"value": "Thrown when"
+						}
+					]
+				},
+				{
+					"type": "tableCell",
+					"children": [
+						{
+							"type": "text",
+							"value": "Message shown"
+						}
+					]
+				}
+			],
+			"rows": [
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "readerUnavailable"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "The device has no NFC reader, or the entitlement is missing"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "\"This iPhone cannot read NFC tags.\""
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "sessionSpent"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "begin(_:)"
+							},
+							{
+								"type": "text",
+								"value": " called on a finished session"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "(internal, never shown)"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "tagUnsupported"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "The chip answered but is not in the support matrix"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "\"Fixture App does not recognise this tag yet.\""
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "payloadTooLarge"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "The record exceeds the tag's user memory"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "\"This tag holds 137 bytes and the record needs 208.\""
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "writeRejected"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "The tag is locked or password protected"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "\"This tag is locked and cannot be changed.\""
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "lostConnection"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "The tag moved out of range mid-operation"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "\"Hold the tag still and try again.\""
+							}
+						]
+					}
+				]
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "inlineCode",
+					"value": "lostConnection"
+				},
+				{
+					"type": "text",
+					"value": " is the only case the app retries on its own, once, and only for reads. A half-finished write is left alone so that the tag is never rewritten without the user asking."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "the-payload",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "The payload"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Fixture App writes a single NDEF record with a MIME type of "
+				},
+				{
+					"type": "inlineCode",
+					"value": "application/vnd.hexpro.fixture+json"
+				},
+				{
+					"type": "text",
+					"value": ". The object is small on purpose, because user memory on a NTAG213 is 137 bytes."
+				}
+			]
+		},
+		{
+			"lang": "json",
+			"langLabel": "JSON",
+			"type": "code",
+			"highlighted": true,
+			"lines": [
+				{
+					"tokens": [
+						{
+							"text": "{",
+							"scope": "punctuation"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "  "
+						},
+						{
+							"text": "\"v\"",
+							"scope": "property"
+						},
+						{
+							"text": ":",
+							"scope": "punctuation"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "2",
+							"scope": "number"
+						},
+						{
+							"text": ",",
+							"scope": "punctuation"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "  "
+						},
+						{
+							"text": "\"kind\"",
+							"scope": "property"
+						},
+						{
+							"text": ":",
+							"scope": "punctuation"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "\"route\"",
+							"scope": "string"
+						},
+						{
+							"text": ",",
+							"scope": "punctuation"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "  "
+						},
+						{
+							"text": "\"target\"",
+							"scope": "property"
+						},
+						{
+							"text": ":",
+							"scope": "punctuation"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "\"fixture://scan/history\"",
+							"scope": "string"
+						},
+						{
+							"text": ",",
+							"scope": "punctuation"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "  "
+						},
+						{
+							"text": "\"written\"",
+							"scope": "property"
+						},
+						{
+							"text": ":",
+							"scope": "punctuation"
+						},
+						{
+							"text": " "
+						},
+						{
+							"text": "\"2026-03-14T09:21:07Z\"",
+							"scope": "string"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "}",
+							"scope": "punctuation"
+						}
+					]
+				}
+			],
+			"showLineNumbers": false
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "inlineCode",
+					"value": "v"
+				},
+				{
+					"type": "text",
+					"value": " is the payload version, not the app version. A reader that meets a higher "
+				},
+				{
+					"type": "inlineCode",
+					"value": "v"
+				},
+				{
+					"type": "text",
+					"value": " than it knows reports "
+				},
+				{
+					"type": "inlineCode",
+					"value": "tagUnsupported"
+				},
+				{
+					"type": "text",
+					"value": " instead of guessing at the fields it recognises."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "debug-output",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Debug output"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Build with the "
+				},
+				{
+					"type": "inlineCode",
+					"value": "FIXTURE_TAG_LOG"
+				},
+				{
+					"type": "text",
+					"value": " environment variable set to "
+				},
+				{
+					"type": "inlineCode",
+					"value": "1"
+				},
+				{
+					"type": "text",
+					"value": " and the session prints one line per transition to the Xcode console. The format is stable enough to grep and is not localised."
+				}
+			]
+		},
+		{
+			"type": "code",
+			"highlighted": false,
+			"lines": [
+				{
+					"tokens": [
+						{
+							"text": "TagSession begin intent=writeRoute polling=iso14443,iso15693"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "TagSession connect uid=04A23B9C5D6E80 chip=NTAG215 memory=504"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "TagSession finish bytes=137 duration=0.68s"
+						}
+					]
+				}
+			],
+			"showLineNumbers": false
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "driving-the-scan-ring",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Driving the scan ring"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "The session publishes a "
+				},
+				{
+					"type": "inlineCode",
+					"value": "phase"
+				},
+				{
+					"type": "text",
+					"value": " value between 0 and 1 while it polls. The Scan sheet feeds that straight into a fragment shader, so the ring on screen is driven by the radio state rather than by a timer that happens to look right."
+				}
+			]
+		},
+		{
+			"lang": "metal",
+			"langLabel": "Metal",
+			"type": "code",
+			"highlighted": false,
+			"lines": [
+				{
+					"tokens": [
+						{
+							"text": "fragment half4 scanPulse(RingVertex in [[stage_in]],"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "                         constant float &phase [[buffer(0)]]) {"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "    float edge = smoothstep(0.46, 0.50, length(in.uv - 0.5));"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "    half3 colour = half3(0.043, 0.463, 0.851);"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "    return half4(colour, half(edge * phase));"
+						}
+					]
+				},
+				{
+					"tokens": [
+						{
+							"text": "}"
+						}
+					]
+				}
+			],
+			"showLineNumbers": false,
+			"wrap": true
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Keep the shader free of branches on "
+				},
+				{
+					"type": "inlineCode",
+					"value": "phase"
+				},
+				{
+					"type": "text",
+					"value": ". The ring is redrawn at 120 Hz on ProMotion devices while the radio is active, and the frame budget is the reason the animation is not a SwiftUI keyframe."
+				}
+			]
+		}
+	],
+	"translation": {
+		"state": "source",
+		"sourceUpdated": "2026-01-05T09:00:00Z"
+	},
+	"reading": {
+		"words": 782,
+		"minutes": 4
+	},
+	"snippets": [],
+	"sourceFile": "content/en/reference/api.md"
+}

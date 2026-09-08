@@ -1,0 +1,59 @@
+{
+	"$id": "private-1.json",
+	"title": "private-1",
+	"description": "Strings that must never appear in anything published: docs/docs.private.json",
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"type": "object",
+	"properties": {
+		"$schema": {
+			"type": "string"
+		},
+		"private": {
+			"type": "number",
+			"const": 1
+		},
+		"strings": {
+			"type": "array",
+			"items": {
+				"type": "string",
+				"minLength": 1
+			}
+		},
+		"patterns": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string",
+						"minLength": 1
+					},
+					"pattern": {
+						"type": "string",
+						"minLength": 1
+					},
+					"flags": {
+						"type": "string"
+					},
+					"why": {
+						"type": "string",
+						"minLength": 1
+					}
+				},
+				"required": [
+					"id",
+					"pattern",
+					"flags",
+					"why"
+				],
+				"additionalProperties": false
+			}
+		}
+	},
+	"required": [
+		"private",
+		"strings",
+		"patterns"
+	],
+	"additionalProperties": false
+}

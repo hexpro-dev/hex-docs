@@ -1,0 +1,620 @@
+{
+	"kitVersion": "@hex-pro/docs-kit@0.1.0",
+	"summary": {
+		"errors": 7,
+		"warnings": 32,
+		"infos": 0,
+		"passing": 33
+	},
+	"findings": [
+		{
+			"rule": "code-fence-language",
+			"severity": "error",
+			"category": "structure",
+			"location": {
+				"kind": "file",
+				"file": "content/en/reference/api.md",
+				"line": 126,
+				"column": 1
+			},
+			"locale": "en",
+			"message": "This fence carries no language, so it renders unhighlighted and nothing says whether that was intended.",
+			"consequence": "An unlabelled fence renders unhighlighted and nothing on the page says whether that was intended, so a typo in the language name looks exactly like a deliberate plain block. Fences that really are not code take the plain language, which is the member that exists for them.",
+			"remediation": "Label it. Use \"text\" for output, a tree or anything that is deliberately not code.",
+			"suggestion": null,
+			"excerpt": null
+		},
+		{
+			"rule": "no-en-dash-prose",
+			"severity": "error",
+			"category": "house-style",
+			"location": {
+				"kind": "file",
+				"file": "content/en/developer/architecture.md",
+				"line": 71,
+				"column": 29
+			},
+			"locale": "en",
+			"message": "The prose uses U+2013 en dash as punctuation.",
+			"consequence": "It reads as an em dash to everyone but a typesetter, and it is the same house rule. Between digits it is correct and permitted, because rewriting a numeric range is not an improvement.",
+			"remediation": "Rewrite the sentence with a comma or a colon. Between two digits the character is correct and this rule permits it.",
+			"suggestion": null,
+			"excerpt": null
+		},
+		{
+			"rule": "no-banned-phrase",
+			"severity": "error",
+			"category": "house-style",
+			"location": {
+				"kind": "file",
+				"file": "content/en/developer/architecture.md",
+				"line": 72,
+				"column": 51
+			},
+			"locale": "en",
+			"message": "The wording \"seamless\" is on the house banned list.",
+			"consequence": "Each phrase on the list is one a reader has met a thousand times in generated copy, and one of them on a page is enough for the whole page to read as machine written. The list is a hard rule, which is why a project may add to it and may not remove from it.",
+			"remediation": "It claims an absence of friction the reader will discover for themselves, and it is the word most often used to cover a step the page has not documented.",
+			"suggestion": null,
+			"excerpt": "...ross. Passing a payload between them is seamless because both sides already speak , so t..."
+		},
+		{
+			"rule": "no-em-dash",
+			"severity": "error",
+			"category": "house-style",
+			"location": {
+				"kind": "file",
+				"file": "content/en/notes/scratch.md",
+				"line": 22,
+				"column": 11
+			},
+			"locale": "en",
+			"message": "The prose uses U+2014 em dash as punctuation.",
+			"consequence": "The em dash is the single most reliable marker of copy nobody read back, and this is one of the estate house rules, stated as a hard rule rather than a preference. That is why a project may raise it and may not lower it.",
+			"remediation": "Rewrite the sentence with a comma, a colon, brackets, or two sentences.",
+			"suggestion": null,
+			"excerpt": null
+		},
+		{
+			"rule": "no-decorative-unicode",
+			"severity": "error",
+			"category": "house-style",
+			"location": {
+				"kind": "file",
+				"file": "content/en/reference/api.md",
+				"line": 60,
+				"column": 62
+			},
+			"locale": "en",
+			"message": "The prose uses U+2192 rightwards arrow as punctuation.",
+			"consequence": "A screen reader announces the character by name in every one of the seven languages, and a search for the word the character was standing in for matches nothing. A glyph that is really data is recognised as a status node before this rule runs, so what it sees is decoration.",
+			"remediation": "Write the word the character was standing in for. A glyph that carries data belongs in a table cell, where the compiler reads it as a status.",
+			"suggestion": null,
+			"excerpt": null
+		},
+		{
+			"rule": "internal-leak",
+			"severity": "error",
+			"category": "brand",
+			"location": {
+				"kind": "file",
+				"file": "content/en/developer/architecture.md",
+				"line": 84,
+				"column": 32
+			},
+			"locale": "en",
+			"message": "The text here matches the deny list pattern \"station-pack\".",
+			"consequence": "This is the rule that stands between an internal tree name, an export-compliance note or a device identifier and a public mirror. It is protected for the same reason the public sync script dies on any hit: a scan that examined nothing has cleared nothing.",
+			"remediation": "Names an internal test fixture directory. Publishing the name tells a reader a tree exists and what to ask for.",
+			"suggestion": null,
+			"excerpt": null
+		},
+		{
+			"rule": "no-competitor-name",
+			"severity": "error",
+			"category": "brand",
+			"location": {
+				"kind": "file",
+				"file": "content/en/developer/architecture.md",
+				"line": 88,
+				"column": 1
+			},
+			"locale": "en",
+			"message": "\"Contoso Tap\" is on the deny list and this page is published.",
+			"consequence": "The names come from the deny list, which lives outside the publishable root because it is the list of things that must not ship. A competitor named on a public page is a comparison the company has to stand behind, made by whoever wrote that sentence.",
+			"remediation": "Describe the behaviour without naming the product. A comparison on a public page is one the company has to stand behind.",
+			"suggestion": null,
+			"excerpt": "Contoso Tap keeps its codec inside the app target,..."
+		},
+		{
+			"rule": "translation-stale",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/ar/guide/first-tag.md"
+			},
+			"locale": "ar",
+			"message": "The ar translation of \"guide/first-tag\" is older than its source.",
+			"consequence": "A stale translation describes behaviour the app no longer has, and it carries no sign of that on the page. It is worse than a missing translation, which at least tells the reader what they are looking at.",
+			"remediation": "Retranslate it. Staleness comes from git committer dates rather than from a field, so there is nothing to refresh but the text.",
+			"suggestion": null,
+			"excerpt": null
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/en/developer/architecture.md"
+			},
+			"locale": "zh",
+			"message": "\"developer/architecture\" has no zh translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write content/zh/developer/architecture.md, or accept the fallback: under graceful parity the site serves the source locale with a notice and noindex.",
+			"suggestion": null,
+			"excerpt": "developer/architecture"
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/en/developer/architecture.md"
+			},
+			"locale": "ar",
+			"message": "\"developer/architecture\" has no ar translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write content/ar/developer/architecture.md, or accept the fallback: under graceful parity the site serves the source locale with a notice and noindex.",
+			"suggestion": null,
+			"excerpt": "developer/architecture"
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/en/developer/architecture.md"
+			},
+			"locale": "es",
+			"message": "\"developer/architecture\" has no es translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write content/es/developer/architecture.md, or accept the fallback: under graceful parity the site serves the source locale with a notice and noindex.",
+			"suggestion": null,
+			"excerpt": "developer/architecture"
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/en/developer/architecture.md"
+			},
+			"locale": "ja",
+			"message": "\"developer/architecture\" has no ja translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write content/ja/developer/architecture.md, or accept the fallback: under graceful parity the site serves the source locale with a notice and noindex.",
+			"suggestion": null,
+			"excerpt": "developer/architecture"
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/en/developer/architecture.md"
+			},
+			"locale": "fr",
+			"message": "\"developer/architecture\" has no fr translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write content/fr/developer/architecture.md, or accept the fallback: under graceful parity the site serves the source locale with a notice and noindex.",
+			"suggestion": null,
+			"excerpt": "developer/architecture"
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/en/developer/architecture.md"
+			},
+			"locale": "pt-BR",
+			"message": "\"developer/architecture\" has no pt-BR translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write content/pt-BR/developer/architecture.md, or accept the fallback: under graceful parity the site serves the source locale with a notice and noindex.",
+			"suggestion": null,
+			"excerpt": "developer/architecture"
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/en/guide/troubleshooting.md"
+			},
+			"locale": "zh",
+			"message": "\"guide/troubleshooting\" has no zh translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write content/zh/guide/troubleshooting.md, or accept the fallback: under graceful parity the site serves the source locale with a notice and noindex.",
+			"suggestion": null,
+			"excerpt": "guide/troubleshooting"
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/en/guide/troubleshooting.md"
+			},
+			"locale": "es",
+			"message": "\"guide/troubleshooting\" has no es translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write content/es/guide/troubleshooting.md, or accept the fallback: under graceful parity the site serves the source locale with a notice and noindex.",
+			"suggestion": null,
+			"excerpt": "guide/troubleshooting"
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/en/guide/troubleshooting.md"
+			},
+			"locale": "fr",
+			"message": "\"guide/troubleshooting\" has no fr translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write content/fr/guide/troubleshooting.md, or accept the fallback: under graceful parity the site serves the source locale with a notice and noindex.",
+			"suggestion": null,
+			"excerpt": "guide/troubleshooting"
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/en/guide/troubleshooting.md"
+			},
+			"locale": "pt-BR",
+			"message": "\"guide/troubleshooting\" has no pt-BR translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write content/pt-BR/guide/troubleshooting.md, or accept the fallback: under graceful parity the site serves the source locale with a notice and noindex.",
+			"suggestion": null,
+			"excerpt": "guide/troubleshooting"
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/en/reference/api.md"
+			},
+			"locale": "zh",
+			"message": "\"reference/api\" has no zh translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write content/zh/reference/api.md, or accept the fallback: under graceful parity the site serves the source locale with a notice and noindex.",
+			"suggestion": null,
+			"excerpt": "reference/api"
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/en/reference/api.md"
+			},
+			"locale": "ar",
+			"message": "\"reference/api\" has no ar translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write content/ar/reference/api.md, or accept the fallback: under graceful parity the site serves the source locale with a notice and noindex.",
+			"suggestion": null,
+			"excerpt": "reference/api"
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/en/reference/api.md"
+			},
+			"locale": "es",
+			"message": "\"reference/api\" has no es translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write content/es/reference/api.md, or accept the fallback: under graceful parity the site serves the source locale with a notice and noindex.",
+			"suggestion": null,
+			"excerpt": "reference/api"
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/en/reference/api.md"
+			},
+			"locale": "ja",
+			"message": "\"reference/api\" has no ja translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write content/ja/reference/api.md, or accept the fallback: under graceful parity the site serves the source locale with a notice and noindex.",
+			"suggestion": null,
+			"excerpt": "reference/api"
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/en/reference/api.md"
+			},
+			"locale": "fr",
+			"message": "\"reference/api\" has no fr translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write content/fr/reference/api.md, or accept the fallback: under graceful parity the site serves the source locale with a notice and noindex.",
+			"suggestion": null,
+			"excerpt": "reference/api"
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/en/reference/api.md"
+			},
+			"locale": "pt-BR",
+			"message": "\"reference/api\" has no pt-BR translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write content/pt-BR/reference/api.md, or accept the fallback: under graceful parity the site serves the source locale with a notice and noindex.",
+			"suggestion": null,
+			"excerpt": "reference/api"
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/en/reference/chip-support.md"
+			},
+			"locale": "fr",
+			"message": "\"reference/chip-support\" has no fr translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write content/fr/reference/chip-support.md, or accept the fallback: under graceful parity the site serves the source locale with a notice and noindex.",
+			"suggestion": null,
+			"excerpt": "reference/chip-support"
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/en/reference/chip-support.md"
+			},
+			"locale": "pt-BR",
+			"message": "\"reference/chip-support\" has no pt-BR translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write content/pt-BR/reference/chip-support.md, or accept the fallback: under graceful parity the site serves the source locale with a notice and noindex.",
+			"suggestion": null,
+			"excerpt": "reference/chip-support"
+		},
+		{
+			"rule": "translation-stale",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/es/guide/first-tag.md"
+			},
+			"locale": "es",
+			"message": "The es translation of \"guide/first-tag\" is older than its source.",
+			"consequence": "A stale translation describes behaviour the app no longer has, and it carries no sign of that on the page. It is worse than a missing translation, which at least tells the reader what they are looking at.",
+			"remediation": "Retranslate it. Staleness comes from git committer dates rather than from a field, so there is nothing to refresh but the text.",
+			"suggestion": null,
+			"excerpt": null
+		},
+		{
+			"rule": "translation-stale",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/fr/guide/first-tag.md"
+			},
+			"locale": "fr",
+			"message": "The fr translation of \"guide/first-tag\" is older than its source.",
+			"consequence": "A stale translation describes behaviour the app no longer has, and it carries no sign of that on the page. It is worse than a missing translation, which at least tells the reader what they are looking at.",
+			"remediation": "Retranslate it. Staleness comes from git committer dates rather than from a field, so there is nothing to refresh but the text.",
+			"suggestion": null,
+			"excerpt": null
+		},
+		{
+			"rule": "translation-stale",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/ja/guide/first-tag.md"
+			},
+			"locale": "ja",
+			"message": "The ja translation of \"guide/first-tag\" is older than its source.",
+			"consequence": "A stale translation describes behaviour the app no longer has, and it carries no sign of that on the page. It is worse than a missing translation, which at least tells the reader what they are looking at.",
+			"remediation": "Retranslate it. Staleness comes from git committer dates rather than from a field, so there is nothing to refresh but the text.",
+			"suggestion": null,
+			"excerpt": null
+		},
+		{
+			"rule": "translation-stale",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/pt-BR/guide/first-tag.md"
+			},
+			"locale": "pt-BR",
+			"message": "The pt-BR translation of \"guide/first-tag\" is older than its source.",
+			"consequence": "A stale translation describes behaviour the app no longer has, and it carries no sign of that on the page. It is worse than a missing translation, which at least tells the reader what they are looking at.",
+			"remediation": "Retranslate it. Staleness comes from git committer dates rather than from a field, so there is nothing to refresh but the text.",
+			"suggestion": null,
+			"excerpt": null
+		},
+		{
+			"rule": "translation-stale",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "content/zh/guide/first-tag.md"
+			},
+			"locale": "zh",
+			"message": "The zh translation of \"guide/first-tag\" is older than its source.",
+			"consequence": "A stale translation describes behaviour the app no longer has, and it carries no sign of that on the page. It is worse than a missing translation, which at least tells the reader what they are looking at.",
+			"remediation": "Retranslate it. Staleness comes from git committer dates rather than from a field, so there is nothing to refresh but the text.",
+			"suggestion": null,
+			"excerpt": null
+		},
+		{
+			"rule": "translation-stale",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "snippets/ar/safety-note.md"
+			},
+			"locale": "ar",
+			"message": "The ar translation of the snippet \"safety-note\" is older than its source.",
+			"consequence": "A stale translation describes behaviour the app no longer has, and it carries no sign of that on the page. It is worse than a missing translation, which at least tells the reader what they are looking at.",
+			"remediation": "Retranslate it. Every page that transcludes it is no fresher than this fragment, which is what the effective state on those pages already says.",
+			"suggestion": null,
+			"excerpt": null
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "snippets/en/legend.md"
+			},
+			"locale": "fr",
+			"message": "The snippet \"legend\" has no fr translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write snippets/fr/legend.md. A snippet is per locale on purpose: a flat tree would inject the source language into a translated page and the page would still read current.",
+			"suggestion": null,
+			"excerpt": "legend"
+		},
+		{
+			"rule": "translation-missing",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "snippets/en/legend.md"
+			},
+			"locale": "pt-BR",
+			"message": "The snippet \"legend\" has no pt-BR translation.",
+			"consequence": "Under graceful parity the site serves the source text with a notice and no indexing, which is a reader in one of seven languages reading English. Under required parity the same state blocks the publish, which is what the mode is for.",
+			"remediation": "Write snippets/pt-BR/legend.md. A snippet is per locale on purpose: a flat tree would inject the source language into a translated page and the page would still read current.",
+			"suggestion": null,
+			"excerpt": "legend"
+		},
+		{
+			"rule": "translation-stale",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "snippets/es/safety-note.md"
+			},
+			"locale": "es",
+			"message": "The es translation of the snippet \"safety-note\" is older than its source.",
+			"consequence": "A stale translation describes behaviour the app no longer has, and it carries no sign of that on the page. It is worse than a missing translation, which at least tells the reader what they are looking at.",
+			"remediation": "Retranslate it. Every page that transcludes it is no fresher than this fragment, which is what the effective state on those pages already says.",
+			"suggestion": null,
+			"excerpt": null
+		},
+		{
+			"rule": "translation-stale",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "snippets/fr/safety-note.md"
+			},
+			"locale": "fr",
+			"message": "The fr translation of the snippet \"safety-note\" is older than its source.",
+			"consequence": "A stale translation describes behaviour the app no longer has, and it carries no sign of that on the page. It is worse than a missing translation, which at least tells the reader what they are looking at.",
+			"remediation": "Retranslate it. Every page that transcludes it is no fresher than this fragment, which is what the effective state on those pages already says.",
+			"suggestion": null,
+			"excerpt": null
+		},
+		{
+			"rule": "translation-stale",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "snippets/ja/safety-note.md"
+			},
+			"locale": "ja",
+			"message": "The ja translation of the snippet \"safety-note\" is older than its source.",
+			"consequence": "A stale translation describes behaviour the app no longer has, and it carries no sign of that on the page. It is worse than a missing translation, which at least tells the reader what they are looking at.",
+			"remediation": "Retranslate it. Every page that transcludes it is no fresher than this fragment, which is what the effective state on those pages already says.",
+			"suggestion": null,
+			"excerpt": null
+		},
+		{
+			"rule": "translation-stale",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "snippets/pt-BR/safety-note.md"
+			},
+			"locale": "pt-BR",
+			"message": "The pt-BR translation of the snippet \"safety-note\" is older than its source.",
+			"consequence": "A stale translation describes behaviour the app no longer has, and it carries no sign of that on the page. It is worse than a missing translation, which at least tells the reader what they are looking at.",
+			"remediation": "Retranslate it. Every page that transcludes it is no fresher than this fragment, which is what the effective state on those pages already says.",
+			"suggestion": null,
+			"excerpt": null
+		},
+		{
+			"rule": "translation-stale",
+			"severity": "warning",
+			"category": "i18n",
+			"location": {
+				"kind": "file",
+				"file": "snippets/zh/safety-note.md"
+			},
+			"locale": "zh",
+			"message": "The zh translation of the snippet \"safety-note\" is older than its source.",
+			"consequence": "A stale translation describes behaviour the app no longer has, and it carries no sign of that on the page. It is worse than a missing translation, which at least tells the reader what they are looking at.",
+			"remediation": "Retranslate it. Every page that transcludes it is no fresher than this fragment, which is what the effective state on those pages already says.",
+			"suggestion": null,
+			"excerpt": null
+		}
+	],
+	"truncated": false,
+	"nextAction": {
+		"kind": "command",
+		"argv": [
+			"hexdocs",
+			"lint",
+			"content/en/reference/api.md"
+		],
+		"why": "7 errors block a publish. Start with \"code-fence-language\" in content/en/reference/api.md."
+	}
+}

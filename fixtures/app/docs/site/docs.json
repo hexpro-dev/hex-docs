@@ -1,0 +1,83 @@
+{
+	"$schema": "../../../../kit/schema/docs-1.json",
+	"docs": 1,
+	"project": "fixture-app",
+	"productName": "Fixture App",
+	"repo": "hexpro-dev/fixture-app",
+	"defaultAudience": "both",
+	"headingIds": "slug",
+	"sections": [
+		{ "id": "guide", "kind": "guide" },
+		{ "id": "reference", "kind": "reference" },
+		{ "id": "developer", "kind": "reference" },
+		{ "id": "notes", "kind": "manual" }
+	],
+	"i18n": {
+		"locales": ["en", "zh", "ar", "es", "ja", "fr", "pt-BR"],
+		"sourceLocale": "en",
+		"parity": "graceful"
+	},
+	"budgets": {
+		"titleMax": 70,
+		"descriptionMax": 160,
+		"pageBytesMax": 524288,
+		"codeFenceBytesMax": 204800,
+		"tableRowsMax": 500,
+		"nestingDepthMax": 32,
+		"assetBytesMax": 2097152,
+		"bundleBytesMax": 67108864
+	},
+	"code": {
+		"languages": ["text", "swift", "metal", "json"]
+	},
+	"toc": {
+		"enabled": true,
+		"maxDepth": 3,
+		"minHeadings": 3
+	},
+	"lint": {
+		"extends": "house",
+		"maxDisables": 2,
+		"rules": {
+			"australian-spelling": "warning",
+			"description-is-a-sentence": { "severity": "warning", "locales": ["en"] }
+		},
+		"bannedPhrases": [
+			{
+				"phrase": "tap and go",
+				"replacement": "hold the tag against the phone",
+				"why": "It names a contactless payment scheme this app has nothing to do with."
+			}
+		],
+		"technicalTerms": ["NDEF", "NTAG", "APDU", "ISO 14443-3A", "ISO 15693"]
+	},
+	"taxonomy": {
+		"tags": ["scanning", "writing", "chips", "security", "troubleshooting", "architecture"]
+	},
+	"glossary": [
+		{
+			"kind": "do-not-translate",
+			"term": "NDEF",
+			"note": "A standard name. Localising the acronym makes the page unsearchable in that language."
+		},
+		{
+			"kind": "do-not-translate",
+			"term": "NTAG213",
+			"note": "A part number. It is printed on the chip and typed into a search box."
+		},
+		{
+			"kind": "translate",
+			"term": "tag",
+			"translations": {
+				"en": "tag",
+				"zh": "标签",
+				"ar": "بطاقة",
+				"es": "etiqueta",
+				"ja": "タグ",
+				"fr": "badge",
+				"pt-BR": "etiqueta"
+			},
+			"note": "One spelling per language. Three sessions writing one manual is how a Japanese page ends up with three words for the same object."
+		}
+	]
+}

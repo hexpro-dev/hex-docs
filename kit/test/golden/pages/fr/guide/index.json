@@ -1,0 +1,239 @@
+{
+	"ast": 1,
+	"project": "fixture-app",
+	"slug": "guide/index",
+	"locale": "fr",
+	"title": "Guide",
+	"description": "Comment scanner, \u00e9crire et organiser des badges NFC avec Fixture App, du premier scan \u00e0 un badge qui survit \u00e0 un passage en machine.",
+	"navTitle": "Guide",
+	"audience": "both",
+	"pageKind": "article",
+	"tags": [
+		"scanning"
+	],
+	"toc": true,
+	"headings": [
+		{
+			"id": "par-o\u00f9-commencer",
+			"depth": 2,
+			"text": "Par o\u00f9 commencer"
+		},
+		{
+			"id": "ce-que-le-guide-ne-couvre-pas",
+			"depth": 2,
+			"text": "Ce que le guide ne couvre pas"
+		},
+		{
+			"id": "ordre-de-lecture-pour-un-nouveau-d\u00e9ploiement",
+			"depth": 2,
+			"text": "Ordre de lecture pour un nouveau d\u00e9ploiement"
+		}
+	],
+	"body": [
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Ce guide couvre les parties de Fixture App que vous utilisez tous les jours : lire un badge, y \u00e9crire une charge utile et comprendre ce qui a \u00e9chou\u00e9 quand le t\u00e9l\u00e9phone reste muet. Il suppose un iPhone capable de lire les badges en arri\u00e8re-plan, c'est-\u00e0-dire tous les mod\u00e8les \u00e0 partir de l'iPhone XS."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Deux pages sont rattach\u00e9es \u00e0 celle-ci. La premi\u00e8re fois, lisez-les dans l'ordre."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "par-o\u00f9-commencer",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Par o\u00f9 commencer"
+				}
+			],
+			"aliases": [
+				"where-to-start"
+			]
+		},
+		{
+			"type": "list",
+			"style": "ordered",
+			"tight": false,
+			"children": [
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "link",
+									"kind": "internal",
+									"slug": "guide/first-tag",
+									"children": [
+										{
+											"type": "text",
+											"value": "Scannez votre premier badge"
+										}
+									]
+								},
+								{
+									"type": "text",
+									"value": " d\u00e9taille la feuille Scan, le retour haptique d\u00e9clench\u00e9 par une lecture r\u00e9ussie et la liste des enregistrements qui appara\u00eet une fois le badge d\u00e9cod\u00e9. La page utilise un autocollant NTAG213, la puce que l'on trouve dans la plupart des lots de badges bon march\u00e9."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "link",
+									"kind": "internal",
+									"slug": "guide/troubleshooting",
+									"children": [
+										{
+											"type": "text",
+											"value": "Quand un scan \u00e9choue"
+										}
+									]
+								},
+								{
+									"type": "text",
+									"value": " r\u00e9pertorie les erreurs que la radio NFC peut renvoyer et ce que chacune signifie en pratique. Les expirations de session, les badges qui ne se lisent qu'une seule fois et le probl\u00e8me de position de l'antenne, \u00e0 l'origine de la plupart des signalements, y sont tous trait\u00e9s."
+								}
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Les deux pages supposent que vous avez accept\u00e9 la demande d'autorisation NFC au premier lancement. Si vous l'avez refus\u00e9e, le bouton Scan est d\u00e9sactiv\u00e9 et une banni\u00e8re \u00ab NFC indisponible \u00bb s'affiche en haut de l'\u00e9cran Badges. Supprimer puis r\u00e9installer l'app est le seul moyen de revoir cette demande."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "ce-que-le-guide-ne-couvre-pas",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Ce que le guide ne couvre pas"
+				}
+			],
+			"aliases": [
+				"what-the-guide-does-not-cover"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Les capacit\u00e9s des puces, l'organisation de leur m\u00e9moire et les types d'enregistrements que chacune accepte se trouvent dans la section de r\u00e9f\u00e9rence, pas ici. Si vous choisissez des badges \u00e0 acheter, commencez par la matrice de compatibilit\u00e9 des puces plut\u00f4t que par ce guide."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Le sch\u00e9ma d'URL de Fixture App, les actions de raccourcis et les rappels de session de badge rel\u00e8vent de la documentation destin\u00e9e aux d\u00e9veloppeurs. Ils ne sont pas repris dans le guide, qui est \u00e9crit pour quelqu'un qui tient un t\u00e9l\u00e9phone et un autocollant."
+				}
+			]
+		},
+		{
+			"type": "blockquote",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "Un badge dont l'\u00e9criture \u00e9choue n'est en g\u00e9n\u00e9ral pas d\u00e9fectueux. Une \u00e9criture exige que le badge reste dans le champ pendant toute l'op\u00e9ration, et une main qui s'\u00e9loigne apr\u00e8s le signal sonore de lecture interrompt l'\u00e9criture : le badge reste lisible, mais inchang\u00e9. Ne bougez plus jusqu'au second signal sonore."
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "ordre-de-lecture-pour-un-nouveau-d\u00e9ploiement",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Ordre de lecture pour un nouveau d\u00e9ploiement"
+				}
+			],
+			"aliases": [
+				"reading-order-for-a-new-deployment"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Si vous pr\u00e9parez plus d'une poign\u00e9e de badges, faites un passage complet sur un seul badge avant de toucher aux autres. \u00c9crivez-le, relisez-le sur un deuxi\u00e8me t\u00e9l\u00e9phone, puis verrouillez-le. Un NTAG213 verrouill\u00e9 ne peut plus \u00eatre r\u00e9\u00e9crit : une erreur rep\u00e9r\u00e9e sur le premier badge co\u00fbte un autocollant, une erreur rep\u00e9r\u00e9e sur le deux centi\u00e8me co\u00fbte un apr\u00e8s-midi."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "L'"
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "index",
+					"children": [
+						{
+							"type": "text",
+							"value": "accueil de la documentation"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " renvoie aux sections de r\u00e9f\u00e9rence et d\u00e9veloppeur quand vous en avez besoin."
+				}
+			]
+		}
+	],
+	"translation": {
+		"state": "current",
+		"sourceUpdated": "2026-01-05T09:00:00Z",
+		"translationUpdated": "2026-02-10T11:30:00Z"
+	},
+	"reading": {
+		"words": 471,
+		"minutes": 3
+	},
+	"snippets": [],
+	"sourceFile": "content/fr/guide/index.md"
+}

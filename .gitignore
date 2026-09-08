@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+.DS_Store
+*.tsbuildinfo
+
+# The eight-dimension design pass and its critique. Reference material for the
+# implementation, superseded by CLAUDE.md and the approved plan wherever they
+# disagree. Kept on disk, out of history: it is a megabyte of working notes.
+.design/
+
+# Local bundle cache written by `hexdocs prefetch` and `hexdocs build`.
+.hexdocs-cache/

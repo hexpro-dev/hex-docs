@@ -1,0 +1,66 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The runtime half has no dependencies to fetch at build time and the toolchain half
+# installs its own, so nothing here needs credentials.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 22 is what the estate runs. 24 is here so a Node change that breaks the
+        # toolchain is found before an upgrade rather than during one.
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history, not the default depth of 1. Two things need it: the house
+          # lint scans commit messages for attribution, and the compiler derives
+          # translation staleness from git committer dates, where a shallow clone gives
+          # every file the same date and the whole corpus reads as current. The lint
+          # detects a shallow clone and refuses rather than reporting a pass, so a
+          # regression here fails the job instead of hiding.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      # Two installs, because the two halves are deliberately not one workspace: the
+      # runtime half is excluded from every consuming site's workspace, so it must be
+      # installable and checkable on its own.
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir kit install --frozen-lockfile
+
+      # Assert the generated artifacts match their source before anything reads them.
+      # Zod is the single source for both the JSON Schemas and the house rule pack, so
+      # a difference here means somebody edited a generated file.
+      - run: pnpm schemas
+      - name: generated artifacts are up to date
+        run: |
+          if ! git diff --quiet -- kit/schema; then
+            echo "kit/schema is stale. Run 'pnpm schemas' and commit the result."
+            git --no-pager diff --stat -- kit/schema
+            exit 1
+          fi
+
+      # Typecheck, both suites with coverage, the dependency gate, the house lint and
+      # formatting, in one ladder that reports what each step examined.
+      - run: pnpm verify

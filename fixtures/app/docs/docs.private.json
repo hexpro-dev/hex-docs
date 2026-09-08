@@ -1,0 +1,19 @@
+{
+	"$schema": "../../../kit/schema/private-1.json",
+	"private": 1,
+	"strings": ["Contoso Tap", "Norlink Reader", "Project Bellwether"],
+	"patterns": [
+		{
+			"id": "device-udid",
+			"pattern": "\\b[0-9A-F]{8}-[0-9A-F]{16}\\b",
+			"flags": "i",
+			"why": "A device identifier from a test rig. It identifies a physical phone and belongs in the internal tree, not on a public page."
+		},
+		{
+			"id": "station-pack",
+			"pattern": "station-pack-[a-z0-9-]+",
+			"flags": "i",
+			"why": "Names an internal test fixture directory. Publishing the name tells a reader a tree exists and what to ask for."
+		}
+	]
+}

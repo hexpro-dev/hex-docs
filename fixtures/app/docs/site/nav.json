@@ -1,0 +1,85 @@
+{
+	"$schema": "../../../../kit/schema/nav-1.json",
+	"nav": 1,
+	"items": [
+		{ "doc": "index" },
+		{
+			"group": "guide",
+			"label": {
+				"en": "Guide",
+				"zh": "指南",
+				"ar": "الدليل",
+				"es": "Guía",
+				"ja": "ガイド",
+				"fr": "Guide",
+				"pt-BR": "Guia"
+			},
+			"items": [
+				{ "doc": "guide/index" },
+				{ "doc": "guide/first-tag" },
+				{ "doc": "guide/troubleshooting" }
+			]
+		},
+		{
+			"group": "reference",
+			"label": {
+				"en": "Reference",
+				"zh": "参考",
+				"ar": "المرجع",
+				"es": "Referencia",
+				"ja": "リファレンス",
+				"fr": "Référence",
+				"pt-BR": "Referência"
+			},
+			"items": [
+				{ "doc": "reference/index" },
+				{ "doc": "reference/chip-support" },
+				{
+					"group": "reference-internals",
+					"label": {
+						"en": "Internals",
+						"zh": "内部实现",
+						"ar": "البنية الداخلية",
+						"es": "Interioridades",
+						"ja": "内部構造",
+						"fr": "Fonctionnement interne",
+						"pt-BR": "Funcionamento interno"
+					},
+					"collapsed": true,
+					"items": [
+						{
+							"doc": "reference/api",
+							"hidden": "Published so support replies can link to it, and kept out of the sidebar because the API surface is not something a reader browses to."
+						},
+						{
+							"group": "reference-internals-design",
+							"label": {
+								"en": "Design notes",
+								"zh": "设计说明",
+								"ar": "ملاحظات التصميم",
+								"es": "Notas de diseño",
+								"ja": "設計メモ",
+								"fr": "Notes de conception",
+								"pt-BR": "Notas de design"
+							},
+							"items": [{ "doc": "developer/architecture" }]
+						}
+					]
+				}
+			]
+		},
+		{
+			"link": "https://example.com/fixture-app/support",
+			"label": {
+				"en": "Support",
+				"zh": "支持",
+				"ar": "الدعم",
+				"es": "Soporte",
+				"ja": "サポート",
+				"fr": "Assistance",
+				"pt-BR": "Suporte"
+			},
+			"external": true
+		}
+	]
+}

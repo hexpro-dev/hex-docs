@@ -1,0 +1,568 @@
+{
+	"ast": 1,
+	"project": "fixture-app",
+	"slug": "guide/first-tag",
+	"locale": "es",
+	"title": "Escanea tu primera etiqueta",
+	"description": "Lee una etiqueta NFC con Fixture App por primera vez y guarda lo que contiene.",
+	"navTitle": "Primer escaneo",
+	"audience": "user",
+	"pageKind": "howto",
+	"tags": [
+		"scanning"
+	],
+	"since": "1.0.0",
+	"toc": true,
+	"headings": [
+		{
+			"id": "antes-de-empezar",
+			"depth": 2,
+			"text": "Antes de empezar"
+		},
+		{
+			"id": "lee-la-etiqueta",
+			"depth": 2,
+			"text": "Lee la etiqueta"
+		},
+		{
+			"id": "despu\u00e9s-de-la-lectura",
+			"depth": 2,
+			"text": "Despu\u00e9s de la lectura"
+		},
+		{
+			"id": "si-la-lectura-no-termina",
+			"depth": 2,
+			"text": "Si la lectura no termina"
+		}
+	],
+	"body": [
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "La primera lectura lleva unos diez segundos una vez tienes la etiqueta en la mano. Casi todo ese tiempo se va en encontrar el punto del tel\u00e9fono donde est\u00e1 la antena, que queda m\u00e1s arriba en la parte trasera de lo que la gente espera."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "antes-de-empezar",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Antes de empezar"
+				}
+			],
+			"aliases": [
+				"before-you-start"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Fixture App usa el lector NFC del tel\u00e9fono, as\u00ed que no hay nada que emparejar ni nada que cargar. Cualquier iPhone a partir del iPhone 7, con iOS 16 o posterior, puede leer una etiqueta."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Necesitas una etiqueta con la que el lector pueda hablar y un camino despejado hasta ella:"
+				}
+			]
+		},
+		{
+			"type": "list",
+			"style": "bullet",
+			"tight": true,
+			"children": [
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Un iPhone 7 o posterior con iOS 16 o m\u00e1s reciente"
+								}
+							]
+						}
+					],
+					"checked": true
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Fixture App 1.0 o posterior, instalada desde la App Store"
+								}
+							]
+						}
+					],
+					"checked": true
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Una etiqueta NTAG 213, NTAG 215 o MIFARE Ultralight"
+								}
+							]
+						}
+					],
+					"checked": false
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Una funda de menos de 3 mm, o ninguna funda"
+								}
+							]
+						}
+					],
+					"checked": false
+				}
+			]
+		},
+		{
+			"type": "callout",
+			"kind": "caution",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "Fixture App necesita unos dos segundos de contacto para terminar una escritura. Apretar m\u00e1s fuerte no acorta ese tiempo, y una etiqueta doblada contra una funda met\u00e1lica puede romper la antena que lleva dentro el inlay."
+						}
+					]
+				}
+			],
+			"title": [
+				{
+					"type": "text",
+					"value": "No fuerces la etiqueta contra el tel\u00e9fono"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Mant\u00e9n la etiqueta plana y quieta hasta que la hoja de escaneo muestre la barra verde de confirmaci\u00f3n. Si la escritura se interrumpe, la etiqueta conserva su contenido anterior, as\u00ed que reintentar una escritura fallida no tiene riesgo."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "No todas las etiquetas responden. Las etiquetas MIFARE Classic se quedan mudas en el iPhone porque el lector no habla su protocolo, y algunas etiquetas de control de acceso solo responden tras un intercambio de contrase\u00f1a. La "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "reference/chip-support",
+					"children": [
+						{
+							"type": "text",
+							"value": "matriz de chips compatibles"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " enumera los chips que se han probado con la versi\u00f3n 1.0."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "lee-la-etiqueta",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Lee la etiqueta"
+				}
+			],
+			"aliases": [
+				"read-the-tag"
+			]
+		},
+		{
+			"type": "steps",
+			"children": [
+				{
+					"type": "step",
+					"id": "abre-la-hoja-de-escaneo",
+					"title": [
+						{
+							"type": "text",
+							"value": "Abre la hoja de escaneo"
+						}
+					],
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Toca el c\u00edrculo grande del centro de la pantalla Biblioteca, o mant\u00e9n pulsado el icono de la app en la pantalla de inicio y elige Escanear. La hoja sube y la l\u00ednea de estado dice \"Preparado para una etiqueta\"."
+								}
+							]
+						},
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "El lector permanece activo durante 60 segundos. Si no se acerca nada al alcance, la hoja se cierra sola y no se a\u00f1ade nada a la Biblioteca."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "step",
+					"id": "apoya-la-etiqueta-contra-la-parte-superior-del-tel\u00e9fono",
+					"title": [
+						{
+							"type": "text",
+							"value": "Apoya la etiqueta contra la parte superior del tel\u00e9fono"
+						}
+					],
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Apoya el borde superior del tel\u00e9fono plano contra la etiqueta y mant\u00e9n los dos quietos. La l\u00ednea de estado cambia a \"Etiqueta detectada\" y el tel\u00e9fono emite un chasquido corto."
+								}
+							]
+						},
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "La posici\u00f3n importa m\u00e1s que la presi\u00f3n:"
+								}
+							]
+						},
+						{
+							"type": "list",
+							"style": "bullet",
+							"tight": true,
+							"children": [
+								{
+									"type": "listItem",
+									"children": [
+										{
+											"type": "paragraph",
+											"children": [
+												{
+													"type": "text",
+													"value": "La antena recorre el borde superior, aproximadamente un cent\u00edmetro por debajo del m\u00f3dulo de c\u00e1maras."
+												}
+											]
+										}
+									]
+								},
+								{
+									"type": "listItem",
+									"children": [
+										{
+											"type": "paragraph",
+											"children": [
+												{
+													"type": "text",
+													"value": "Mant\u00e9n la etiqueta paralela al tel\u00e9fono en lugar de en \u00e1ngulo."
+												}
+											]
+										}
+									]
+								},
+								{
+									"type": "listItem",
+									"children": [
+										{
+											"type": "paragraph",
+											"children": [
+												{
+													"type": "text",
+													"value": "Aparta antes una cartera MagSafe o una tarjeta met\u00e1lica."
+												}
+											]
+										}
+									]
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "step",
+					"id": "revisa-los-registros-y-guarda",
+					"title": [
+						{
+							"type": "text",
+							"value": "Revisa los registros y guarda"
+						}
+					],
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Cuando termina la lectura, la hoja enumera todos los registros NDEF de la etiqueta, en el orden en que est\u00e1n almacenados. Fixture App reconoce los registros URL, de texto y de Wi-Fi, y muestra una vista previa de cada uno. Todo lo dem\u00e1s aparece como bytes en bruto."
+								}
+							]
+						},
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Toca Guardar para conservar la etiqueta, o Descartar para cerrar la hoja sin escribir nada en la Biblioteca."
+								}
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "figure",
+			"image": {
+				"type": "image",
+				"src": "assets/b9922ff72601d007f508e4b11a31c7cd3215b8115dfd0ab2da6a584f98bbacb7.png",
+				"alt": "La hoja de escaneo esperando una etiqueta",
+				"width": 160,
+				"height": 200
+			},
+			"caption": [
+				{
+					"type": "text",
+					"value": "La hoja de escaneo, esperando a que se acerque una etiqueta"
+				}
+			]
+		},
+		{
+			"type": "callout",
+			"kind": "warning",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "Las etiquetas con una zona protegida por contrase\u00f1a responden a la primera parte de una lectura y rechazan el resto. Fixture App muestra lo que ha obtenido y pone \"Registros incompletos\" bajo el nombre de la etiqueta. Busca esa l\u00ednea antes de fiarte de la lectura de una etiqueta de control de acceso."
+						}
+					]
+				}
+			],
+			"title": [
+				{
+					"type": "text",
+					"value": "Una lectura parcial parece una lectura correcta"
+				}
+			]
+		},
+		{
+			"type": "callout",
+			"kind": "tip",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "Activa Ajustes > Escaneo > Mantener la hoja abierta para leer varias etiquetas de una vez. La Biblioteca agrupa todo lo de esa sesi\u00f3n bajo un \u00fanico encabezado."
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "despu\u00e9s-de-la-lectura",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Despu\u00e9s de la lectura"
+				}
+			],
+			"aliases": [
+				"after-the-read"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Las etiquetas guardadas van a la Biblioteca, las m\u00e1s recientes primero, con el tipo de chip y la hora de la lectura debajo del nombre. Al tocar una se abre Detalle de la etiqueta, que muestra los bytes en bruto junto a los registros descodificados."
+				}
+			]
+		},
+		{
+			"type": "figure",
+			"image": {
+				"type": "image",
+				"src": "assets/b9922ff72601d007f508e4b11a31c7cd3215b8115dfd0ab2da6a584f98bbacb7.png",
+				"alt": "Una lectura completada con tres registros NDEF",
+				"width": 160,
+				"height": 200
+			}
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Cambiar el nombre de una etiqueta solo afecta a lo que ves en la Biblioteca. No se escribe nada en la etiqueta salvo que uses la hoja de escritura, que es un procedimiento aparte."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "si-la-lectura-no-termina",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Si la lectura no termina"
+				}
+			],
+			"aliases": [
+				"if-the-read-does-not-finish"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "El lector reintenta por su cuenta. Los dos primeros intentos ocurren en silencio, con un segundo aproximado entre uno y otro. A partir del tercer intento, la hoja empieza a informar de lo que hace:"
+				}
+			]
+		},
+		{
+			"type": "list",
+			"style": "ordered",
+			"tight": true,
+			"children": [
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "\"Sigo buscando\" aparece en la l\u00ednea de estado y el chasquido se detiene."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "El lector baja a una frecuencia de sondeo m\u00e1s lenta."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "La sesi\u00f3n termina con \"Etiqueta perdida antes de terminar la lectura\"."
+								}
+							]
+						}
+					]
+				}
+			],
+			"start": 3
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Una lectura que llega al quinto intento dos veces seguidas suele ser cosa de la etiqueta, no del tel\u00e9fono. "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "guide/troubleshooting",
+					"children": [
+						{
+							"type": "text",
+							"value": "Cuando un escaneo no funciona"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " repasa las causas en el orden en que conviene comprobarlas."
+				}
+			]
+		}
+	],
+	"translation": {
+		"state": "stale",
+		"sourceUpdated": "2026-03-15T08:15:00Z",
+		"translationUpdated": "2026-02-10T11:30:00Z"
+	},
+	"reading": {
+		"words": 789,
+		"minutes": 4
+	},
+	"snippets": [
+		"safety-note"
+	],
+	"sourceFile": "content/es/guide/first-tag.md"
+}

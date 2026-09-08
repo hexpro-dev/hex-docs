@@ -1,0 +1,403 @@
+{
+	"ast": 1,
+	"project": "fixture-app",
+	"slug": "index",
+	"locale": "en",
+	"title": "Fixture App documentation",
+	"description": "Read and rewrite the NDEF records on an NFC tag from an iPhone, with nothing leaving the device.",
+	"navTitle": "Overview",
+	"audience": "both",
+	"pageKind": "article",
+	"tags": [
+		"scanning"
+	],
+	"toc": true,
+	"headings": [
+		{
+			"id": "what-fixture-app-does",
+			"depth": 2,
+			"text": "What Fixture App does"
+		},
+		{
+			"id": "what-you-need",
+			"depth": 2,
+			"text": "What you need"
+		},
+		{
+			"id": "where-to-go-next",
+			"depth": 2,
+			"text": "Where to go next"
+		}
+	],
+	"body": [
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Fixture App turns an iPhone into a tag reader and a tag writer. It runs on the NFC hardware Apple exposes to third-party apps, which means one tag at a time with the Scan sheet open."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "what-fixture-app-does",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "What Fixture App does"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Hold the top edge of the phone against a tag and the app decodes the NDEF message on it. From there you can edit a record in place or overwrite the tag with a new one. Nothing is uploaded, and no scan history survives closing the app."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "The reader understands these payloads:"
+				}
+			]
+		},
+		{
+			"type": "list",
+			"style": "bullet",
+			"tight": true,
+			"children": [
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "text records, with the language code the tag declares"
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "URI records, including "
+								},
+								{
+									"type": "inlineCode",
+									"value": "tel:"
+								},
+								{
+									"type": "text",
+									"value": " and "
+								},
+								{
+									"type": "inlineCode",
+									"value": "mailto:"
+								},
+								{
+									"type": "text",
+									"value": " shortcuts"
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Wi-Fi handover records written by an Android phone"
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "vCard payloads, shown as a contact card"
+								}
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Writing is "
+				},
+				{
+					"type": "emphasis",
+					"children": [
+						{
+							"type": "text",
+							"value": "destructive"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": ". The app replaces the whole NDEF message rather than appending to it, so whatever was on the tag is gone the moment you tap "
+				},
+				{
+					"type": "strong",
+					"children": [
+						{
+							"type": "text",
+							"value": "Write"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": ". A locked tag stays readable, and the writer stops with "
+				},
+				{
+					"type": "inlineCode",
+					"value": "Tag is permanently locked"
+				},
+				{
+					"type": "text",
+					"value": " instead of reporting success."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "what-you-need",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "What you need"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Supported hardware: iPhone 7 or later, running iOS 16 or later."
+				},
+				{
+					"type": "break"
+				},
+				{
+					"type": "text",
+					"value": "Supported tags: ISO 14443 Type A chips formatted for NDEF."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "The "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "reference/chip-support",
+					"children": [
+						{
+							"type": "text",
+							"value": "Chip support matrix"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " lists every chip the reader has been tested against and how much writable memory each one has. An NTAG213 holds 132 bytes, which is a short URL and very little else."
+				}
+			]
+		},
+		{
+			"type": "callout",
+			"kind": "note",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "iOS hands a tag to a background app only when the tag carries a URL record matching the app's associated domain. Everything else needs the Scan sheet open in the foreground."
+						}
+					]
+				}
+			],
+			"title": [
+				{
+					"type": "text",
+					"value": "Background scanning"
+				}
+			]
+		},
+		{
+			"type": "callout",
+			"kind": "caution",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "Fixture App needs about two seconds of contact to finish a write. Pressing harder does not shorten that, and a tag creased against a metal case can crack the antenna inside the inlay."
+						}
+					]
+				}
+			],
+			"title": [
+				{
+					"type": "text",
+					"value": "Do not force a tag against the phone"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Keep the tag flat and still until the Scan sheet shows the green confirm bar. If the write is interrupted the tag keeps its previous contents, so a failed write is safe to retry."
+				}
+			]
+		},
+		{
+			"type": "thematicBreak"
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "where-to-go-next",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Where to go next"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Start with "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "guide/first-tag",
+					"children": [
+						{
+							"type": "text",
+							"value": "Scan your first tag"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": ", which covers one read and one write on a blank NTAG215. If a tag will not read at all, re-check "
+				},
+				{
+					"type": "link",
+					"kind": "anchor",
+					"anchor": "what-you-need",
+					"children": [
+						{
+							"type": "text",
+							"value": "what you need"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " first. Most failures are a chip the reader cannot address rather than a fault in the tag."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Build numbers and release notes live on the "
+				},
+				{
+					"type": "link",
+					"kind": "external",
+					"href": "https://example.com/fixture-app",
+					"children": [
+						{
+							"type": "text",
+							"value": "Fixture App site"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": ". Send corrections to this documentation to "
+				},
+				{
+					"type": "link",
+					"kind": "mailto",
+					"address": "docs@example.com",
+					"children": [
+						{
+							"type": "text",
+							"value": "docs@example.com"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": "."
+				}
+			]
+		}
+	],
+	"translation": {
+		"state": "source",
+		"sourceUpdated": "2026-01-05T09:00:00Z"
+	},
+	"reading": {
+		"words": 410,
+		"minutes": 3
+	},
+	"snippets": [
+		"safety-note"
+	],
+	"sourceFile": "content/en/index.md"
+}

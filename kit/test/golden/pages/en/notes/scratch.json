@@ -1,0 +1,146 @@
+{
+	"ast": 1,
+	"project": "fixture-app",
+	"slug": "notes/scratch",
+	"locale": "en",
+	"title": "Release note scratchpad",
+	"description": "Working notes for the 1.4 release, kept out of the published bundle.",
+	"audience": "both",
+	"pageKind": "article",
+	"tags": [
+		"architecture"
+	],
+	"toc": false,
+	"headings": [
+		{
+			"id": "still-to-confirm",
+			"depth": 2,
+			"text": "Still to confirm"
+		},
+		{
+			"id": "parked",
+			"depth": 2,
+			"text": "Parked"
+		}
+	],
+	"body": [
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "still-to-confirm",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Still to confirm"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Aiden is checking whether the NTAG 216 write path still needs the extra capability container read on iOS 18.2. If it does not, the retry loop in "
+				},
+				{
+					"type": "inlineCode",
+					"value": "TagSession.write(_:)"
+				},
+				{
+					"type": "text",
+					"value": " loses a full second of tag contact time."
+				}
+			]
+		},
+		{
+			"type": "list",
+			"style": "bullet",
+			"tight": true,
+			"children": [
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Confirm the \"Tag moved away\" copy matches the string table in Scan."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Decide whether the chip matrix lists the 213 variants separately."
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "text",
+									"value": "Ask design whether the Write sheet keeps the amber lock badge."
+								}
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "parked",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Parked"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Nobody has measured how long the session stays alive after the sheet is dismissed \u2014 the number in the old notes came from a simulator run and the simulator does not run the radio at all. Measure on a device before quoting anything."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Move the confirmed items into the guide and delete this page when 1.4 ships."
+				}
+			]
+		}
+	],
+	"translation": {
+		"state": "source",
+		"sourceUpdated": "2026-01-05T09:00:00Z"
+	},
+	"reading": {
+		"words": 133,
+		"minutes": 1
+	},
+	"snippets": [],
+	"sourceFile": "content/en/notes/scratch.md"
+}

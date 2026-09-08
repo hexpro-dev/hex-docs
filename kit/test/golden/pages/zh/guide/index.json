@@ -1,0 +1,239 @@
+{
+	"ast": 1,
+	"project": "fixture-app",
+	"slug": "guide/index",
+	"locale": "zh",
+	"title": "\u6307\u5357",
+	"description": "\u5982\u4f55\u7528Fixture App\u626b\u63cf\u3001\u5199\u5165\u548c\u6574\u7406NFC\u6807\u7b7e\uff0c\u4ece\u7b2c\u4e00\u6b21\u626b\u63cf\u5230\u4e00\u679a\u80fd\u625b\u4f4f\u4e00\u8f6e\u6d17\u8863\u7684\u6807\u7b7e\u3002",
+	"navTitle": "\u6307\u5357",
+	"audience": "both",
+	"pageKind": "article",
+	"tags": [
+		"scanning"
+	],
+	"toc": true,
+	"headings": [
+		{
+			"id": "\u4ece\u54ea\u91cc\u5f00\u59cb",
+			"depth": 2,
+			"text": "\u4ece\u54ea\u91cc\u5f00\u59cb"
+		},
+		{
+			"id": "\u672c\u6307\u5357\u4e0d\u6d89\u53ca\u7684\u5185\u5bb9",
+			"depth": 2,
+			"text": "\u672c\u6307\u5357\u4e0d\u6d89\u53ca\u7684\u5185\u5bb9"
+		},
+		{
+			"id": "\u65b0\u90e8\u7f72\u7684\u9605\u8bfb\u987a\u5e8f",
+			"depth": 2,
+			"text": "\u65b0\u90e8\u7f72\u7684\u9605\u8bfb\u987a\u5e8f"
+		}
+	],
+	"body": [
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "\u672c\u6307\u5357\u8986\u76d6Fixture App\u91cc\u4f60\u6bcf\u5929\u90fd\u4f1a\u7528\u5230\u7684\u90e8\u5206\uff1a\u8bfb\u53d6\u6807\u7b7e\u3001\u5411\u6807\u7b7e\u5199\u5165\u8d1f\u8f7d\uff0c\u4ee5\u53ca\u5728\u624b\u673a\u6beb\u65e0\u53cd\u5e94\u65f6\u5224\u65ad\u95ee\u9898\u51fa\u5728\u54ea\u91cc\u3002\u5b83\u5047\u8bbe\u4f60\u7684iPhone\u652f\u6301\u540e\u53f0\u6807\u7b7e\u8bfb\u53d6\uff0c\u4e5f\u5c31\u662fiPhone XS\u4ee5\u540e\u7684\u6240\u6709\u673a\u578b\u3002"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "\u672c\u9875\u4e0b\u9762\u8fd8\u6709\u4e24\u9875\u3002\u7b2c\u4e00\u6b21\u9605\u8bfb\u65f6\u8bf7\u6309\u987a\u5e8f\u770b\u3002"
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "\u4ece\u54ea\u91cc\u5f00\u59cb",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "\u4ece\u54ea\u91cc\u5f00\u59cb"
+				}
+			],
+			"aliases": [
+				"where-to-start"
+			]
+		},
+		{
+			"type": "list",
+			"style": "ordered",
+			"tight": false,
+			"children": [
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "link",
+									"kind": "internal",
+									"slug": "guide/first-tag",
+									"children": [
+										{
+											"type": "text",
+											"value": "\u626b\u63cf\u4f60\u7684\u7b2c\u4e00\u4e2a\u6807\u7b7e"
+										}
+									]
+								},
+								{
+									"type": "text",
+									"value": "\u4f1a\u5e26\u4f60\u4e86\u89e3\u626b\u63cf\u9762\u677f\u3001\u8bfb\u53d6\u6210\u529f\u65f6\u7684\u89e6\u611f\u53cd\u9988\uff0c\u4ee5\u53ca\u6807\u7b7e\u89e3\u7801\u540e\u51fa\u73b0\u7684\u8bb0\u5f55\u5217\u8868\u3002\u5b83\u7528\u7684\u662f\u4e00\u679aNTAG213\u8d34\u7eb8\uff0c\u8fd9\u662f\u591a\u6570\u5ec9\u4ef7\u6807\u7b7e\u5957\u88c5\u91cc\u7684\u82af\u7247\u3002"
+								}
+							]
+						}
+					]
+				},
+				{
+					"type": "listItem",
+					"children": [
+						{
+							"type": "paragraph",
+							"children": [
+								{
+									"type": "link",
+									"kind": "internal",
+									"slug": "guide/troubleshooting",
+									"children": [
+										{
+											"type": "text",
+											"value": "\u626b\u63cf\u4e0d\u6210\u529f\u65f6"
+										}
+									]
+								},
+								{
+									"type": "text",
+									"value": "\u5217\u51fa\u4e86NFC\u5c04\u9891\u6a21\u5757\u53ef\u80fd\u8fd4\u56de\u7684\u9519\u8bef\uff0c\u4ee5\u53ca\u6bcf\u79cd\u9519\u8bef\u5728\u5b9e\u9645\u4f7f\u7528\u4e2d\u7684\u542b\u4e49\u3002\u4f1a\u8bdd\u8d85\u65f6\u3001\u53ea\u8bfb\u5f97\u51fa\u4e00\u6b21\u4e4b\u540e\u518d\u4e5f\u8bfb\u4e0d\u5230\u7684\u6807\u7b7e\uff0c\u8fd8\u6709\u5360\u4e86\u5927\u591a\u6570\u53cd\u9988\u7684\u5929\u7ebf\u4f4d\u7f6e\u95ee\u9898\uff0c\u90fd\u5728\u90a3\u4e00\u9875\u91cc\u3002"
+								}
+							]
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "\u8fd9\u4e24\u9875\u90fd\u5047\u8bbe\u4f60\u5728\u9996\u6b21\u542f\u52a8\u65f6\u540c\u610f\u4e86\u5e94\u7528\u7684NFC\u6388\u6743\u63d0\u793a\u3002\u5982\u679c\u4f60\u62d2\u7edd\u4e86\uff0c\u626b\u63cf\u6309\u94ae\u4f1a\u4e0d\u53ef\u7528\uff0c\u6807\u7b7e\u5c4f\u5e55\u9876\u90e8\u4f1a\u51fa\u73b0\u4e00\u6761\u5199\u7740\u201cNFC\u4e0d\u53ef\u7528\u201d\u7684\u6a2a\u5e45\u3002\u53ea\u6709\u5220\u9664\u5e76\u91cd\u65b0\u5b89\u88c5\u5e94\u7528\uff0c\u624d\u80fd\u518d\u6b21\u770b\u5230\u90a3\u4e2a\u63d0\u793a\u3002"
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "\u672c\u6307\u5357\u4e0d\u6d89\u53ca\u7684\u5185\u5bb9",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "\u672c\u6307\u5357\u4e0d\u6d89\u53ca\u7684\u5185\u5bb9"
+				}
+			],
+			"aliases": [
+				"what-the-guide-does-not-cover"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "\u82af\u7247\u5bb9\u91cf\u3001\u5b58\u50a8\u5e03\u5c40\uff0c\u4ee5\u53ca\u6bcf\u6b3e\u82af\u7247\u63a5\u53d7\u7684\u5177\u4f53\u8bb0\u5f55\u7c7b\u578b\uff0c\u90fd\u5728\u53c2\u8003\u7ae0\u8282\u91cc\uff0c\u800c\u4e0d\u5728\u8fd9\u91cc\u3002\u5982\u679c\u4f60\u6b63\u5728\u6311\u9009\u8981\u4e70\u7684\u6807\u7b7e\uff0c\u8bf7\u5148\u770b\u82af\u7247\u652f\u6301\u77e9\u9635\uff0c\u800c\u4e0d\u662f\u672c\u6307\u5357\u3002"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Fixture App\u7684URL scheme\u3001\u5feb\u6377\u6307\u4ee4\u52a8\u4f5c\u548c\u6807\u7b7e\u4f1a\u8bdd\u56de\u8c03\u5c5e\u4e8e\u5f00\u53d1\u8005\u5185\u5bb9\u3002\u6307\u5357\u91cc\u4e0d\u4f1a\u91cd\u590d\u5b83\u4eec\uff0c\u56e0\u4e3a\u6307\u5357\u662f\u5199\u7ed9\u624b\u91cc\u62ff\u7740\u4e00\u90e8\u624b\u673a\u548c\u4e00\u5f20\u8d34\u7eb8\u7684\u4eba\u770b\u7684\u3002"
+				}
+			]
+		},
+		{
+			"type": "blockquote",
+			"children": [
+				{
+					"type": "paragraph",
+					"children": [
+						{
+							"type": "text",
+							"value": "\u5199\u5165\u5931\u8d25\u7684\u6807\u7b7e\u901a\u5e38\u5e76\u6ca1\u6709\u574f\u3002\u5199\u5165\u64cd\u4f5c\u8981\u6c42\u6807\u7b7e\u5728\u6574\u4e2a\u8fc7\u7a0b\u4e2d\u90fd\u7559\u5728\u5c04\u9891\u573a\u91cc\uff0c\u8bfb\u53d6\u63d0\u793a\u97f3\u4e4b\u540e\u624b\u4e00\u79fb\u5f00\uff0c\u5199\u5165\u5c31\u4f1a\u4e2d\u6b62\uff0c\u6807\u7b7e\u4ecd\u7136\u53ef\u8bfb\uff0c\u5185\u5bb9\u4e5f\u6ca1\u6709\u53d8\u5316\u3002\u8bf7\u4fdd\u6301\u4e0d\u52a8\uff0c\u76f4\u5230\u7b2c\u4e8c\u58f0\u63d0\u793a\u97f3\u54cd\u8d77\u3002"
+						}
+					]
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "\u65b0\u90e8\u7f72\u7684\u9605\u8bfb\u987a\u5e8f",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "\u65b0\u90e8\u7f72\u7684\u9605\u8bfb\u987a\u5e8f"
+				}
+			],
+			"aliases": [
+				"reading-order-for-a-new-deployment"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "\u5982\u679c\u4f60\u8981\u914d\u7f6e\u7684\u6807\u7b7e\u4e0d\u6b62\u51e0\u679a\uff0c\u5148\u5728\u4e00\u679a\u4e0a\u628a\u6574\u4e2a\u6d41\u7a0b\u8d70\u5b8c\uff0c\u518d\u53bb\u52a8\u5176\u4f59\u7684\u3002\u5199\u5165\uff0c\u7528\u7b2c\u4e8c\u90e8\u624b\u673a\u8bfb\u56de\u6765\uff0c\u7136\u540e\u9501\u5b9a\u3002\u5df2\u9501\u5b9a\u7684NTAG213\u65e0\u6cd5\u91cd\u5199\uff0c\u6240\u4ee5\u5728\u7b2c\u4e00\u679a\u6807\u7b7e\u4e0a\u53d1\u73b0\u7684\u9519\u8bef\u53ea\u635f\u5931\u4e00\u5f20\u8d34\u7eb8\uff0c\u5728\u7b2c\u4e24\u767e\u679a\u4e0a\u624d\u53d1\u73b0\u7684\u9519\u8bef\u8981\u642d\u8fdb\u4e00\u4e2a\u4e0b\u5348\u3002"
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "\u9700\u8981\u53c2\u8003\u7ae0\u8282\u548c\u5f00\u53d1\u8005\u7ae0\u8282\u65f6\uff0c\u53ef\u4ee5\u4ece"
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "index",
+					"children": [
+						{
+							"type": "text",
+							"value": "\u6587\u6863\u9996\u9875"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " \u8fdb\u5165\u3002"
+				}
+			]
+		}
+	],
+	"translation": {
+		"state": "current",
+		"sourceUpdated": "2026-01-05T09:00:00Z",
+		"translationUpdated": "2026-02-10T11:30:00Z"
+	},
+	"reading": {
+		"words": 652,
+		"minutes": 4
+	},
+	"snippets": [],
+	"sourceFile": "content/zh/guide/index.md"
+}

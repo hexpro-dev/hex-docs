@@ -1,0 +1,15 @@
+{
+	// The toolchain half. Unlike src/, this actually runs on node (through tsx), so
+	// module resolution is nodenext and the `.js` extension on relative imports is
+	// enforced by the compiler rather than by habit.
+	"extends": "../tsconfig.json",
+	"compilerOptions": {
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"lib": ["ES2022"],
+		"types": ["node"],
+		"noEmit": true
+	},
+	"include": ["src", "bin", "test", "vitest.config.ts", "../src", "../fixtures"],
+	"exclude": ["node_modules", "dist", "coverage"]
+}

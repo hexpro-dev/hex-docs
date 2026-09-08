@@ -1,0 +1,733 @@
+# CLAUDE.md
+
+Guidance for Claude Code working in `hex-docs`.
+
+## What this is
+
+A reusable documentation package for Hex Pro. Documentation source lives in each app's
+own repository, a GitHub Action publishes a compiled bundle to S3 keyed by commit sha,
+and the consuming website labels a sha as a version. Unlabelled shas are invisible.
+
+Two halves in one repo, consumed as a **git submodule** (no npm registry):
+
+- **the root** (`package.json`, `src/`) is the runtime: a React renderer, the search
+  client, route derivation and the UI strings. It has **zero runtime dependencies**, is
+  consumed as TypeScript source through a `tsconfig` `paths` entry, and a CI gate fails
+  the build if a `dependencies` entry ever appears.
+- **`kit/`** is the toolchain: the `hexdocs` CLI, the MCP server, the bundled skills and
+  the JSON Schemas. It has its own `package.json` and lockfile, installs its own
+  `node_modules` on first run, and is never imported by a website.
+
+The approved plan is `~/.claude/plans/i-have-need-for-indexed-russell.md`. The
+eight-dimension design pass and its adversarial critique are in `.design/` (untracked);
+read `.design/README.md` first, because a substantial number of those documents' claims
+were overturned.
+
+## Where it mounts
+
+| Repo                                       | Path                         | Role                                                                                                                                 |
+| ------------------------------------------ | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `hex-web`                                  | `common/docs`                | consumer. Excluded from the pnpm workspace, wired through `tsconfig` `paths`, listed in `deploy.config.json` `hash.extra_dirs.front` |
+| `kcalc-ai`                                 | `kcalc-web/docs`             | consumer and content source                                                                                                          |
+| `hex-nfc`, `sol-alarm`, `nepali-companion` | `hex-docs/` at the repo root | content source only; mirrors how `hex-terraform/` is mounted                                                                         |
+
+## Verified facts about the consumers
+
+These cost real effort to establish and several of them overturned an earlier design.
+Do not re-derive them, and do not assume the opposite.
+
+### The consumers are not the same
+
+`hex-web/apps/front` is React Router 7.12 framework mode (SSR), React 19.2, Vite 7,
+Tailwind v4 CSS-first, with `@hex-pro/i18n` and framer-motion. `kcalc-web/front` is the
+same template diverged: identical React, React Router, Vite and Tailwind versions, the
+same seven languages and the same URL scheme, but **no i18next, no shadcn, no
+framer-motion**, and its locales live at `app/locales/<lang>/<page>.json` rather than in
+a shared package.
+
+**The only safe shared assumptions are React 19 + React Router 7 + Tailwind v4.**
+Never depend on `@hex-pro/ui`, `@hex-pro/i18n`, `i18next` or `framer-motion`. This
+package ships its own UI strings in all seven languages.
+
+### There is no CI on hex-web or on kcalc-ai
+
+No `.github/` directory in either. Every guard is a hand-run zero-dependency `.mjs` in
+`apps/front/scripts/`, each carrying the comment "There is no CI on this repository."
+
+The one thing that always runs is `prebuild`. Verified: pnpm 10.28.0 fires `prebuild`
+automatically, and `hex-terraform/deploy/src/build.ts` runs `pnpm build` **on the host**
+before the Docker build, so the network and the submodule are available there. The
+container's own `npm install --ignore-scripts` never re-runs it. That is why the docs
+guard hangs off `prebuild` and not off a script somebody has to remember.
+
+### CSP
+
+`default-src 'none'` with a per-request 128-bit nonce, `connect-src 'self'`,
+`img-src 'self' blob: data:`, `script-src 'self' 'nonce-…' 'wasm-unsafe-eval'`. Minted in
+`root.tsx`'s loader, re-emitted by its `headers` export, and read back out of the header
+by `entry.server.tsx` to pass to `<ServerRouter nonce>`. Without that nonce the page
+renders and never hydrates.
+
+**Never export `headers` from a docs route.** React Router copies only `Set-Cookie` from
+`parentHeaders` into a child's headers, so a child `headers` export ships docs pages with
+no `Content-Security-Policy` and no nonce.
+
+**Never widen `connect-src`.** Everything the browser fetches is a static file from the
+consuming site's own origin, which is what the build-time prefetch exists to guarantee.
+
+### root.tsx owns the canonical and the hreflang set
+
+`root.tsx` writes `<link rel="canonical">` and all eight alternates as plain JSX inside
+`Layout`, above `<Meta />`, gated on `isLocalisedPath(path)`. React Router's `meta()` can
+append tags, never delete them, so a docs route cannot correct its own canonical.
+
+Consequence: **the docs slug list must be a build input.** `hexdocs sync` writes it into
+`<project>.docs.json` and `LOCALISED_PATHS` is derived from it. A slug list that only
+existed at runtime would put a self-referential canonical plus eight alternates pointing
+at eight 404s on every mistyped docs URL.
+
+`isLocalisedPath` has a second caller, `preferredLanguageRedirect` in
+`lib/i18n.server.ts`, which cookie-redirects any bare path it accepts.
+
+### Resource routes bypass parent loaders
+
+A leaf match with no default export is dispatched to `queryRoute`, which runs that one
+route's loader and no parent's. `routes/lang.tsx` does all its language validation in its
+loader, so a machine endpoint mounted under `:lang` answers
+`GET /banana/hex-nfc/docs/llms.txt` with a 200.
+
+Mount `llms.txt`, the raw markdown tree and the JSON index **top-level**, beside
+`robots.txt` and `sitemap.xml`, carrying the language as a segment the route validates
+itself with `matchLanguage()`.
+
+### Route ranking ties break on declaration order
+
+`:slug.json` fails React Router's `/^:[\w-]+$/` test so it scores as a static segment and
+ties with `search.json`. Probed against the installed 7.12: declaring `:slug.json` first
+makes `/…/search.json` resolve to it with `{slug: "search"}`. Declare every static-suffix
+pattern before any `:slug.*` pattern, and pin it with a route-table test.
+
+### The deployment
+
+`hex-web` and `kcalc-ai` both vendor the same `hex-terraform` submodule and deploy with
+`./deploy.sh <env>`. The web tier runs as **Docker Compose on a self-hosted box** behind
+a cloudflared tunnel, not on ECS. AWS holds ECR, Secrets Manager, Terraform state and the
+media buckets. Profile `hex-pro`, region `ap-southeast-2`.
+
+This repository is public. The account id, the deploy host alias and the bucket name stay
+in the private repos that already need them, and nothing here repeats one. The Terraform
+in step 6 is parameterised for the same reason.
+
+`hex-terraform/dockerfiles/frontend.Dockerfile` copies `build/` and `package.json` and
+nothing else. Anything generated outside `build/` does not reach production. Vite copies
+`public/` into `build/client/`, which is why docs images go there.
+
+The front container gets exactly three read-only volumes (`compose.ts` `credsVolumes`)
+and none of them is `/data`. There is no config key that adds a fourth, so a disk cache
+would write into the container's own layer and vanish on redeploy.
+
+Change detection is hash-based over project directories. A submodule not listed in
+`deploy.config.json` `hash.extra_dirs.front` leaves the hash unchanged, the deploy
+reports "unchanged", and production keeps serving the old code.
+`apps/front/scripts/check-tools.mjs` already asserts exactly this for the two existing
+submodules, along with `.gitmodules`, the `pnpm-workspace.yaml` exclusion and the
+`tsconfig` path. Copy that shape.
+
+### hex-nfc
+
+Remote `git@github.com:hexpro-dev/hex-nfc.git`. Zero git tags, `MARKETING_VERSION` 1.0,
+nothing released. `docs/public/` holds three engineering documents; `docs/internal/`
+holds App Store review-risk strategy, export-compliance classification, competitor naming
+and a device UDID.
+
+**`docs/internal/` is protected by absence, not by a guard.** `scripts/sync-public.sh`
+has a copy-in `ALLOW_PATHS` listing `docs/public`, and `prune_internal_files()` only
+matches `CLAUDE.md`, `AGENTS.md`, `.claude` and `.agents` by name. Widening that entry to
+`docs/` would push the internal tree to a public repo and nothing would catch it. Add
+exactly `docs/site`, never `docs`, and assert that no bare `docs` entry exists.
+
+The publish workflow is deliberately **not** allowlisted: it names the bucket and the
+publisher role.
+
+`.claude/` is gitignored there by policy, so skills wiring cannot be committed. `.mcp.json`
+can be. That is why the MCP server exposes `list_skills` and `get_skill`.
+
+App strings are `app/HexNFC/Localizable.xcstrings`, 468 keys, `sourceLanguage` `en`,
+fully translated into `ar es fr ja pt-BR zh-Hans` (2796 translated string units, two
+keys using `variations` rather than a top-level unit). Note `zh-Hans` there against `zh` on the web, and an orphan
+`hi` App Store listing with no app strings behind it.
+
+**`73b7be1ed9a1361bad35091207610e4f331493cf`, the commit cited as the first version,
+touches only `marketing/`.** Nine of roughly a hundred main commits touch `docs/public`.
+Release commits are precisely the commits least likely to be docs commits, which is why
+the publish workflow has no `paths:` filter.
+
+### The seven languages
+
+`en zh ar es ja fr pt-BR`. English is unprefixed, `/en/…` 301s to bare, `/pt-br/…` 301s
+to `/pt-BR/…`, `ar` is RTL. The language comes from the URL and nothing else. Normalise
+`zh-Hans` to `zh` and `pt_BR` to `pt-BR` at the boundary and reject `hi` loudly.
+
+`check-locales.mjs` compares all seven files key for key **in both directions**, so any
+chrome key this package needs would be fourteen mandatory edits in the consumer. It needs
+none: UI strings ship inside the package and the nav label lives in the project config.
+
+## Contract decisions (step 1)
+
+These were settled against the real corpus and the adversarial pass. They are not
+preferences, and each one closes a failure the alternative left open.
+
+### The AST is sized to the corpus, not to imagination
+
+Twenty-two node types: ten block, nine inline, three child-only, pinned to their
+unions by `AssertCovers` in `src/contracts/ast.ts` so a type added to one and not the
+other fails the typecheck by name.
+
+**Deferred to `ast-2`, deliberately:** math, mermaid diagrams, footnotes and
+`<details>`. The real corpus is 59 markdown files with zero of any of them. Math also
+cannot use `$…$` as a delimiter: "A$9.99 per month or A$6.99" in kcalc's terms and
+`$0.createdAt > $1` in a Swift snippet would both render as equations. Mermaid needs a
+real DOM for text measurement, so it means headless Chromium in the publish workflow
+for zero diagrams. Adding any of them bumps `AST_VERSION`, which costs one additive
+recompile and one submodule bump, and that cheapness is the whole reason the `ast-N`
+key namespace exists.
+
+**`status` is a node type**, because `chip-support-matrix.md` carries 86 status glyphs
+that are data rather than decoration. Left as text they make a screen reader say "white
+heavy check mark" in seven languages, make a search for "supported" match nothing, and
+force the decorative-unicode rule to grow an exception it cannot express. Authors keep
+typing the glyph, so the source still reads correctly on GitHub.
+
+**`Heading` carries `idSource` and `aliases`.** Two anchor conventions are already in
+production and are incompatible: engineering docs deep-link `#station-data` from the
+heading text, and every legal document depends on `#section-4` derived from the section
+number so one anchor addresses the same clause in all seven languages. `aliases` is
+what keeps a link alive across a translation and across a rename.
+
+**Soft wraps fold into `TextNode.value`** with the CJK rule `legal-markdown.ts` already
+ships: a space unless the characters on _both_ sides are wide. Every corpus file is
+hard-wrapped at about 75 columns. Nothing strips U+FE0F or U+200F; both are
+load-bearing on the page.
+
+### Two conventions for absence, and the boundary between them
+
+Wire formats the renderer reads (AST, compiled page, manifest, search index) use
+optional-and-omitted. Diagnostics an agent reads (`Finding`, the envelopes, the
+reports) use `T | null`, always present, because "there is no suggested fix" must not
+read the same as "the suggested fix is to delete this".
+
+`PageRecord.locales` is a **partial** record and an absent key means the page does not
+exist in that locale; `manifest.locales` is the authority for which languages exist at
+all, and `validateManifestShape` cross-checks them. The all-keys-with-explicit-null
+alternative was rejected on the day-one case: hex-nfc's first bundle is English-only, so
+a sixty-page manual would carry 360 nulls saying nothing.
+
+### Search normalises with NFKC, not the NFC the plan named
+
+Measured: the same product name is spelled `NTAG 210µ` with U+00B5 in the chip matrix
+and `NTAG210μ` with U+03BC in the store listing. NFC keeps them distinct. NFKC also
+folds the fullwidth forms in the Japanese legal documents and subsumes the compatibility
+folding Arabic already required. It is applied to tokeniser input only, and it is
+recorded in the index header so a future change is a refusal rather than a silent
+mis-query. Folding does not fix a tokenisation difference, so a project spelling a part
+number two ways still needs the glossary entry.
+
+### Byte reproducibility needs a header patch, not a gzip option
+
+The bundle digest is taken over the stored bytes, so the same commit has to compress to
+the same member or the write-once refusal fires on a re-run that changed nothing.
+`GZIP_SETTINGS` states what that member must be, and only `level` is a zlib option.
+
+Measured on Node 22.22, and pinned by `test/contracts/manifest.test.ts`:
+`zlib.gzipSync(buf, { level, mtime, os })` and `zlib.gzipSync(buf, { level })` return
+byte-identical output. Node has no `os` or `mtime` option and ignores both silently. It
+writes byte 9 from the platform it was compiled on, **19 on macOS and 3 on Linux**, so a
+writer that spreads the constant into `gzipSync` produces exactly the host-dependent byte
+the constant exists to remove. The writer compresses and then patches byte 9 to 255. The
+OS field is outside the CRC, which covers the uncompressed data, so the patch is safe and
+the test proves it round-trips.
+
+Bytes 4 to 7 are already zero and `gzipSync` sets no FNAME flag, so `mtime: 0` and
+`filename: null` are assertions rather than instructions. They are in the object anyway,
+because the alternative is a property stated only in prose that a future writer has to
+rediscover.
+
+### Guards fail closed, and have no exemptions
+
+A `NOT RUN` row fails the run. That is not a detail: counting only failures is how the
+house lint printed "all clear" and exited 0 with every one of its rows dark, which is
+what deleting the generated rule pack does, and CI runs nothing but the exit code.
+`SKIPPED` is the separate state for a deliberate, explained non-run, and it still
+passes.
+
+There is exactly one exception mechanism in the repository, and its shape is the point.
+The fixture corpus has to contain an em dash, a rightwards arrow and two banned emoji,
+because those are what the linter's rules exist to catch and what the `status` node
+exists to recognise. Taking `fixtures/` out of the house lint to get them past it would
+be the ordinary kind of exemption. Instead `fixtures/planted.json` names each file, each
+code point and the reason; `scripts/lint.mjs` reads it; and the check runs **in both
+directions**. An undeclared hit fails, and a declared pair whose character is no longer
+present fails too. That second half is the one worth having: a planted character quietly
+deleted leaves the rule it was the only coverage for untested, with every row green.
+Every declared path must be under `fixtures/`, so the mechanism cannot reach real source,
+and a group whose `why` is shorter than a sentence is refused as an exemption nobody
+decided on.
+
+Every step of `pnpm verify` measures what it examined rather than asserting it. The
+typecheck step counted a literal `3` until `-p kit/tsconfig.json` was dropped from the
+script and it went on reporting three configurations; that third one is the only thing
+that compiles the drift assertions, which have no runtime statements and no test
+importing them.
+
+Measuring is not sufficient on its own, which is the second half of the same lesson. The
+typecheck row then reported **two** configurations and still passed, because a smaller
+count is not a failing count. A step whose coverage is knowable carries an `expect`
+alongside its `count`, derived from the filesystem rather than a literal, and a shortfall
+is a failure naming what should have run. `scripts/lint.mjs` has the same shape from the
+other side: `REQUIRED_DIRS` is cross-checked against the directories actually on disk, so
+deleting `.github` from the list fails instead of quietly taking the publish workflow out
+of the lint.
+
+### The trick that makes no-exemptions possible
+
+Tests live in `test/`, not beside the code, which is what lets `check-imports.mjs`
+allow nothing under `src/` to import anything a consumer will not have.
+
+Banned characters are declared as **code points**, and the pattern is derived from that
+list. A literal set would flag the line that declares it, and an exemption for "the file
+that declares the rule" is the hole that later swallows a real hit. The same trick keeps
+test fixtures clean: an em dash in a fixture is written `\u2014`, and the attribution
+patterns carry a one-character class (`C[l]aude`) so the guard does not match itself.
+
+The rule pack is emitted to `kit/schema/house-rules.json` so a zero-dependency `.mjs`
+can read it. `scripts/lint.mjs` does; `check-locales.mjs` in hex-web should, instead of
+re-deriving its set from a CLAUDE.md.
+
+### The drift check
+
+`kit/src/contracts/drift.ts` asserts every Zod schema's inferred output equals its
+hand-written twin, invariantly, in both directions. The failure type is built from
+template literals rather than a named alias, because TypeScript prints an unresolved
+alias by name and would dump both whole types while naming neither key. It reads
+`drift: "released" is only in the second type`.
+
+Three things it does **not** prove, each closed elsewhere, and none of them safe to
+assume:
+
+**A union comparison can collapse to `never`.** `keyof` a union is the intersection of
+its members' keys, so two unions differing in a member can produce three empty key
+unions, and `Expect<never>` compiles because `never` is assignable to everything. Every
+union contract therefore uses `AssertExactUnion`, and `AssertExact` falls back to a
+literal rather than to `never`.
+
+**A container's children are typed by annotation.** `inlineArray()` returning `z.any()`
+typechecks and leaves the entire tree below the top node unvalidated. The seam-identity
+and rejected-child tests in `kit/test/contracts/ast.schema.test.ts` are the only guard.
+
+**A schema constraint is invisible to it.** `z.string()` and `z.string().regex(…)` both
+infer `string`, so dropping a regex leaves the gate green.
+`kit/test/contracts/constraint-sweep.test.ts` holds the constraints whose loss would
+ship something wrong, and it is not every constraint in the package.
+
+`kit/test/contracts/drift-coverage.test.ts` fails when a schema is added without an
+assertion, matches the whole `Expect<AssertExact<…>>` wrapper rather than the schema
+name, and carries a reason per exemption. Its bulk exemption tests what a schema
+**validates**, unwrapping to a `ZodString` or `ZodNumber`, not which module it is
+exported from. Exempting the whole of `primitives.ts` read as an explicit list and
+behaved as a heuristic: a `z.strictObject` added to that file was auto-exempted with a
+canned reason saying it refines a string.
+
+There is a fourth thing it does not prove, worth stating separately because it is a
+property of `AssertExactUnion` rather than of the drift check. A member that only gains
+or loses an **optional** field is still assignable in both directions, so `Exclude` drops
+it and the union form prints `{ onlyInFirst: never; onlyInSecond: never }`, naming
+nothing. The per-member object assertions are what name the key. Measured, not assumed:
+adding `order?: number` to `navGroupSchema` produces exactly that from the union
+assertion and `drift: "order" is only in the first type` from the object one.
+
+### Naming, so the two configs are never confused
+
+`DocsProjectConfig` is `docs/site/docs.json` in the app repository. `DocsSiteConfig` is
+`<project>.docs.json` in the web repository. Neither is a partial of the other. Theme
+tokens are `--hx-*`, read at the point of use, never aliased at `:root`, and
+`--hx-accent-link` is separate from `--hx-accent` because `#0b76d9` on the void ground
+measures 4.23:1, which clears the 3:1 a control needs and misses the 4.5:1 an inline
+link needs.
+
+## Source spellings (step 2)
+
+`src/contracts/source.ts` holds what an author types, as against `ast.ts`, which holds
+what the renderer switches on. It exists because two parties have to agree about the
+same characters: the compiler recognises them, and the linter has to know which of them
+are data before it decides whether a character is decoration. A table private to the
+parser would mean the two had separate ideas of which check mark was content.
+
+**Status glyphs came out of the real corpus, not out of imagination.** A census of
+`hex-nfc/docs/public/` counts 59 U+2705, 16 U+26A0 every one followed by U+FE0F, and 11
+U+274C, which is exactly the 86 the design records. The fourth spelling is the one that
+matters: **"not applicable" is written as a U+2014 EM DASH**, a character the house rules
+ban outright and this package's own lint would reject in its own source. So the glyph
+table carries a scope, and the em dash is recognised **only as the entire content of a
+table cell**. Anywhere else it is a violation. Without that restriction the status node
+would hand every author a one-character way to write an em dash that no prose rule can
+see.
+
+**Recognising a glyph means scanning, not comparing.** `statusAt(text, index, scope)` is
+the form the compiler needs, because the corpus has a status glyph in the middle of a
+sentence. The longest-first ordering is load-bearing there and only there: matched bare
+first, U+26A0 U+FE0F consumes one code point and strands the variation selector as a
+one-character text node beside the status. An earlier draft had the ordering and only a
+whole-string equality compare, so the ordering could not change any answer and the comment
+claiming it protected the variation selector was describing a scanner the module did not
+contain.
+
+**Directives are remark-directive's grammar, not an invented one, and the label is
+bracketed.** Three or more colons and a name opens a container, `[label]` carries its
+argument, a line of the same width closes it, nesting adds a colon to the outer marker,
+and `::name[argument]` is a leaf. The names are derived from `CALLOUT_KINDS` plus `steps`,
+`step`, `figure` and `table`, so a callout kind added to the union without being added to
+the parser fails the typecheck.
+
+The bracket is not cosmetic. The first draft took a bare argument, `:::note Background
+scanning`, while the comment claimed the grammar was borrowed rather than invented. To
+remark-directive that line is a paragraph, so every titled container in the corpus would
+have compiled to nothing under the extension being cited. Borrowing a real extension's
+spelling costs nothing and means the source renders on GitHub as visible literal markers
+rather than as nothing, which is the honest failure for a page a developer reads in the
+GitHub UI before it is ever published.
+
+`figure` and `table` take their caption as the bracketed label rather than as the
+container's last paragraph, because the paragraph form is ambiguous with the prose that
+follows a table and the ambiguity only shows up as a missing sentence on a published page.
+
+**A fence info string is parsed, not scanned.** Options are `title=`, `lineNumbers`,
+`start=`, `highlight=` and `wrap`, each declaring the field it sets and whether it takes a
+value. `parseFenceInfo` walks the string with a cursor and reports every span no option
+consumed, which is the difference between it and the `matchAll` scan it replaces: that one
+skipped anything that did not look like an option name, so ` ```swift 2,5-7 ` parsed
+as a fence with no options and no problems and the author's intent vanished with no sign it
+had been there. Arity is checked too, because `lineNumbers=yes` and a bare `title` both
+used to parse.
+
+## The fixture corpus (step 2)
+
+`fixtures/app` is a synthetic app repository in all seven languages, and both suites read
+it. `fixtures/README.md` is the file to read first; what follows is what would otherwise
+be rediscovered.
+
+**The corpus is deliberately not uniform.** A page in every language, a page in three, a
+page in one, a page whose translations are stale, a page whose Spanish file was scaffolded
+and never translated, a draft that is excluded from a bundle and still linted, and a page
+that is published but hidden from the sidebar. Each is a state that produces a different
+notice or a different coverage column, and none is testable against a corpus where every
+page is the same.
+
+**The history is replayed, not asserted.** Translation staleness is
+`git log -1 --format=%cI` on the English file against the translation, so a corpus
+committed in one go contains no stale page and cannot grow one: every file carries the
+same date and the whole tree reads `current`. That is the shallow-clone failure reproduced
+by accident. `materialiseCorpus()` copies the tree into a throwaway repository and replays
+the declared commit dates. Two files are revised by a later commit, which means the first
+commit has to write something different for them or the revising commit is empty and
+`git log -1` never moves; the materialiser writes a placeholder and then checks the
+finished tree byte for byte against the corpus on disk, comparing bytes rather than
+decoded text so that the check covers the PNG.
+
+The Spanish chip matrix is committed **after** the English source on purpose, so
+timestamps alone call it current and only `translated: false` says otherwise. That is the
+hole the flag exists to close, reproduced rather than described.
+
+**No golden ASTs, on purpose.** They belong to step 3. The canonical JSON a digest is
+taken over, the word count behind the reading estimate and the exact scope tokens a
+highlighter emits are none of them decidable from the source and the contracts alone.
+Hand-authoring them now would be inventing the compiler's answers before writing the
+compiler, and checking those inventions in as golden files that look like evidence.
+
+**The corpus markdown is excluded from Prettier**, with the reason in `.prettierignore`.
+Prettier rewrites markdown rather than only spacing it: `*emphasis*` becomes `_emphasis_`,
+table pipes are realigned and blank lines move around lists. Every one of those is a
+construct under test. The house lint still reads every one of those files.
+
+**`fixtures/nodes.ts` claims every AST node type against a page and a source pattern**,
+and the suite fails when a node type has no claim, when a claimed file is gone, or when a
+claimed pattern stops matching. Without it a page gets rewritten, the construct goes with
+it, the golden test still passes against whatever the page now says, and one node type
+quietly stops being exercised anywhere.
+
+Type coverage alone is not enough, and this is the same lesson as counting: it is
+satisfied by one claim per type, so 29 of the 51 claims were deletable with both suites
+green, including every one whose own reason says it is the sole coverage of something.
+`REQUIRED_VARIANTS` is the second list, checked against the claims in both directions, so
+a deleted claim fails naming the variant.
+
+**The declared translation states are swept against git, not spot-checked.** Three pairs
+were checked by name at first and the other thirty-odd `current` declarations were
+decorative: the table could have said the opposite of the replayed history and nothing
+would have noticed. Every declared page-locale and snippet-locale pair now derives its
+expected relation from its state, and the sweep asserts all four states appear.
+
+**`fixtures/frontmatter.ts` refuses by name.** It is a deliberately narrow YAML subset and
+its whole contract is that it must never quietly reinterpret: a reader that accepted
+`title: a: b` as the string "a: b" would make the corpus pass while teaching a shape the
+compiler's parser rejects. Every refusal names the construct and what YAML would have done
+with it, and a table of refused shapes is in the suite.
+
+**What the corpus disproved on its first run, which is the whole argument for building
+it before the compiler.** `frontMatterSchema` required a title of at least three
+characters, and the constraint sweep carried a row saying "a two-character title is a
+mistake, not a title". The Chinese guide came back titled 指南. It is two characters and
+it is correct: a floor measured in characters is a floor on Latin, which is the same
+reasoning `description` already carried, rediscovered on the field nobody had applied it
+to. The floor is now non-empty and nothing more.
+
+The corpus also settled a question the contracts left implicit. **A link is a slug, and
+a slug is resolved against the source locale**, not the linking page's. The Arabic
+reference index links to a page nobody has translated, and that link is correct: the page
+exists in the bundle and the site serves the English fallback with a notice and
+`noindex`. Resolving against the linking locale would call `graceful` parity's normal
+state a broken link.
+
+**`fixtures/text.ts` measures the normalisation the search index depends on.** Until it
+existed, `INDEX_NORMALISATION` said NFKC, the comment said why, and NFC would have passed
+every test in the repository. The table records what NFC and NFKC each do with ten
+spellings, including three that neither form folds, which is what says the tokeniser has
+to do the Arabic work itself rather than leaning on normalisation.
+
+## The compiler (step 3)
+
+`kit/src/compile/` turns the tree into a bundle: markdown to AST, lint, link and orphan
+checks, the search index, the bundle writer. `kit/test/golden/` is what pins it. What
+follows is what would otherwise be rediscovered.
+
+### The parser is hand written, over the subset the AST can carry
+
+Not remark. Three reasons, and the first is decisive: `src/contracts/source.ts` already
+declares the grammar as patterns, so a library parser would leave that table unused and
+the two would drift. A parser that accepted more than the AST can carry would be
+producing nodes with nowhere to go. And a refusal has to be a **named finding with a
+line**, not a silently dropped block, which is what `unsupported-syntax` exists for.
+
+Deliberately absent, each because it otherwise reads as a bug rather than a decision:
+setext headings (there is one heading spelling and a page's title is front matter, so
+`---` is always a thematic break), indented code blocks (four spaces is list
+continuation here, and supporting both puts every deep continuation line one stray
+space from becoming code), HTML blocks (there is no `html` node; raw HTML stays literal
+text and `no-raw-html` reports it, which is what makes "no `dangerouslySetInnerHTML`
+anywhere" structural), and link reference definitions and footnotes.
+
+The one place it is deliberately unlike CommonMark: an underscore only opens emphasis
+when the character outside it is not alphanumeric, so `FIXTURE_TAG_LOG` and
+`session(_:didConnect:)` stay literal in a technical corpus.
+
+### Positions live beside the tree, and prose is extracted once
+
+The AST has no line numbers, because it is a wire format read by a renderer that has no
+source. The parser records where each node came from in a `WeakMap` keyed by the node,
+so a position field is never published and a node the map has not seen is honestly
+unknown.
+
+`ProseSegment` is the other half and it is what makes the house-style rules possible at
+all. It is one block's text with the markup gone, the inline code gone, code fences
+never present and **recognised status glyphs already absent**, soft wraps folded with
+the CJK joiner, plus the runs that say which source line every character came from. So
+a banned phrase that straddles a soft wrap is found, `no-decorative-unicode` sees the
+tick that is decoration and not the 59 that are a support matrix, and a match at offset
+41 of a folded paragraph reports line 12, column 3.
+
+### Two constraints the corpus disproved by compiling
+
+Both are the same shape as the three-character title floor that step 2 disproved.
+
+**The anchor pattern was ASCII.** `anchorSchema` was `[a-z0-9]`, and every heading on
+every Chinese, Japanese and Arabic page was refused the first time the compiler ran over
+the corpus. An id derived from heading text is locale-dependent by construction, which
+`ast.ts` says outright and which `aliases` exists to cope with, so ASCII was not a
+stricter version of the rule but a rule that cannot be satisfied in four of the seven
+languages. It now allows letters in any script. The alternative, a positional
+`section-3` fallback for non-Latin headings, was rejected because it makes every anchor
+below an inserted heading change, and stability is the whole reason the ids exist.
+
+**`glossary-term-translated` used word boundaries.** It reported every correctly
+translated Chinese page as having dropped `NDEF`, because CJK has no spaces and the
+character after the term is a letter. Presence in a translation is now substring
+containment; the source side keeps word boundaries, where they are right.
+
+### The state a reader sees is not the state the manifest counts
+
+`PageLocaleRecord.state` is the page's own state and `coverage` counts it, because a
+translator needs to know which files to open. `CompiledPage.translation.state` is the
+effective state, the worst of the page and every snippet it transcludes, because a
+current page full of stale snippets is not current to a reader. Both contracts now say
+so where they are declared.
+
+The consequence is worth knowing before it surprises somebody: a page can be `stale`
+with a `translationUpdated` **later** than its `sourceUpdated`, because the timestamps
+are the page's own and the state is not. `index` in `zh` is exactly that, which is what
+the corpus says that page is for.
+
+Two independent things set `scaffolded`, and either alone is enough: the `translated:
+false` flag, and the body text being byte for byte the source's. Timestamps can see
+neither, because a scaffolded file is committed after the source it copies.
+
+### Snippets are linted once, and parsed per page
+
+A snippet is parsed fresh for every page that includes it, so its nodes land in that
+page's origins map and a finding on a transcluded block points at the snippet's own file
+and line. Its prose and its own problems are dropped there and collected once, from a
+separate parse of the file itself. Without that split a banned phrase in a fragment is
+reported once per including page, and the count in the report is a count of pages rather
+than of problems.
+
+Snippet links resolve as if the snippet sat at `content/<locale>/`, not relative to the
+including page, because a fragment included from two directories cannot have two right
+answers.
+
+### The front matter reader is narrow, and cross-checked
+
+Not a YAML parser, which `fixtures/frontmatter.ts` originally said it would be. A
+general parser plus a schema error says "expected string, received boolean" where a
+narrow reader says "`title: yes` is YAML's boolean true, quote it", and the toolchain
+half stays dependency-light. The risk a real parser was protecting against is two
+readers that quietly disagree, and what closes that is a test asserting this reader and
+the fixture corpus reader agree on every file in the corpus, in both the values and the
+refusals.
+
+### What the writer does and does not decide
+
+`buildBundle` always produces a bundle, even when the lint has errors, and returns the
+envelope beside it. Refusing is the publisher's job. The fixture corpus carries seven
+planted errors on purpose and still has to compile, which is the case that makes the
+split obvious.
+
+`AssetRecord.lqip` is `null`, always, in this version. Every encoder available here is a
+shell out to ffmpeg or cwebp, whose output varies by build, and the manifest has to be
+byte-reproducible from the commit alone or the write-once refusal fires on a re-run that
+changed nothing. It is the same reasoning that makes a Display P3 asset a refusal rather
+than a conversion. A deterministic encoder written in this repository would qualify.
+
+Git is read in **one walk**, not one `git log -1` per file: a fourteen-hundred-file
+project would otherwise spawn fourteen hundred processes on a runner for the same
+answer. `kit/test/compile/project.test.ts` asserts the equivalence against per-file
+calls rather than assuming it.
+
+### Golden files
+
+`kit/test/golden/` holds every compiled page in every locale, the manifest, the whole
+findings list, the English term dictionary and the raw markdown of the three pages that
+expand an include. `UPDATE_GOLDEN=1` rewrites them; read the diff.
+
+**Every golden file is written with non-ASCII escaped as `\uXXXX`.** The house lint
+reads every file in this repository and a compiled page carries the en dash, the em dash
+and the arrow the corpus plants on purpose; the exemption mechanism is scoped to
+`fixtures/` and widening it to reach a test directory would be the hole it exists to
+refuse. The better reason is the second one: a golden file is the one place an invisible
+character has to be visible, and U+FE0F and U+200F are load-bearing in this corpus.
+
+The English dictionary is goldened and the other six are not. A dictionary of Chinese
+bigrams written as escapes is not something a reviewer can read, so those are pinned
+numerically by the manifest's per-locale term count and index digest, and readably by
+the smoke queries, which are ten real phrases per language that must each return a hit.
+
+### What the adversarial review changed
+
+Forty-nine agents over six dimensions, each finding attacked by an independent skeptic:
+43 findings, 41 confirmed. The ones worth knowing before touching this code again, because
+each was green in 1633 tests and none of them is visible from the corpus.
+
+**Three parser defects that ordinary English triggers.** `readDestination` advanced its
+cursor with the emphasis flanking predicate, which counts the end of the text as
+whitespace, so `Press [Enter] now.` did not hang the compiler in the sense of throwing:
+it produced no output at all until something killed it. It also never checked that the
+character after a `]` was a `(`, so a bracketed phrase became a link to a page nobody
+named, and `The tag ID (see [chip matrix] below) is printed` refused to publish. And the
+emphasis recursion published its own delimiters: `***important***` rendered a literal
+asterisk inside the bold. The fixes are a separate `isBlank` for cursor advancement, a
+one-line guard, a run of three meaning emphasis-wrapping-strong, and a descend into the
+span a declined run opens. That descend is exponential without its memo, which is why
+`EmphasisCache` exists and is not an optimisation.
+
+**Two lists that had to be one.** The search index was built from `published` and the page
+records from the same set minus the slugs with no source-locale file, so a French-only
+page was searchable and had no payload behind it. And `assetBytes` was keyed by digest
+while the records were pushed per path, so one file under two names produced two records
+and one object key twice, under a comment claiming the opposite.
+
+**The deny scan read prose only.** A `ProseSegment` has inline code removed and fences
+never present, which is right for every house-style rule and exactly wrong for the rule
+that stands between a device UDID and a public mirror. It now reads the raw source lines
+as well, and `DenyList`'s contract says which two inputs and why. An empty deny list is
+refused out loud for the same reason an absent one always was.
+
+**Nine rule arms could be deleted with the suite green.** `kit/test/compile/rules-fire.test.ts`
+is the answer and it is the highest-value file in the package: every rule in
+`LINT_RULE_IDS` is claimed by a case, the union is checked against the contract in both
+directions, and a multi-arm rule claims each arm by the message only that arm produces.
+`registry.test.ts`'s `DESCRIBED` bucket used to assert a sentence about what covered a
+rule; most of those sentences named the corpus and the corpus trips none of them.
+
+**The git walk was wrong for exactly one commit shape.** `--name-only` prints no file
+names for a merge, so a source page resolved in a merge's own conflict resolution was
+dated four months early and six stale translations read `current`. `--diff-merges=combined`
+matches `git log -1` on both that case and the side-branch-only case; `--first-parent`
+matches only the first and gets the second wrong in the dangerous direction. The
+equivalence test now has a merge in it, because a linear fixture history cannot show any
+of this.
+
+**`summary.passing` is not a coverage measure**, and the contract now says so rather than
+claiming the opposite. Making it one means every rule declaring what it had to examine and
+a third state in the envelope for a rule with nothing to look at, which is a design change
+rather than a bug fix. The one case where the distinction actually bit is closed at the
+rule.
+
+Smaller, and each with the reasoning at the code: the tokeniser classified CJK punctuation
+as a word character (`TOKENISER_VERSION` is 2 because of it), prefix expansion summed every
+completion instead of taking the best, `stem` was a header field nothing compared, `df`
+documented a cross-check that did not exist, the protected-rule constraint was enforced
+nowhere despite two comments saying the schema did it, `no-decorative-unicode` was the one
+third of the banned-character partition a project could switch off, tree-layout problems
+were reported as `unsupported-syntax`, and three pieces of reader-visible text (a link
+title, an image title, a fence's `title=`) reached no prose segment at all.
+
+## Code style
+
+Tabs. TypeScript strict, `verbatimModuleSyntax`, ES2022 / ESNext / bundler. Prettier with
+`useTabs`, `tabWidth` 2, `singleQuote`, `trailingComma: all`, `printWidth` 100, `semi`,
+`arrowParens: always`. `.editorconfig`: lf, tab, final newline, trim trailing except in
+markdown, spaces in yaml. Node `>=22`, CI matrix on 22 and 24.
+
+Relative imports carry a `.js` extension, matching `@hex-pro/i18n`.
+
+**No em dashes** in code comments, commit messages or any shipped content. The full
+banned-phrasing list in the global CLAUDE.md applies to everything this package emits and
+to everything it lints.
+
+**No AI attribution anywhere in git activity.** No `Co-Authored-By`, no "Generated with",
+no robot emoji, in commit messages or pull request bodies.
+
+House comment style: every non-obvious decision carries a paragraph saying what breaks if
+it is undone. A comment that overstates a guard is worse than no comment, because it is
+how the guard gets trusted by the next person to touch it.
+
+## Testing
+
+vitest with v8 coverage and **per-directory thresholds set just under what the suite
+actually reaches**, each with a comment saying why that number and not a higher one.
+100% on the schema validators and the sanitiser, where a bug is silent rather than loud.
+
+A check that examined zero things is a failure, not a pass. `kcalc-web/front/scripts/verify.mjs`
+is the model: four states (PASS, FAIL, SKIPPED, NOT RUN), every row carrying a count, and
+a checker reporting zero converted to a failure even when it exited 0.
+
+The consumer sweep is the highest-value suite: walk every repo beside `~/Hex` holding a
+`docs/site` or a `*.docs.json` and validate it against the current schema, so a config
+key that only exists on a branch fails here rather than silently at publish time.
+
+The fixture corpus is read by both suites, and each reads it for what only it can check.
+`test/fixtures.test.ts` uses the contracts alone, which is what a consumer has: slugs
+parse, locales normalise, the nav invariants hold, the declared inventory matches the tree
+in both directions, and the materialised history really does produce the states the corpus
+claims. `kit/test/fixtures.test.ts` adds the Zod schemas and the source grammar: every
+config validates, every front matter block validates, every directive name is one this
+AST major understands, every container is closed at the width it opened with, and every
+fence language is in the project allowlist. That last one is checked in both directions,
+because an allowlist that grew to cover mistakes stops catching them.

@@ -1,0 +1,293 @@
+{
+	"ast": 1,
+	"project": "fixture-app",
+	"slug": "reference/index",
+	"locale": "pt-BR",
+	"title": "Refer\u00eancia",
+	"description": "P\u00e1ginas de consulta sobre a compatibilidade de hardware das etiquetas e a API de sess\u00e3o de etiqueta do Fixture App.",
+	"navTitle": "Refer\u00eancia",
+	"audience": "both",
+	"pageKind": "article",
+	"tags": [
+		"chips"
+	],
+	"toc": false,
+	"headings": [
+		{
+			"id": "o-que-h\u00e1-aqui",
+			"depth": 2,
+			"text": "O que h\u00e1 aqui"
+		},
+		{
+			"id": "conven\u00e7\u00f5es",
+			"depth": 2,
+			"text": "Conven\u00e7\u00f5es"
+		}
+	],
+	"body": [
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "As p\u00e1ginas de refer\u00eancia respondem rapidamente a uma pergunta espec\u00edfica. Elas n\u00e3o conduzem voc\u00ea por uma tarefa, que \u00e9 para o que serve "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "guide/index",
+					"children": [
+						{
+							"type": "text",
+							"value": "o guia"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": "."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "o-que-h\u00e1-aqui",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "O que h\u00e1 aqui"
+				}
+			],
+			"aliases": [
+				"what-is-here"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "A "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "reference/chip-support",
+					"children": [
+						{
+							"type": "text",
+							"value": "Matriz de compatibilidade de chips"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " lista todas as fam\u00edlias de etiquetas que o Fixture App reconhece, com a mem\u00f3ria utiliz\u00e1vel, os modos de grava\u00e7\u00e3o que cada uma aceita e se os bits de bloqueio s\u00e3o irrevers\u00edveis. Consulte-a antes de comprar um lote de etiquetas."
+				}
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "A "
+				},
+				{
+					"type": "link",
+					"kind": "internal",
+					"slug": "reference/api",
+					"children": [
+						{
+							"type": "text",
+							"value": "API de sess\u00e3o de etiqueta"
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " documenta o tipo "
+				},
+				{
+					"type": "inlineCode",
+					"value": "TagSession"
+				},
+				{
+					"type": "text",
+					"value": ", os registros que ele retorna e todos os erros que ele pode lan\u00e7ar. Foi escrita para desenvolvedores que integram o leitor do Fixture App a outro app."
+				}
+			]
+		},
+		{
+			"type": "heading",
+			"depth": 2,
+			"id": "conven\u00e7\u00f5es",
+			"idSource": "slug",
+			"children": [
+				{
+					"type": "text",
+					"value": "Conven\u00e7\u00f5es"
+				}
+			],
+			"aliases": [
+				"conventions"
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "As duas p\u00e1ginas usam a mesma nota\u00e7\u00e3o. Os tamanhos s\u00e3o os bytes dispon\u00edveis para voc\u00ea depois do cabe\u00e7alho da pr\u00f3pria etiqueta, e n\u00e3o o n\u00famero impresso na embalagem."
+				}
+			]
+		},
+		{
+			"type": "table",
+			"align": [
+				null,
+				null
+			],
+			"header": [
+				{
+					"type": "tableCell",
+					"children": [
+						{
+							"type": "text",
+							"value": "Nota\u00e7\u00e3o"
+						}
+					]
+				},
+				{
+					"type": "tableCell",
+					"children": [
+						{
+							"type": "text",
+							"value": "Significado"
+						}
+					]
+				}
+			],
+			"rows": [
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "0x04"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "Um \u00fanico byte em hexadecimal, como o app o imprime"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "216 B"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "Mem\u00f3ria de usu\u00e1rio utiliz\u00e1vel, sem o cabe\u00e7alho"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "n/a"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "O campo n\u00e3o se aplica a essa fam\u00edlia de etiquetas"
+							}
+						]
+					}
+				],
+				[
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "inlineCode",
+								"value": "RO"
+							}
+						]
+					},
+					{
+						"type": "tableCell",
+						"children": [
+							{
+								"type": "text",
+								"value": "Somente leitura, porque os bits de bloqueio foram definidos"
+							}
+						]
+					}
+				]
+			]
+		},
+		{
+			"type": "paragraph",
+			"children": [
+				{
+					"type": "text",
+					"value": "Um campo marcado como "
+				},
+				{
+					"type": "inlineCode",
+					"value": "n/a"
+				},
+				{
+					"type": "text",
+					"value": " est\u00e1 ausente, e n\u00e3o em zero. Uma etiqueta que informa "
+				},
+				{
+					"type": "inlineCode",
+					"value": "0 B"
+				},
+				{
+					"type": "text",
+					"value": " foi bloqueada com um payload vazio, o que \u00e9 um problema diferente."
+				}
+			]
+		}
+	],
+	"translation": {
+		"state": "current",
+		"sourceUpdated": "2026-01-05T09:00:00Z",
+		"translationUpdated": "2026-02-10T11:30:00Z"
+	},
+	"reading": {
+		"words": 215,
+		"minutes": 2
+	},
+	"snippets": [],
+	"sourceFile": "content/pt-BR/reference/index.md"
+}

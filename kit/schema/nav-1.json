@@ -1,0 +1,153 @@
+{
+	"$id": "nav-1.json",
+	"title": "nav-1",
+	"description": "Documentation order and the set of pages that exist: docs/site/nav.json",
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"type": "object",
+	"properties": {
+		"$schema": {
+			"type": "string"
+		},
+		"nav": {
+			"type": "number",
+			"const": 1
+		},
+		"items": {
+			"type": "array",
+			"items": {
+				"$ref": "#/$defs/__schema0"
+			}
+		}
+	},
+	"required": [
+		"nav",
+		"items"
+	],
+	"additionalProperties": false,
+	"$defs": {
+		"__schema0": {
+			"anyOf": [
+				{
+					"type": "object",
+					"properties": {
+						"doc": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 260
+						},
+						"hidden": {
+							"type": "string",
+							"minLength": 8
+						}
+					},
+					"required": [
+						"doc"
+					],
+					"additionalProperties": false
+				},
+				{
+					"type": "object",
+					"properties": {
+						"group": {
+							"type": "string",
+							"pattern": "^[a-z][a-z0-9-]*$"
+						},
+						"label": {
+							"type": "object",
+							"propertyNames": {
+								"type": "string",
+								"enum": [
+									"en",
+									"zh",
+									"ar",
+									"es",
+									"ja",
+									"fr",
+									"pt-BR"
+								]
+							},
+							"additionalProperties": {
+								"type": "string",
+								"minLength": 1,
+								"maxLength": 40
+							},
+							"required": [
+								"en",
+								"zh",
+								"ar",
+								"es",
+								"ja",
+								"fr",
+								"pt-BR"
+							]
+						},
+						"collapsed": {
+							"type": "boolean"
+						},
+						"items": {
+							"minItems": 1,
+							"type": "array",
+							"items": {
+								"$ref": "#/$defs/__schema0"
+							}
+						}
+					},
+					"required": [
+						"group",
+						"label",
+						"items"
+					],
+					"additionalProperties": false
+				},
+				{
+					"type": "object",
+					"properties": {
+						"link": {
+							"type": "string",
+							"format": "uri"
+						},
+						"label": {
+							"type": "object",
+							"propertyNames": {
+								"type": "string",
+								"enum": [
+									"en",
+									"zh",
+									"ar",
+									"es",
+									"ja",
+									"fr",
+									"pt-BR"
+								]
+							},
+							"additionalProperties": {
+								"type": "string",
+								"minLength": 1,
+								"maxLength": 40
+							},
+							"required": [
+								"en",
+								"zh",
+								"ar",
+								"es",
+								"ja",
+								"fr",
+								"pt-BR"
+							]
+						},
+						"external": {
+							"type": "boolean",
+							"const": true
+						}
+					},
+					"required": [
+						"link",
+						"label",
+						"external"
+					],
+					"additionalProperties": false
+				}
+			]
+		}
+	}
+}
