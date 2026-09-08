@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 import { STYLESHEET_PATH, emitStylesheet } from '../theme/stylesheet.js';
+import { COMMANDS } from '../registry/index.js';
 
 import {
 	BANNED_CHARACTERS,
@@ -128,8 +129,52 @@ export function emitStylesheetFile(root: string = resolve(OUT, '..', '..')): str
 	return path;
 }
 
+/**
+ * The command surface, as data.
+ *
+ * Emitted for the same reason the house rule pack is: a zero-dependency `.mjs` guard
+ * cannot import TypeScript, and `scripts/check-cli.mjs` has to know how many commands
+ * and tools there should be in order to report a shortfall rather than a smaller number.
+ * Deriving that from a literal in the guard would be a second declaration of the
+ * registry, which is the drift the registry exists to remove.
+ *
+ * It also gets CI's existing `git diff --quiet -- kit/schema` gate for free, so renaming
+ * a flag becomes a reviewable diff in a committed file rather than a change visible only
+ * inside a type.
+ */
+export function emitToolCatalogue(outDir: string = OUT): string {
+	mkdirSync(outDir, { recursive: true });
+	const document = {
+		$id: 'tools-1.json',
+		title: 'tools-1',
+		description:
+			'Every hexdocs command and MCP tool, derived from the registry. Read by zero-dependency guards.',
+		commands: COMMANDS.map((command) => ({
+			name: command.name,
+			tool: command.tool,
+			writes: command.writes,
+			summary: command.summary,
+			positionals: [...command.positionals],
+			// Sorted, so a diff of this file is a diff of the surface rather than of the
+			// order somebody happened to declare the parameters in.
+			flags: Object.keys(command.params)
+				.filter((name) => !(command.positionals as readonly string[]).includes(name))
+				.sort(),
+			taughtBy: [...command.taughtBy],
+		})),
+	};
+	const path = join(outDir, 'tools-1.json');
+	writeFileSync(path, `${JSON.stringify(document, null, '\t')}\n`, 'utf8');
+	return path;
+}
+
 export function emitAll(outDir: string = OUT): string[] {
-	return [...emitJsonSchemas(outDir), emitHouseRules(outDir), emitStylesheetFile()];
+	return [
+		...emitJsonSchemas(outDir),
+		emitHouseRules(outDir),
+		emitToolCatalogue(outDir),
+		emitStylesheetFile(),
+	];
 }
 
 if (

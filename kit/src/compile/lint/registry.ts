@@ -21,10 +21,11 @@
  * translating, or that wants its own prose held tighter, raises what it likes.
  */
 
-import type { Severity } from '../../../../src/contracts/diagnostics.js';
+import type { FindingCategory, Severity } from '../../../../src/contracts/diagnostics.js';
 import type { Locale } from '../../../../src/contracts/locales.js';
 import type { LintConfig } from '../../../../src/contracts/project.js';
 import {
+	type CheckId,
 	type LintRuleId,
 	type RuleDefinition,
 	isProtectedRule,
@@ -675,3 +676,200 @@ export function resolveSeverity(
 	if (locales !== undefined && locales.length > 0 && !locales.includes(locale)) return fallback;
 	return setting.severity;
 }
+
+/**
+ * What a structural check is for, and what it costs to leave.
+ *
+ * `RULE_DEFINITIONS` covers `LintRuleId` and nothing covered `CheckId`, so every
+ * structural finding in the package carried the same canned sentence, `'The package
+ * cannot do its job in this state.'` That sentence is true of all of them and useful
+ * about none of them, and `diagnostics.ts` states the reason it matters: an agent that
+ * has to ask why will instead guess, and a guess about a wiring failure is a second
+ * broken edit.
+ *
+ * Pinned with `satisfies Record<CheckId, CheckDefinition>`, the same shape
+ * `RULE_DEFINITIONS` uses, so a check id added to the contract without an entry here
+ * fails the typecheck by name rather than producing findings with no consequence.
+ *
+ * `unit` is here rather than at each call site because it is the plural noun in the
+ * `examined` column, and inventing one per call site is how two rows that count the same
+ * thing end up counting it under different names. There is no `defaultSeverity`: a check
+ * is not a rule, no project may configure one, and `severityFor` pins every id in this
+ * table to `error`.
+ */
+export interface CheckDefinition {
+	id: CheckId;
+	category: FindingCategory;
+	/** One line, imperative, the same voice as a rule's title. */
+	title: string;
+	/** What breaks if it is left. Copied onto every finding the check produces. */
+	consequence: string;
+	/** Plural noun for the `examined` column: "entries", "route declarations". */
+	unit: string;
+}
+
+export const CHECK_DEFINITIONS = {
+	// -------------------------------------------------------------------------
+	// the consuming website's wiring
+	// -------------------------------------------------------------------------
+
+	'wiring-submodule': {
+		id: 'wiring-submodule',
+		category: 'wiring',
+		title: 'Declare the docs package as a submodule.',
+		consequence:
+			'The package is consumed as TypeScript source through a tsconfig paths entry, so there is no install step that could fail loudly. On a fresh clone the only symptom is a module resolution error inside the build, naming a path rather than a missing submodule.',
+		unit: 'submodule declarations',
+	},
+	'wiring-workspace-exclusion': {
+		id: 'wiring-workspace-exclusion',
+		category: 'wiring',
+		title: 'Keep the submodule out of the pnpm workspace.',
+		consequence:
+			'A workspace glob enrols the submodule as a package, so `pnpm install` inside it installs the whole consuming monorepo and ignores the lockfile the toolchain is pinned to. The two existing submodules carry the same exclusion and say why in a comment.',
+		unit: 'workspace entries',
+	},
+	'wiring-tsconfig-path': {
+		id: 'wiring-tsconfig-path',
+		category: 'wiring',
+		title: 'Map every package entry point to its TypeScript source.',
+		consequence:
+			'Nothing in the consuming repository builds a dist/, so the package exports resolve to files that do not exist. The paths entry is also what `vite-tsconfig-paths` turns into a bundler alias, so without it the compiler and the bundler disagree about the same specifier and the failure arrives during a deploy.',
+		unit: 'path entries',
+	},
+	'wiring-deploy-hash-dirs': {
+		id: 'wiring-deploy-hash-dirs',
+		category: 'wiring',
+		title: 'List the submodule in the deploy hash directories.',
+		consequence:
+			'Change detection is hash based over project directories. A submodule that is not listed leaves the hash identical when the submodule changes, the deploy reports unchanged, and production keeps serving the old code.',
+		unit: 'hashed directories',
+	},
+	'wiring-prebuild-hook': {
+		id: 'wiring-prebuild-hook',
+		category: 'wiring',
+		title: 'Run the docs guard from a script that always runs.',
+		consequence:
+			'There is no CI on the consuming repositories, so a check that only runs when somebody types it is not a guard. The prebuild hook is the one thing that always runs, on the host, before the container build.',
+		unit: 'build scripts',
+	},
+	'wiring-routes': {
+		id: 'wiring-routes',
+		category: 'wiring',
+		title: 'Derive the docs routes from the registry, in the right order.',
+		consequence:
+			'Three separate failures live here. A machine endpoint mounted under the language segment is dispatched to `queryRoute`, which runs no parent loader, so an invalid language answers 200. A `:slug.*` pattern declared before a static-suffix pattern wins the tie and swallows it. And a docs route that exports `headers` ships pages with no Content-Security-Policy and no nonce, because React Router copies only Set-Cookie from a parent.',
+		unit: 'route declarations',
+	},
+	'wiring-localised-paths': {
+		id: 'wiring-localised-paths',
+		category: 'wiring',
+		title: 'Add the docs slugs to the localised path list.',
+		consequence:
+			'The canonical link and all eight hreflang alternates are rendered by root.tsx above the meta outlet and gated on this list, and a child route can append tags but never delete them. A slug missing from it ships with no canonical; a slug in it that the bundle does not carry points eight alternates at eight 404s.',
+		unit: 'docs paths',
+	},
+	'wiring-sitemap': {
+		id: 'wiring-sitemap',
+		category: 'wiring',
+		title: 'Derive the sitemap entries from the registry.',
+		consequence:
+			'A hand-listed docs spread cannot know which pages are hidden. A hidden page stays published and indexable while staying out of the sidebar, out of prev and next, and out of the sitemap, and a hand-written list advertises it.',
+		unit: 'sitemap sources',
+	},
+	'wiring-mcp': {
+		id: 'wiring-mcp',
+		category: 'wiring',
+		title: 'Mount the docs MCP server and the bundled skills.',
+		consequence:
+			'Without it an agent in this repository has no way to read a page, check a tree or reach a skill, which is the whole agent-facing surface. It is the only route in a repository whose `.claude/` directory is gitignored by policy.',
+		unit: 'server entries',
+	},
+
+	// -------------------------------------------------------------------------
+	// the app repository's own wiring
+	// -------------------------------------------------------------------------
+
+	'wiring-allow-paths': {
+		id: 'wiring-allow-paths',
+		category: 'wiring',
+		title: 'Name the publishable docs root in the public mirror allowlist, and nothing wider.',
+		consequence:
+			'The internal documentation tree is protected by absence from this list and by nothing else: the prune step matches four file names and would report nothing to prune. One entry widened from the publishable root to its parent copies export-compliance material and a device identifier into a public repository, and the sync then commits, tags and pushes.',
+		unit: 'allowlist entries',
+	},
+	'wiring-forbidden-agent-files': {
+		id: 'wiring-forbidden-agent-files',
+		category: 'wiring',
+		title: 'Keep agent guidance out of the publishable tree.',
+		consequence:
+			'The public mirror deletes these four names after copying and dies if it finds one it did not expect. Refusing them at compile time puts the message where somebody is looking, rather than in a tagged release that fails on a file nobody put there on purpose.',
+		unit: 'source files',
+	},
+
+	// -------------------------------------------------------------------------
+	// the shape of the publishable tree
+	// -------------------------------------------------------------------------
+
+	'source-layout': {
+		id: 'source-layout',
+		category: 'structure',
+		title: 'Keep the publishable tree to the shape the compiler reads.',
+		consequence:
+			'A file outside a locale directory, or a non-markdown file under content/, is not compiled and not copied. Nothing is dropped from a page and nothing reports it, so the page simply lacks whatever the file was for.',
+		unit: 'tree entries',
+	},
+
+	// -------------------------------------------------------------------------
+	// bundles
+	// -------------------------------------------------------------------------
+
+	'bundle-ast-major': {
+		id: 'bundle-ast-major',
+		category: 'bundle',
+		title: 'Read a bundle at an AST major this toolchain knows.',
+		consequence:
+			'Bundles at different AST majors sit beside each other legitimately, which is the whole reason the key namespace carries the major. A bundle from a newer toolchain is not malformed; it is one this runtime cannot render, and the next step is a submodule bump rather than a recompile.',
+		unit: 'majors',
+	},
+	'bundle-missing-object': {
+		id: 'bundle-missing-object',
+		category: 'bundle',
+		title: 'Store every object the manifest names, and no others.',
+		consequence:
+			'Every reader trusts the manifest rather than the objects, so a named object that is absent is a page that 404s from a link the site rendered. A stray object the manifest does not name is invisible from the page records, which is why the whole key set is compared rather than the page list.',
+		unit: 'objects',
+	},
+	'bundle-digest-mismatch': {
+		id: 'bundle-digest-mismatch',
+		category: 'bundle',
+		title: 'Store the bytes the manifest recorded.',
+		consequence:
+			'A bundle that does not match its own manifest is one a consumer mounts and reads wrong. Bundles are a product of a commit and nothing else, so the answer is always to recompile rather than to repair.',
+		unit: 'objects',
+	},
+	'bundle-label-unknown-sha': {
+		id: 'bundle-label-unknown-sha',
+		category: 'bundle',
+		title: 'Label only commits that have a bundle.',
+		consequence:
+			'A labelled commit with no bundle puts a version in the picker whose every page 404s. Labelling is the throttle that makes a docs change visible, so a label nothing backs is the one state the throttle cannot report on its own.',
+		unit: 'version entries',
+	},
+	'bundle-shallow-clone': {
+		id: 'bundle-shallow-clone',
+		category: 'bundle',
+		title: 'Compile from a full clone.',
+		consequence:
+			'Translation freshness is derived from commit dates. In a shallow clone every file carries the same date, so no source is ever newer than a translation and the whole corpus reads current, which is the wrong answer in the reassuring direction.',
+		unit: 'repositories',
+	},
+	'bundle-file-undated': {
+		id: 'bundle-file-undated',
+		category: 'bundle',
+		title: 'Commit every file the compiler reads.',
+		consequence:
+			'A file the git walk has no date for cannot be graded against its source, and the timestamp fields it would fill are required by the bundle schema. Without this the page compiles to a payload its own schema rejects, and the failure arrives downstream as a digest mismatch naming nothing.',
+		unit: 'files',
+	},
+} as const satisfies Record<CheckId, CheckDefinition>;

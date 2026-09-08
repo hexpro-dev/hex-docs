@@ -130,6 +130,66 @@ export function zeroExaminedPasses(report: VerifyInstallReport): string[] {
 		);
 }
 
+/**
+ * The same invariant from the other end: a row that is not a pass and says nothing.
+ *
+ * `zeroExaminedPasses` catches a green row that examined nothing. This catches a row
+ * a reader cannot act on: a `fail` with no finding and no note is a red line with no
+ * cause, and a `skipped` with no note is indistinguishable from a check somebody
+ * switched off, which is the opposite of what that state means.
+ *
+ * `checkRowSchema` permits `note: null` on every state, and it has to: a passing row
+ * with findings below the error threshold has a reason in the findings and needs no
+ * note. So the rule is per state rather than in the schema, and `skipped` is included
+ * deliberately, because step 5 emits more of those than of anything else.
+ */
+export function rowsWithoutReason(report: VerifyInstallReport): string[] {
+	return report.rows
+		.filter(
+			(row) =>
+				row.status !== 'pass' &&
+				row.findings.length === 0 &&
+				(row.note === null || row.note.trim() === ''),
+		)
+		.map(
+			(row) =>
+				`Check "${row.id}" is ${row.status} and carries neither a finding nor a note. A row a reader cannot act on is the same problem as a passing row that examined nothing, from the other end.`,
+		);
+}
+
+/**
+ * The counting rule at the level of the whole report.
+ *
+ * `checkRow` applies it per row and `zeroExaminedPasses` re-checks that on the way out,
+ * and both are exempt from the state this catches. A `skipped` row examines nothing on
+ * purpose, so it is exempt by design and correctly so; but a report in which *every* row
+ * skipped has looked at nothing, validates against the schema, satisfies both per-row
+ * invariants and exits 0. The generated shim then prints "a skipped check did not run, it
+ * is not a pass" immediately above an exit code saying it was.
+ *
+ * That is the same failure the per-row rule exists for, one level up, and it is the
+ * likeliest shape step 5 can produce: skips are what this half of the toolchain emits
+ * when a repository does not have the thing a check reads.
+ *
+ * It is a property of the contract rather than of today's probe table, which is why it
+ * lives here beside the other two and not inside `verifyInstall`. Both other readers, the
+ * shim and the MCP tool, get it for free.
+ */
+export function examinedNothing(report: VerifyInstallReport): string[] {
+	// Only a report that would otherwise pass. `zeroExaminedPasses` scopes itself to rows
+	// whose status is `pass` for the same reason, and the report-level analogue of "pass"
+	// is a zero exit code: a report already carrying a failing or non-running row has
+	// reported failure, and a second sentence saying it examined nothing adds nothing.
+	// Without this scope the guard fires on its own remedy, because a `not-run` row
+	// examines nothing by definition.
+	if (report.exitCode !== 0) return [];
+	const total = report.rows.reduce((sum, row) => sum + row.examined, 0);
+	if (total > 0) return [];
+	return [
+		`This report has ${report.rows.length} row(s), exits 0 and examined zero things in total. A report that looked at nothing has not verified anything, whatever its rows say individually.`,
+	];
+}
+
 export type {
 	CheckRow,
 	DiagnosticEnvelope,

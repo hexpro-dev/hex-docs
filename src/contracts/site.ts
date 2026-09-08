@@ -124,6 +124,28 @@ export interface DocsSiteConfig {
 	 * translation.
 	 */
 	pages: string[];
+
+	/**
+	 * The subset of `pages` that `nav.json` marks hidden. Written by `hexdocs sync`.
+	 *
+	 * A hidden page is published, indexable and addressable, and stays out of the
+	 * sidebar, out of prev and next, and out of the sitemap. Two of those three are
+	 * decided by the renderer from the manifest, which carries `hidden` on its nav
+	 * nodes. The sitemap is the one that is not: this file is the sole build input from
+	 * which the consuming site derives its routes, `LOCALISED_PATHS`, the hreflang set
+	 * and the sitemap, and with only `pages` it could not tell the two apart. The
+	 * consumer would then have had to reach into the manifest for one field, which is a
+	 * second build input for one boolean.
+	 *
+	 * So a slug in `pages` and absent here is sitemapped, and a slug in both is not.
+	 * Every entry must also be in `pages`, which the schema enforces: a hidden page that
+	 * was not published would be a page with no canonical and no address, and the
+	 * hiding would be indistinguishable from a deletion.
+	 *
+	 * Absent means none, which is the ordinary case, and `hexdocs sync` omits the key
+	 * rather than writing an empty array so an ordinary config carries no noise.
+	 */
+	hidden?: string[];
 }
 
 /**

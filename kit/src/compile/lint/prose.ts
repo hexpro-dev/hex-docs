@@ -25,6 +25,7 @@ import type { FindingLocation } from '../../../../src/contracts/diagnostics.js';
 import type { PageKind } from '../../../../src/contracts/frontmatter.js';
 import type { Locale } from '../../../../src/contracts/locales.js';
 import type { DenyList, DocsProjectConfig } from '../../../../src/contracts/project.js';
+import { DENY_LIST_RELATIVE } from '../../../../src/contracts/project.js';
 import {
 	type BannedPhrase,
 	BANNED_CHARACTERS,
@@ -93,10 +94,12 @@ export type ProseRule = (
 /**
  * The deny list path, named in the finding that fires when there is no deny list.
  *
- * Outside `docs/site/` on purpose: it names the things that must not ship, so keeping it
- * inside the tree the publisher reads would be the same mistake in miniature.
+ * The contract owns the string, because `loadProject` reads the file and this reports on
+ * its absence, and a rule naming a path the loader does not read is a rule pointing at
+ * nothing. Outside `docs/site/` on purpose: it names the things that must not ship, so
+ * keeping it inside the tree the publisher reads would be the same mistake in miniature.
  */
-export const DENY_LIST_PATH = 'docs/docs.private.json';
+export const DENY_LIST_PATH: string = DENY_LIST_RELATIVE;
 
 // ---------------------------------------------------------------------------
 // Positions, excerpts and the character partition

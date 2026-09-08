@@ -19,22 +19,34 @@
  * the wrong answer that looks fine, which is the only kind worth refusing over.
  */
 
-import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+
+import type { ReadRecipeId } from '../exec/recipes.js';
+import { runRecipe } from '../exec/run.js';
 
 /** ISO 8601 with a local offset, as `%cI` emits it, normalised to UTC to the second. */
 export function toUtcTimestamp(iso: string): string {
 	return new Date(iso).toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
-function git(root: string, args: string[]): string {
-	return execFileSync('git', args, {
-		cwd: root,
-		encoding: 'utf8',
-		stdio: ['ignore', 'pipe', 'pipe'],
-		maxBuffer: 64 * 1024 * 1024,
-	});
+/**
+ * The four reads this module makes, by recipe id rather than by argv.
+ *
+ * These were `execFileSync('git', args)` calls with fixed argv arrays, which was safe
+ * and was the only place in the package that started a process outside the exec table.
+ * A guard with one caller outside it is a guard whose scan cannot be exemption free, so
+ * the caller moved rather than the guard growing an exception.
+ *
+ * `kit/test/compile/project.test.ts` asserts the walk still matches a per-file
+ * `git log -1`, which is what proves the move changed no answer.
+ */
+function git(root: string, id: ReadRecipeId, holes: readonly string[] = []): string {
+	const result = runRecipe(id, holes, { cwd: root });
+	if (result.status !== 0) {
+		throw new Error(`git (${id}) exited ${result.status ?? 'without a status'}: ${result.stderr}`);
+	}
+	return result.stdout;
 }
 
 /**
@@ -44,9 +56,9 @@ function git(root: string, args: string[]): string {
  * read at all. Every later call is made against a repository that has already answered
  * `rev-parse HEAD`, so a failure there is a real fault and is left to throw.
  */
-function gitOrUndefined(root: string, args: string[]): string | undefined {
+function gitOrUndefined(root: string, id: ReadRecipeId): string | undefined {
 	try {
-		return git(root, args);
+		return git(root, id);
 	} catch {
 		return undefined;
 	}
@@ -74,6 +86,13 @@ export interface RepositoryState {
 	dates: Map<string, string>;
 }
 
+/**
+ * The record separator the log walk's `--format` opens each commit with.
+ *
+ * It has to be the same character `READ_RECIPES['git.log-walk']` puts in the format
+ * string. The argv is there and the parse is here, and they are two halves of one
+ * decision, so each says so.
+ */
 const COMMIT_MARKER = '\u0001';
 
 /**
@@ -94,10 +113,10 @@ export function readRepository(from: string): RepositoryState | undefined {
 	// a date, so no page can be compared against its source. The caller then says so in
 	// one sentence naming the directory, where letting the throw through says it in a
 	// child process stack trace with no file and no line.
-	const head = gitOrUndefined(root, ['rev-parse', 'HEAD'])?.trim();
+	const head = gitOrUndefined(root, 'git.head')?.trim();
 	if (head === undefined || head === '') return undefined;
-	const headTimestamp = toUtcTimestamp(git(root, ['log', '-1', '--format=%cI']).trim());
-	const shallow = git(root, ['rev-parse', '--is-shallow-repository']).trim() === 'true';
+	const headTimestamp = toUtcTimestamp(git(root, 'git.head-date').trim());
+	const shallow = git(root, 'git.is-shallow').trim() === 'true';
 
 	const dates = new Map<string, string>();
 	// `--diff-merges=combined` is the option that makes the equivalence above true. A
@@ -114,12 +133,7 @@ export function readRepository(from: string): RepositoryState | undefined {
 	// The combined diff lists a merge's files only where it differs from every parent,
 	// which is exactly git's own history simplification, so both cases match `git log -1`.
 	// Measured against it on a conflict resolution and a side-branch-only file.
-	const log = git(root, [
-		'log',
-		`--format=${COMMIT_MARKER}%cI`,
-		'--name-only',
-		'--diff-merges=combined',
-	]);
+	const log = git(root, 'git.log-walk');
 	let current: string | undefined;
 	for (const line of log.split('\n')) {
 		if (line.startsWith(COMMIT_MARKER)) {

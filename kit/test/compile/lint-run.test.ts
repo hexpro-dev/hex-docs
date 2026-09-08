@@ -10,6 +10,7 @@ import {
 	type Severity,
 } from '../../../src/contracts/diagnostics.js';
 import {
+	CHECK_IDS,
 	LINT_RULE_IDS,
 	PROTECTED_RULES,
 	RULE_CATEGORIES,
@@ -22,7 +23,7 @@ import type { DocsProjectConfig } from '../../../src/contracts/project.js';
 
 import { SITE_ROOT } from '../../../fixtures/index.js';
 import { docsProjectConfigSchema } from '../../src/contracts/config.schema.js';
-import { RULE_DEFINITIONS } from '../../src/compile/lint/registry.js';
+import { CHECK_DEFINITIONS, RULE_DEFINITIONS } from '../../src/compile/lint/registry.js';
 import {
 	MAX_FINDINGS,
 	runLint,
@@ -376,7 +377,7 @@ describe('the parity override, which the config cannot express', () => {
 // ---------------------------------------------------------------------------
 
 describe('a check id is not configurable', () => {
-	test('a wiring check reports as an error with a category read off its prefix', () => {
+	test('a wiring check reports as an error carrying its own consequence', () => {
 		const finding = only(
 			runLint(
 				[raw('wiring-submodule', { kind: 'project' }, null, 'The submodule is not here.')],
@@ -388,9 +389,47 @@ describe('a check id is not configurable', () => {
 			'error',
 			'wiring',
 		]);
-		// There is no registry entry behind a check, so the consequence is the runner's own.
-		// A finding with an empty consequence is the failure this asserts against.
-		expect(finding.consequence).toBe('The package cannot do its job in this state.');
+		// From `CHECK_DEFINITIONS`, not from the runner. Every check used to share one
+		// sentence, `The package cannot do its job in this state.`, which is true of all
+		// eighteen and useful about none of them.
+		expect(finding.consequence).toBe(CHECK_DEFINITIONS['wiring-submodule'].consequence);
+	});
+
+	test('the category comes from the table, not from the id prefix', () => {
+		// `source-layout` is the case a prefix test gets wrong: it begins with neither
+		// `wiring-` nor `bundle-`, so it fell through to `config` and a filter by category
+		// could not find the one category it belongs to.
+		const finding = only(
+			runLint(
+				[
+					raw(
+						'source-layout',
+						{ kind: 'file', file: 'docs/site/stray.png' },
+						null,
+						'Not markdown.',
+					),
+				],
+				options(),
+			),
+		);
+		expect(finding.category).toBe('structure');
+		expect(CHECK_DEFINITIONS['source-layout'].category).toBe('structure');
+	});
+
+	test('every check has a definition, a distinct consequence and a plural unit', () => {
+		// The exhaustiveness is a typecheck (`satisfies Record<CheckId, CheckDefinition>`),
+		// so what is left to assert is that the entries say something. A table satisfying
+		// the type with eighteen copies of one sentence would compile.
+		const consequences = new Set<string>();
+		for (const id of CHECK_IDS) {
+			const definition = CHECK_DEFINITIONS[id];
+			expect(definition.id).toBe(id);
+			expect(definition.title.length).toBeGreaterThan(20);
+			expect(definition.consequence.length).toBeGreaterThan(60);
+			expect(definition.unit).toMatch(/^[a-z][a-z ]+s$/);
+			consequences.add(definition.consequence);
+		}
+		expect(consequences.size).toBe(CHECK_IDS.length);
 	});
 
 	test('a bundle check takes the bundle category', () => {
@@ -850,7 +889,7 @@ describe('nextAction names one thing to do', () => {
 		const action = result.envelope.nextAction;
 		expect(action.kind).toBe('command');
 		if (action.kind !== 'command') throw new Error('expected a command');
-		expect(action.argv).toEqual(['hexdocs', 'lint', 'b.md']);
+		expect(action.argv).toEqual(['hexdocs', 'check', 'b.md']);
 		expect(action.why).toContain('2 errors block a publish');
 		expect(action.why).toContain('"link-resolves" in b.md');
 		expect(action.why).not.toContain('truncated');
@@ -860,7 +899,7 @@ describe('nextAction names one thing to do', () => {
 		const result = runLint([raw('wiring-submodule', { kind: 'project' }, null, 'x')], options());
 		const action = result.envelope.nextAction;
 		if (action.kind !== 'command') throw new Error('expected a command');
-		expect(action.argv).toEqual(['hexdocs', 'lint', 'the project']);
+		expect(action.argv).toEqual(['hexdocs', 'check', 'the project']);
 		expect(action.why).toContain('"wiring-submodule" in the project');
 	});
 

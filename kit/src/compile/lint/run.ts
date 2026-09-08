@@ -22,6 +22,7 @@ import {
 	CHECK_IDS,
 	LINT_RULE_IDS,
 	RULE_CATEGORIES,
+	type CheckId,
 	type LintRuleId,
 } from '../../../../src/contracts/lint.js';
 import type { Locale } from '../../../../src/contracts/locales.js';
@@ -29,7 +30,7 @@ import { SOURCE_LOCALE } from '../../../../src/contracts/locales.js';
 import type { DocsProjectConfig } from '../../../../src/contracts/project.js';
 
 import type { DisableComment, RawFinding } from '../types.js';
-import { RULE_DEFINITIONS, resolveSeverity } from './registry.js';
+import { CHECK_DEFINITIONS, RULE_DEFINITIONS, resolveSeverity } from './registry.js';
 
 /**
  * The most findings one report carries.
@@ -85,10 +86,17 @@ const CHECK_ID_SET: ReadonlySet<string> = new Set<string>(CHECK_IDS);
  * categorised without a second list to update. The two prefixes are the only two there
  * are, and the fallback names the id rather than guessing.
  */
+/**
+ * A check's category, from its own definition.
+ *
+ * This was a prefix test, which got `source-layout` wrong: it starts with neither
+ * `wiring-` nor `bundle-`, so every finding about the shape of the publishable tree was
+ * filed under `config`, and `hexdocs check --category structure` would not have shown
+ * the one category it belongs to. The table states it per id instead, and the typecheck
+ * refuses a check id with no entry.
+ */
 function checkCategory(id: string): FindingCategory {
-	if (id.startsWith('wiring-')) return 'wiring';
-	if (id.startsWith('bundle-')) return 'bundle';
-	return 'config';
+	return CHECK_DEFINITIONS[id as CheckId].category;
 }
 
 function severityFor(
@@ -113,7 +121,9 @@ function severityFor(
 
 function toFinding(entry: RawFinding, severity: Severity): Finding {
 	const isCheck = CHECK_ID_SET.has(entry.rule);
-	const definition = isCheck ? undefined : RULE_DEFINITIONS[entry.rule as LintRuleId];
+	const definition = isCheck
+		? CHECK_DEFINITIONS[entry.rule as CheckId]
+		: RULE_DEFINITIONS[entry.rule as LintRuleId];
 	return {
 		rule: entry.rule,
 		severity,
@@ -121,7 +131,12 @@ function toFinding(entry: RawFinding, severity: Severity): Finding {
 		location: entry.location,
 		locale: entry.locale,
 		message: entry.message,
-		consequence: definition?.consequence ?? 'The package cannot do its job in this state.',
+		// No fallback. Both tables are pinned exhaustively against their own union, so a
+		// rule or check reaching here without a definition is a typecheck failure rather
+		// than a finding that says nothing. The `?? 'The package cannot do its job in this
+		// state.'` that used to stand here was reachable only for check ids, and it made
+		// all eighteen of them say the same thing.
+		consequence: definition.consequence,
 		remediation: entry.remediation,
 		suggestion: entry.suggestion,
 		excerpt: entry.excerpt,
@@ -269,7 +284,12 @@ function nextAction(findings: readonly Finding[], truncated: boolean): NextActio
 		const where = 'file' in first.location ? first.location.file : 'the project';
 		return {
 			kind: 'command',
-			argv: ['hexdocs', 'lint', where],
+			// `check`, not `lint`. There is no `lint` command: this envelope is what
+			// `hexdocs check` prints, and an action naming a command the registry does not
+			// have gets an agent a usage error and no finding. It stayed invisible because
+			// every surface recomputes the action over its own filtered list first, so the
+			// only route that reached it was a caller returning this envelope untouched.
+			argv: ['hexdocs', 'check', where],
 			why: `${findings.filter((f) => f.severity === 'error').length} errors block a publish. Start with "${first.rule}" in ${where}.${truncated ? ' The list is truncated: fix these and run it again.' : ''}`,
 		};
 	}

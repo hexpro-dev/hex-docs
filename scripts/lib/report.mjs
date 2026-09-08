@@ -145,12 +145,20 @@ export function render(title, results) {
 	// from success to the exit code, and CI runs nothing but the exit code.
 	const ok = failed === 0 && notRunCount === 0;
 
+	// A run of nothing but SKIPPED rows is still `ok`, which is what the state means, and
+	// the exit code above is unchanged. What it must not print is "all clear": nothing ran,
+	// and those two words above a column of SKIPPED tell a reader the opposite of what
+	// happened. `kit/src/cli/render.ts` renders the same rows and says the same thing, and
+	// `kit/test/cli/render.test.ts` runs both over one row set to keep them saying it.
+	const skippedCount = results.filter((r) => r.state === 'SKIPPED').length;
 	const verdict =
 		failed > 0
 			? PAINT.FAIL(`${failed} failed`)
 			: notRunCount > 0
 				? PAINT.FAIL(`${notRunCount} did not run`)
-				: PAINT.PASS('all clear');
+				: skippedCount === results.length && results.length > 0
+					? PAINT.SKIPPED('nothing ran')
+					: PAINT.PASS('all clear');
 
 	process.stdout.write(
 		`\n  ${verdict} ` +

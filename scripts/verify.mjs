@@ -14,7 +14,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -130,6 +130,36 @@ function expectTestFiles(dir) {
 /** Pulls "N things examined" out of this package's own report footer. */
 export const countExamined = (output) => Number(/(\d+) things examined/.exec(output)?.[1] ?? 0);
 
+/**
+ * How much of the command surface the guard actually reached, against the registry.
+ *
+ * The headline count cannot answer this. It adds four rows in four different units,
+ * commands plus findings plus tools plus launchers, so a guard that stopped exercising
+ * the MCP handshake entirely would report a smaller number and smaller is not failing.
+ * That is the same shape as the test rows, which is why this uses `subset` rather than
+ * `expect`.
+ *
+ * The two numbers compared are the two that can shrink silently and mean something: the
+ * commands `--help` lists and the tools the server advertises, both against the emitted
+ * catalogue. The findings count is a fact about the fixture corpus rather than about the
+ * registry, and the launcher count is two, so neither belongs here.
+ *
+ * @param {string} output
+ * @returns {{ ran: number, expected: number, what: string }}
+ */
+function surfaceSubset(output) {
+	const catalogue = JSON.parse(readFileSync(join(ROOT, 'kit', 'schema', 'tools-1.json'), 'utf8'));
+	const commands = catalogue.commands.length;
+	const tools = catalogue.commands.filter((command) => command.tool !== null).length;
+	const listed = Number(/help\s+PASS\s+(\d+) commands/.exec(output)?.[1] ?? 0);
+	const advertised = Number(/mcp handshake\s+PASS\s+(\d+) tools/.exec(output)?.[1] ?? 0);
+	return {
+		ran: listed + advertised,
+		expected: commands + tools,
+		what: `${commands} commands and ${tools} tools in kit/schema/tools-1.json`,
+	};
+}
+
 /** @type {Step[]} */
 export const STEPS = [
 	{
@@ -162,6 +192,22 @@ export const STEPS = [
 		unit: 'tests',
 		count: countTests,
 		subset: expectTestFiles('kit/test'),
+	},
+	{
+		name: 'cli surface',
+		// The only row that runs the launcher. Everything else about the CLI is a vitest
+		// test importing the modules, which never executes `kit/bin/hexdocs`, never
+		// resolves tsx through it, and never proves stdout stays clean while the same
+		// launcher is serving a protocol. That is the path every consumer uses and the
+		// only one with a shell script in it.
+		argv: ['pnpm', 'check:cli'],
+		unit: 'things',
+		count: countExamined,
+		// Measured against the registry rather than against the guard's own output, so a
+		// smoke case deleted from the guard reports a shortfall naming what should have
+		// run instead of simply reporting a smaller number. Same lesson as the typecheck
+		// row's `countTsconfigs`, applied to the surface rather than to the configs.
+		subset: surfaceSubset,
 	},
 	{
 		name: 'dependency gate',

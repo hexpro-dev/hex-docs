@@ -905,6 +905,208 @@ across the seam. They do: `kit/test/compile/search.test.ts` imports `searchIndex
 `src/search/query.js` and runs 81 smoke queries, ten a language, against indexes
 `buildBundle` produced in that same run.
 
+## The CLI and the MCP server (step 5)
+
+`kit/src/registry/` is one flat array and everything else is derived from it.
+`kit/src/README.md` carries the failure catalogue, twelve rows of failure, structure,
+proving test and the mutation that must turn it red, and a test walks that table. What
+follows is what would otherwise be rediscovered.
+
+### The parameter key is the field name, so there is no binder
+
+The design this replaces carried a JSON pointer per argument, `into: '/options/locale'`,
+so a CLI flag could write anywhere inside a separately hand-written Zod schema. The
+adversarial critique called that resolver more code than the CLI it serves, and it was
+right for a second reason: the schema it points into is redundant once the parameter table
+exists. Here one `Record<string, Param>` produces the Zod shape, the JSON Schema a model
+reads, the `parseArgs` options row, the `--help` column and the flag set the skill
+validator checks a `SKILL.md` against. There is nowhere for a pointer to point.
+
+`Input<P>` is a mapped type over the same record, so a handler reading a flag nobody
+declared is a compile error at the definition site. That is also why the shared parameters
+in `commands/common.ts` are `as const satisfies Param` and never `: Param`: an annotation
+widens `required` and `fallback` back out of the literal types the mapped type reads, and
+every handler using a shared `ROOT` then sees `root?: string` for a value the schema
+guarantees. One colon erases the whole benefit, and it did, in four handlers at once.
+
+**The array holds an erased type, and the reason took a compile failure to establish.**
+`Input<Params>` collapses: `Params` is an index signature, so `Provided<Params>` is `never`
+and every value widens to `string`. `Input<{offset: integer}>` is therefore assignable to
+`Input<Params>` in neither direction, and method bivariance, which needs one of the two,
+does not save it. `AnyCommand.run` takes `never`, which every input type is a supertype of,
+and the erasure states exactly what `invoke`'s comment already says: the relationship
+between table and handler is checked at the definition site by the type and at the call
+site by the schema.
+
+### install and verify-install share a predicate, not a specification
+
+Each consumer edit is an `{ present, apply, byHand }` record. `verify-install` calls
+`present` and `install` calls `present` then `apply`, and `install.test.ts` asserts
+`edit.present === check.present` **by reference identity** rather than by behaviour,
+because a copied predicate passes a behavioural test and a copy is the whole failure mode.
+Idempotency is then not a property anyone maintains: re-running `install` is a no-op
+exactly when `verify-install` passes, and there is no third state.
+
+There is no managed-region convention to lean on. An exhaustive grep across hex-web returns
+four whole-file "Code generated" headers and nothing else, and zero of the target files are
+generated: `routes.ts` is about half prose comment and `root.tsx`'s CSP doc comment alone
+is 55 lines. So detection is semantic and `apply` returns `null` when its anchor is missing
+or not unique, which is the honest form of "abort only the edits whose own write target was
+hand-edited": without markers, hand-edited is not knowable and "I cannot find exactly one
+place to put this" is.
+
+Three edits the plan's install table has and this deletes, each against the source:
+`root.tsx` already matches app paths by prefix so a docs mount under an app path inherits
+the accent for free; a missing `PATH_SCOPES` entry yields chrome-only strings, which is
+right because this package ships its own in seven languages; and docs pages are not opted
+out of the language cookie redirect, because the reason legal documents are does not apply
+to a manual.
+
+### The MCP server is written here, and the SDK is a devDependency that proves it
+
+`@modelcontextprotocol/sdk@1.30.0` declares seventeen direct dependencies, including
+express, hono, cors, jose and ajv, and resolves to roughly a hundred packages in a `kit/`
+that ships two. That weight travels into every app repository that mounts the submodule,
+and one of them is a Swift project whose first agent session pays for the install before
+the server answers `initialize`, for transports this server does not use.
+
+Measured against the SDK on disk rather than recalled: the stdio wire format is
+`JSON.stringify(message) + '\n'`, and a tools-only server answers five methods. So
+`mcp/protocol.ts` is about two hundred lines, the SDK is a devDependency, and
+`kit/test/mcp/protocol.test.ts` drives this server with its real `Client`. The protocol
+claim is proved against the reference implementation while the reference implementation
+stays out of every consumer's tree, because `bin/hexdocs` installs production dependencies
+only. All four candidate designs put the SDK in `dependencies` and three named the weight
+as an accepted risk; it was the largest single cost in the step and it was avoidable.
+
+A JSON array on that wire is a batch, and `typeof [] === 'object'`, so the guard needs
+`Array.isArray` or an array falls through to the notification arm and is dropped in
+silence. Batching is permitted in two of the protocol versions this server offers, so a
+conforming client that used it would hang until its own timeout. It is refused by name.
+
+### The exec boundary is a recipe table, not an allowlist
+
+`runRecipe(id, holes)` fills a fixed argv template from a closed table. `git clean -fd` is
+not denied, it is unrepresentable. That is strictly stronger than the two shapes it
+replaces: hex-terraform's binary allowlist passes `git clean -fd`, `git reset --hard` and
+`aws s3 rm --recursive` outright, and a subcommand allowlist still leaves `git checkout --
+.` under a `checkout` entry and `git -c core.hooksPath=... log` under a `log` one, because
+the dangerous form of a permitted subcommand is a flag.
+
+`kit/src/compile/git.ts` moved behind the table rather than being exempted from it, and
+`one-spawn-site.test.ts` asserts there is exactly one process-spawn site under `kit/src`.
+hex-terraform has that defect live: its `context.ts` reaches for `execSync` while
+`lib/exec.ts` beside it holds the allowlist.
+
+**A space is deliberately not refused.** It is the separator a shell splits on, so it looks
+like it belongs, and refusing it would break a repository checked out under a path
+containing one. What makes that safe is that the class is not the guarantee: `spawnSync`
+takes an argv array with `shell: false`, so nothing ever parses a value. The NUL is written
+as an escape, because it stood in that class as a raw byte for a while, invisible in every
+diff, in the one file where a reviewer most needs to read the characters literally.
+
+### Two id namespaces that look like one
+
+`Finding.rule` is the closed union `LintRuleId | CheckId`. `CheckRow.id` is a plain string
+and is a **row** id: `verifyBundle` has emitted `bundle-manifest`, `bundle-objects`,
+`bundle-digests` and `bundle-payloads` since step 3 and none of them is in `CHECK_IDS`.
+
+The consequence is that a both-directions coverage test keyed on row ids fails against the
+compiler's own output, and one keyed on `Finding.rule` is the one worth having.
+`checks-fire.test.ts` proves `CHECK_IDS` by **firing** each of them, which is
+`rules-fire.test.ts`'s shape, and not by scanning source for a string literal: a literal in
+an unreachable branch satisfies a grep, and that is exactly how eleven check ids sat
+implemented-and-unreachable through four steps with a green suite. `wiring-allow-paths` was
+the last of them, and closing it meant giving `hexdocs check` a reason to read the mirror
+script rather than writing an exemption saying nothing called it.
+
+### What the mutation testing found
+
+Every guard in step 5 was reverted and observed to fail, and six defects came out of it
+that a green suite did not show.
+
+`kit/src/cli/help.ts` padded its left column to a literal 20, and two real flags are 21 and
+22 characters, so `hexdocs label --help` printed the spelling and the help text with no
+separator. The width is measured now, which is the version of the claim that holds for a
+flag longer than any that exists today.
+
+The lint envelope's `nextAction` named `hexdocs lint`, and there is no `lint` command. It
+was invisible because every surface recomputes the action over its own filtered list first,
+so the only route that reached it was a caller returning `runLint`'s envelope untouched.
+
+`filterEnvelope`'s action was a fixed point: `['hexdocs', 'check', '--severity', <severity>]`
+is byte for byte the invocation that produces it whenever the run already carried that
+filter, so an agent following actions never left the state. It names the page to open now.
+
+`normaliseEntry` in the allowlist reader folded by trimming the string, and `docs/..` named
+the repository root to the copy step while reading here as an ordinary two-segment path: no
+refusal fired and the insert proceeded beside it. It folds by segment now. Nobody would
+have found it from the cases people write, because every case people write uses the plain
+spelling.
+
+A report whose every row is `skipped` validated, satisfied both per-row invariants and
+exited 0 having examined nothing. `examinedNothing` is the report-level form of the rule
+`checkRow` applies per row, and it is scoped to a report that would otherwise pass, because
+a `not-run` row examines nothing by definition and without the scope the guard fires on its
+own remedy. `verify-install` converts the all-skipped state into a `not-run` row before it
+gets there, because pointing the command at the wrong directory is a wrong argument rather
+than a bug in the command.
+
+The prebuild check walked every `../`-prefixed token in the prebuild string looking for a
+shared script that invokes hexdocs, and the docs guard invokes the launcher by exactly such
+a path, whose file naturally contains the word. A correctly wired repository with the
+submodule checked out failed its own row for naming its own launcher.
+
+### Two claims that were corrected rather than defended
+
+`kit/src/README.md` row 10 said the import graph from `mcp/server.ts` reaches no writer.
+That is false and always will be: the server imports the registry and the registry is one
+flat array of all sixteen commands, which is the point of having a registry. The guarantee
+is real and is carried by three other things, so the row now names them and the graph walk
+is rooted at the nine tool handlers instead. A comment that overstates a guard is worse
+than no comment, and this was one in a file whose whole subject is that.
+
+`registry/index.ts` said the seven commands with no tool are exactly the seven that write.
+Six write; the seventh is `mcp`, which writes nothing and is the server itself. Wrong by
+one, in a sentence that reads as a guarantee.
+
+### Fixture consumers are strings, not files
+
+Every design proposed committing `fixtures/consumer/apps/front/app/routes.ts` and its
+siblings, and all of them break this repository's own ladder. Measured: both test tsconfigs
+include `fixtures`, so a copied `routes.ts` importing `@react-router/dev/routes` and a
+`.tsx` sitemap fail the typecheck row; `scripts/lint.mjs` scans `fixtures/` and the real
+`paths.ts` carries four em dashes; and `pnpm format` rewrites `- "!common/docs"` to single
+quotes, which is the exact byte shape the consumer's own guard matches. `fixtures/consumers.ts`
+holds the bytes as escaped template strings and materialises them into a temporary
+directory, which is what `materialiseCorpus()` already established one directory over.
+
+The two shapes are not decoration. Seven of the nine wiring checks meet a materially
+different situation in each: a workspace glob against an explicit include list, a JSONC
+tsconfig against bare JSON, an existing `prebuild` shared by four packages against no
+`prebuild` at all, a composed mutable path array against a readonly alias of a registry
+whose keys are a closed union. A check developed against one consumer and correct only
+there is the failure two fixtures exist to catch.
+
+### What step 5 deliberately does not do
+
+The Terraform stack, the publish workflow committed in an app repository, and running
+`install` against the real hex-web belong to steps 6, 7 and 8. `publish` and `prefetch` are
+therefore tested against a recording fake `Exec`, and each test says so in its header and
+names what stays unproved: that S3 answers a second conditional write with a 412, that
+`--checksum-sha256` is verified server side, and that `s3api get-object` writes stored bytes
+rather than decoding `Content-Encoding`, which the whole stored-digest half of `prefetch`
+rests on.
+
+`hexdocs mv` is not built. Renaming across seven locales means rewriting inbound links,
+which means emitting markdown, and this package has no printer. A regex rewriter would be a
+second, weaker parser disagreeing with the first about exactly the constructs the first was
+hand-written to get right, and the disagreement would surface as a broken link in a
+language nobody here reads.
+
+`hexdocs coverage --strings` is refuted rather than deferred: the only app with strings
+keys them by their English source text, so there are no screen prefixes to group by.
+
 ## Code style
 
 Tabs. TypeScript strict, `verbatimModuleSyntax`, ES2022 / ESNext / bundler. Prettier with

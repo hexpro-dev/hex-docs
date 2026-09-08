@@ -24,7 +24,24 @@ const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const RULES_RELATIVE = 'kit/schema/house-rules.json';
 const PLANTED_RELATIVE = 'fixtures/planted.json';
 
-const SCANNED_EXTENSIONS = ['.ts', '.tsx', '.mjs', '.js', '.md', '.json', '.yml', '.yaml', '.css'];
+// `.sh` joined this list in step 5, and the gap it closed is worth naming: the two
+// launchers are shipped content full of comment paragraphs, and until they existed no
+// shell file did, so nothing scanned one for a banned character or an attribution
+// trailer. A repository whose stated position is that there are no exemptions had an
+// unscanned file type rather than an exemption, which is the same hole with no name on
+// it.
+const SCANNED_EXTENSIONS = [
+	'.ts',
+	'.tsx',
+	'.mjs',
+	'.js',
+	'.md',
+	'.json',
+	'.yml',
+	'.yaml',
+	'.css',
+	'.sh',
+];
 
 /**
  * Roots that must exist and must contain something.
@@ -45,12 +62,11 @@ const SCANNED_EXTENSIONS = ['.ts', '.tsx', '.mjs', '.js', '.md', '.json', '.yml'
  * here is a directory nothing lints, and that is now a failure rather than a smaller
  * number.
  */
-export const REQUIRED_DIRS = ['src', 'kit', 'scripts', 'test', '.github', 'fixtures'];
+export const REQUIRED_DIRS = ['src', 'kit', 'scripts', 'test', '.github', 'fixtures', '.claude'];
 
 /** Roots a later step creates. Absent is fine; present and empty is not. */
 const OPTIONAL_DIRS = {
 	infra: 'the terraform stack, step 6 of the plan',
-	'.claude': 'the bundled skills, step 5 of the plan',
 };
 
 /**
@@ -60,7 +76,16 @@ const OPTIONAL_DIRS = {
  */
 const EXCLUDED_DIRS = ['node_modules', 'coverage', 'dist', '.design', '.git'];
 
-const SCANNED_FILES = ['CLAUDE.md', 'README.md', 'package.json', 'kit/package.json'];
+// Extensionless files, named individually because a walk cannot recognise them. The
+// launcher is the one entry point every consumer reaches, and it has no extension
+// because it is invoked as a command rather than read as a script.
+const SCANNED_FILES = [
+	'CLAUDE.md',
+	'README.md',
+	'package.json',
+	'kit/package.json',
+	'kit/bin/hexdocs',
+];
 
 /** Record separator for the git log parse. */
 const SEPARATOR = '@@hexdocs-commit@@';

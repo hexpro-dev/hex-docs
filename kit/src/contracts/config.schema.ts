@@ -373,37 +373,47 @@ export const versionEntrySchema = z.strictObject({
 	digest: sha256Schema.optional(),
 });
 
-export const docsSiteConfigSchema = z.strictObject({
-	$schema: schemaRefSchema,
-	site: z.literal(SITE_CONFIG_VERSION),
-	project: projectIdSchema,
-	// Leading slash, no trailing slash, no locale segment. A basePath carrying a locale
-	// would have to exist seven times.
-	basePath: z
-		.string()
-		// Segment form, so `/hex-nfc//docs` is refused rather than quietly collapsed. A
-		// validator that rewrites a copy-paste hides the copy-paste.
-		.regex(
-			/^\/[a-z0-9]+(?:[-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[-][a-z0-9]+)*)*$/,
-			'Expected /project/docs: leading slash, no trailing slash, no empty segment.',
-		)
-		// The locale is added by the address builder, because English is unprefixed and
-		// the other six are not. A basePath carrying one would have to exist seven times,
-		// and the way it gets in is somebody pasting a docs URL out of their browser
-		// while reading the Japanese page. Derived from `matchLocale` so this stays true
-		// for an eighth language, and so it already covers `pt-br` and `zh-hans`.
-		.refine((value) => {
-			const first = value.split('/')[1] ?? '';
-			return !matchLocale(first).ok;
-		}, 'basePath must not start with a locale segment: the locale is added per request.'),
-	themeClass: z
-		.string()
-		.regex(/^[a-z][a-z0-9-]*$/)
-		.optional(),
-	navLabel: localisedLabelSchema,
-	versions: z.array(versionEntrySchema).min(1),
-	pages: z.array(slugSchema),
-});
+export const docsSiteConfigSchema = z
+	.strictObject({
+		$schema: schemaRefSchema,
+		site: z.literal(SITE_CONFIG_VERSION),
+		project: projectIdSchema,
+		// Leading slash, no trailing slash, no locale segment. A basePath carrying a locale
+		// would have to exist seven times.
+		basePath: z
+			.string()
+			// Segment form, so `/hex-nfc//docs` is refused rather than quietly collapsed. A
+			// validator that rewrites a copy-paste hides the copy-paste.
+			.regex(
+				/^\/[a-z0-9]+(?:[-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[-][a-z0-9]+)*)*$/,
+				'Expected /project/docs: leading slash, no trailing slash, no empty segment.',
+			)
+			// The locale is added by the address builder, because English is unprefixed and
+			// the other six are not. A basePath carrying one would have to exist seven times,
+			// and the way it gets in is somebody pasting a docs URL out of their browser
+			// while reading the Japanese page. Derived from `matchLocale` so this stays true
+			// for an eighth language, and so it already covers `pt-br` and `zh-hans`.
+			.refine((value) => {
+				const first = value.split('/')[1] ?? '';
+				return !matchLocale(first).ok;
+			}, 'basePath must not start with a locale segment: the locale is added per request.'),
+		themeClass: z
+			.string()
+			.regex(/^[a-z][a-z0-9-]*$/)
+			.optional(),
+		navLabel: localisedLabelSchema,
+		versions: z.array(versionEntrySchema).min(1),
+		pages: z.array(slugSchema),
+		hidden: z.array(slugSchema).optional(),
+	})
+	// A hidden page that is not published is a page with no canonical and no address, so
+	// the hiding would be indistinguishable from a deletion. The relationship is between
+	// two keys, which is exactly what a JSON Schema cannot state, so an editor will not
+	// flag it and this parse will.
+	.refine(
+		(config) => (config.hidden ?? []).every((slug) => config.pages.includes(slug)),
+		'Every slug in `hidden` must also be in `pages`: hiding a page keeps it published.',
+	);
 
 /**
  * The version table's invariants: exactly one default, no repeated label, no repeated

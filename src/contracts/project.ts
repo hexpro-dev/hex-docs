@@ -21,6 +21,38 @@ import type { LintRuleId, RuleSetting } from './lint.js';
 /** The `docs.json` format version. Independent of the AST major and of `nav.json`. */
 export const DOCS_CONFIG_VERSION = 1;
 
+/**
+ * The publishable root, relative to the app repository, with forward slashes.
+ *
+ * One constant with two readers, and the pairing is the whole reason it exists rather
+ * than being a pair of string literals at each site. `loadProject` resolves the tree it
+ * compiles against this, and `hexdocs init` writes exactly this string into
+ * `scripts/sync-public.sh`'s `ALLOW_PATHS` in an app repository whose public mirror is
+ * protected by absence and nothing else.
+ *
+ * So the dangerous edit is not expressible on its own. Widening the allowlist entry to a
+ * bare `docs` means changing this line, and changing this line points the compiler at
+ * `docs/` instead of `docs/site/`, which every project test in `kit/test/compile/` fails
+ * on before anything reaches a mirror. A separate literal in the editor could have been
+ * widened with the compiler none the wiser, and that edit pushes `docs/internal/`, which
+ * in hex-nfc holds export-compliance material and a device UDID, to a public GitHub
+ * repository where `prune_internal_files()` matches four basenames and reports nothing
+ * to prune.
+ *
+ * Forward slashes, never `path.join`: it is a manifest path, a finding's `file`, and a
+ * line in a bash array, none of which is a filesystem path on the machine reading it.
+ */
+export const SITE_ROOT_RELATIVE = 'docs/site';
+
+/**
+ * The deny list, relative to the app repository.
+ *
+ * Deliberately a sibling of `SITE_ROOT_RELATIVE` and not under it, and declared here
+ * beside it so the two are read together. It names the things that must not ship, so
+ * keeping it inside the tree the publisher reads would be the same mistake in miniature.
+ */
+export const DENY_LIST_RELATIVE = 'docs/docs.private.json';
+
 /** Project ids are slug-shaped: they are an S3 key prefix and a URL segment. */
 export const PROJECT_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 

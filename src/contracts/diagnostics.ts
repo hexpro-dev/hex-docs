@@ -241,6 +241,49 @@ export function checkRow(
 }
 
 /**
+ * A check that deliberately did not run, with the reason.
+ *
+ * `checkRow` can reach only `pass` and `fail`, and `CHECK_STATES` has four members.
+ * That gap is not cosmetic, and step 5 is where it started to matter: the
+ * public-mirror allowlist check has nothing to examine in a repository that has no
+ * public mirror, and both of the states `checkRow` can produce are wrong for it. A
+ * pass would be a false green over a file that is not being read; a fail would be a
+ * red row on a repository that has done nothing wrong.
+ *
+ * `scripts/lib/report.mjs` has had all four states since step 1 and the contract had
+ * two, so the CLI and the ladder could not have described the same run.
+ *
+ * The reason is a required parameter rather than an optional note, because a skip
+ * whose reason is absent is indistinguishable from a check somebody switched off.
+ */
+export function skippedRow(id: string, unit: string, reason: string): CheckRow {
+	return { id, status: 'skipped', examined: 0, unit, findings: [], note: reason };
+}
+
+/**
+ * A check that should have run and did not, because something it needed was missing.
+ *
+ * A failing state. `report.mjs`'s `render` says why at length: delete the thing a
+ * check reads and every row goes dark, and dark is indistinguishable from green to an
+ * exit code. Use `skippedRow` for the case somebody decided on.
+ */
+export function notRunRow(id: string, unit: string, reason: string): CheckRow {
+	return { id, status: 'not-run', examined: 0, unit, findings: [], note: reason };
+}
+
+/**
+ * A failure with no finding behind it, which is why the note is required.
+ *
+ * Some failures have no rule to name: a config file that is not JSON, an allowlist
+ * block this check could not find. `checkRow` would report those as a pass with a
+ * count, so they need their own constructor rather than a synthesised finding whose
+ * rule id would have to be invented.
+ */
+export function failedRow(id: string, examined: number, unit: string, note: string): CheckRow {
+	return { id, status: 'fail', examined, unit, findings: [], note };
+}
+
+/**
  * The full report from `hexdocs verify-install --json`.
  *
  * The JSON carries every string the shim prints, including `notCheckedHere`, which is

@@ -299,12 +299,13 @@ describe('the verification ladder', () => {
 		}
 	});
 
-	test('the ladder covers typecheck, both suites, both guards, paint and formatting', () => {
+	test('the ladder covers typecheck, both suites, the surface, both guards, paint and formatting', () => {
 		const names = (STEPS as { name: string }[]).map((step) => step.name);
 		expect(names).toEqual([
 			'typecheck',
 			'runtime tests',
 			'toolchain tests',
+			'cli surface',
 			'dependency gate',
 			'house lint',
 			'paint',

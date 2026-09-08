@@ -18,6 +18,7 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./contracts": "./src/contracts/index.ts",
+		"./render": "./src/render/index.ts",
 		"./package.json": "./package.json"
 	},
 	"files": [
@@ -33,6 +34,7 @@
 		"typecheck:verbose": "tsc --noEmit --extendedDiagnostics && tsc --noEmit -p tsconfig.test.json --extendedDiagnostics && tsc --noEmit -p kit/tsconfig.json --extendedDiagnostics",
 		"lint": "node scripts/lint.mjs",
 		"paint": "node scripts/check-paint.mjs",
+		"check:cli": "node scripts/check-cli.mjs",
 		"check:deps": "node scripts/check-imports.mjs",
 		"schemas": "pnpm --dir kit schemas",
 		"format": "prettier --write .",

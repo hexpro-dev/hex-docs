@@ -612,7 +612,7 @@
 		"kind": "command",
 		"argv": [
 			"hexdocs",
-			"lint",
+			"check",
 			"content/en/reference/api.md"
 		],
 		"why": "7 errors block a publish. Start with \"code-fence-language\" in content/en/reference/api.md."

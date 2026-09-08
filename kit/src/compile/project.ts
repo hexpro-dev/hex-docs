@@ -21,7 +21,11 @@ import type { Locale } from '../../../src/contracts/locales.js';
 import { matchLocale, sortLocales } from '../../../src/contracts/locales.js';
 import type { NavTree } from '../../../src/contracts/nav.js';
 import type { DenyList, DocsProjectConfig } from '../../../src/contracts/project.js';
-import { FORBIDDEN_SOURCE_NAMES } from '../../../src/contracts/project.js';
+import {
+	DENY_LIST_RELATIVE,
+	FORBIDDEN_SOURCE_NAMES,
+	SITE_ROOT_RELATIVE,
+} from '../../../src/contracts/project.js';
 import { parseSlug } from '../../../src/contracts/slug.js';
 import { SNIPPET_ID_PATTERN } from '../../../src/contracts/source.js';
 import type { ZodType } from 'zod';
@@ -220,7 +224,9 @@ function walk(directory: string, base: string, findings: RawFinding[]): string[]
 }
 
 export function loadProject(appRoot: string): LoadedProject {
-	const siteRoot = join(appRoot, 'docs', 'site');
+	// Split on '/' rather than written as two literals, so this is the same string the
+	// allowlist editor writes and there is no second spelling of the publishable root.
+	const siteRoot = join(appRoot, ...SITE_ROOT_RELATIVE.split('/'));
 	const findings: RawFinding[] = [];
 
 	const config = parseConfig<DocsProjectConfig>(
@@ -240,11 +246,11 @@ export function loadProject(appRoot: string): LoadedProject {
 
 	let denyList: DenyList | null = null;
 	try {
-		statSync(join(appRoot, 'docs', 'docs.private.json'));
+		statSync(join(appRoot, ...DENY_LIST_RELATIVE.split('/')));
 		denyList =
 			parseConfig<DenyList>(
 				denyListSchema,
-				readJson(join(appRoot, 'docs', 'docs.private.json'), 'docs.private.json'),
+				readJson(join(appRoot, ...DENY_LIST_RELATIVE.split('/')), 'docs.private.json'),
 				'docs.private.json',
 				false,
 				findings,

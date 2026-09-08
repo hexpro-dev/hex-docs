@@ -1,0 +1,44 @@
+#!/bin/sh
+# The one entry point. `.mcp.json`, a consuming site's prebuild hook, the publish
+# workflow and a person at a terminal all arrive here.
+#
+# Three differences from `hex-terraform/mcp/start.sh`, each of which is a failure that
+# has happened there or is one step away from happening.
+#
+#   * The probe is `[ -x node_modules/.bin/tsx ]`, not `[ -d node_modules ]`. A
+#     half-finished install leaves the directory present and the binary absent, and a
+#     directory probe then trusts it forever and execs something that is not there.
+#   * `exec node_modules/.bin/tsx`, not `npx tsx`. npx re-resolves on every run and
+#     reaches the network when the local copy is missing, which turns a broken install
+#     into a silent download instead of an error.
+#   * Every byte of install chatter goes to stderr. The same launcher serves
+#     `hexdocs mcp`, where stdout is the JSON-RPC stream, and one progress line on
+#     stdout is a parse error the client reports as a broken server with no cause.
+#
+# It deliberately does not cd into the kit. $PWD is the consuming project and is what
+# HEXDOCS_PROJECT_ROOT has to capture.
+set -eu
+
+KIT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+export HEXDOCS_PROJECT_ROOT="${HEXDOCS_PROJECT_ROOT:-$PWD}"
+
+if [ ! -x "$KIT_DIR/node_modules/.bin/tsx" ]; then
+	echo "hexdocs: installing toolchain dependencies (first run)" >&2
+	if command -v pnpm >/dev/null 2>&1; then
+		# --prod is what keeps this cheap in an app repository: tsx and zod are
+		# dependencies and everything else is not, so the MCP SDK used to prove the
+		# protocol in the test suite never reaches a consumer.
+		( cd "$KIT_DIR" && pnpm install --frozen-lockfile --prod --silent ) >&2
+	elif command -v npm >/dev/null 2>&1; then
+		# npm ignores pnpm-lock.yaml and writes a package-lock.json beside it, so the
+		# resolution is fresh rather than pinned. It is the fallback rather than the path
+		# because an app repository may be a Swift project with npm and no pnpm.
+		( cd "$KIT_DIR" && npm install --omit=dev --silent --no-audit --no-fund ) >&2
+	else
+		echo "hexdocs: neither pnpm nor npm is on PATH, so the toolchain cannot install." >&2
+		echo "hexdocs: install one, or run 'pnpm install --prod' in $KIT_DIR yourself." >&2
+		exit 1
+	fi
+fi
+
+exec "$KIT_DIR/node_modules/.bin/tsx" "$KIT_DIR/src/cli/main.ts" "$@"

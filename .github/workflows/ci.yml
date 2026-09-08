@@ -65,9 +65,15 @@ jobs:
             exit 1
           fi
 
-      # Typecheck, both suites with coverage, the dependency gate, the house lint, the
-      # browser paint check and formatting, in one ladder that reports what each step
-      # examined.
+      # Typecheck, both suites with coverage, the command surface through the real
+      # launcher, the dependency gate, the house lint, the browser paint check and
+      # formatting, in one ladder that reports what each step examined.
+      #
+      # The kit install above is the full tree rather than `--prod`, and the command
+      # surface row needs it: the MCP protocol is hand written and the SDK is a
+      # devDependency used only to prove that server against the reference client. A
+      # `--prod` install here would leave that proof unrun while every other row stayed
+      # green, which is the shape of failure this ladder exists to refuse.
       #
       # `CI` is what turns a missing browser from a deliberate skip into a failure. The
       # runner image ships Google Chrome and Chromium, so a paint row that found neither

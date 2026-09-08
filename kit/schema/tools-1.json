@@ -1,0 +1,288 @@
+{
+	"$id": "tools-1.json",
+	"title": "tools-1",
+	"description": "Every hexdocs command and MCP tool, derived from the registry. Read by zero-dependency guards.",
+	"commands": [
+		{
+			"name": "doctor",
+			"tool": "docs_doctor",
+			"writes": "nothing",
+			"summary": "Run every check that applies to this repository and report what is wrong.",
+			"positionals": [
+				"root"
+			],
+			"flags": [
+				"bundle",
+				"site"
+			],
+			"taughtBy": [
+				"docs-diagnose",
+				"docs-install-site"
+			]
+		},
+		{
+			"name": "check",
+			"tool": "docs_check",
+			"writes": "nothing",
+			"summary": "Check a documentation tree: structure, house style, links, nav and translations.",
+			"positionals": [
+				"root"
+			],
+			"flags": [
+				"category",
+				"include-drafts",
+				"locale",
+				"severity"
+			],
+			"taughtBy": [
+				"docs-authoring",
+				"docs-diagnose"
+			]
+		},
+		{
+			"name": "pages",
+			"tool": "docs_pages",
+			"writes": "nothing",
+			"summary": "List every page with its translation state in every language.",
+			"positionals": [
+				"root"
+			],
+			"flags": [
+				"bundle",
+				"locale"
+			],
+			"taughtBy": [
+				"docs-authoring",
+				"docs-diagnose"
+			]
+		},
+		{
+			"name": "page",
+			"tool": "docs_page",
+			"writes": "nothing",
+			"summary": "Read one page in one language, as markdown or as the compiled AST.",
+			"positionals": [
+				"slug",
+				"root"
+			],
+			"flags": [
+				"bundle",
+				"format",
+				"limit",
+				"locale",
+				"offset"
+			],
+			"taughtBy": [
+				"docs-authoring",
+				"docs-diagnose"
+			]
+		},
+		{
+			"name": "bundle",
+			"tool": "docs_bundle",
+			"writes": "nothing",
+			"summary": "Verify a compiled bundle, describe what is in it, and diff it against another.",
+			"positionals": [
+				"path"
+			],
+			"flags": [
+				"against"
+			],
+			"taughtBy": [
+				"docs-publish-version",
+				"docs-diagnose"
+			]
+		},
+		{
+			"name": "label",
+			"tool": "docs_label",
+			"writes": "nothing",
+			"summary": "Check that a commit is safe to label as a version, and return the edit.",
+			"positionals": [],
+			"flags": [
+				"cache",
+				"commit",
+				"project",
+				"released",
+				"root",
+				"source-repo",
+				"version"
+			],
+			"taughtBy": [
+				"docs-publish-version"
+			]
+		},
+		{
+			"name": "scaffold",
+			"tool": "docs_scaffold",
+			"writes": "nothing",
+			"summary": "Return the files a repository needs, for the agent to apply. Writes nothing.",
+			"positionals": [
+				"kind"
+			],
+			"flags": [
+				"locale",
+				"product-name",
+				"project",
+				"repo",
+				"root",
+				"site",
+				"slug",
+				"title"
+			],
+			"taughtBy": [
+				"docs-init-source",
+				"docs-authoring",
+				"docs-install-site"
+			]
+		},
+		{
+			"name": "skills",
+			"tool": "docs_skills",
+			"writes": "nothing",
+			"summary": "Return the bundled hexdocs skills: the instructions for using this toolchain.",
+			"positionals": [
+				"id"
+			],
+			"flags": [],
+			"taughtBy": [
+				"docs-install-site",
+				"docs-init-source"
+			]
+		},
+		{
+			"name": "verify-install",
+			"tool": "docs_verify_install",
+			"writes": "nothing",
+			"summary": "Check that a consuming website is wired for a docs mount.",
+			"positionals": [
+				"root"
+			],
+			"flags": [
+				"mount",
+				"site"
+			],
+			"taughtBy": [
+				"docs-install-site",
+				"docs-diagnose"
+			]
+		},
+		{
+			"name": "init",
+			"tool": null,
+			"writes": "files",
+			"summary": "Set up a documentation source in an app repository, and wire its public mirror.",
+			"positionals": [
+				"root"
+			],
+			"flags": [
+				"locale",
+				"product-name",
+				"project",
+				"repo",
+				"write"
+			],
+			"taughtBy": [
+				"docs-init-source"
+			]
+		},
+		{
+			"name": "build",
+			"tool": null,
+			"writes": "files",
+			"summary": "Compile a documentation tree and write the bundle to a directory.",
+			"positionals": [
+				"root"
+			],
+			"flags": [
+				"include-drafts",
+				"out"
+			],
+			"taughtBy": [
+				"docs-publish-version"
+			]
+		},
+		{
+			"name": "install",
+			"tool": null,
+			"writes": "files",
+			"summary": "Wire a consuming website for a docs mount, or print what that would take.",
+			"positionals": [
+				"root"
+			],
+			"flags": [
+				"mount",
+				"site",
+				"write"
+			],
+			"taughtBy": [
+				"docs-install-site"
+			]
+		},
+		{
+			"name": "sync",
+			"tool": null,
+			"writes": "files",
+			"summary": "Write the page list and the bundle digests back into a site config.",
+			"positionals": [
+				"root"
+			],
+			"flags": [
+				"cache",
+				"project",
+				"site"
+			],
+			"taughtBy": [
+				"docs-publish-version"
+			]
+		},
+		{
+			"name": "publish",
+			"tool": null,
+			"writes": "network",
+			"summary": "Upload a compiled bundle to its commit-addressed prefix, once.",
+			"positionals": [
+				"bundle"
+			],
+			"flags": [
+				"bucket",
+				"profile",
+				"region"
+			],
+			"taughtBy": [
+				"docs-publish-version"
+			]
+		},
+		{
+			"name": "prefetch",
+			"tool": null,
+			"writes": "files",
+			"summary": "Download every labelled bundle a site declares and write it into the site.",
+			"positionals": [
+				"root"
+			],
+			"flags": [
+				"bucket",
+				"cache",
+				"offline",
+				"profile",
+				"region",
+				"site"
+			],
+			"taughtBy": [
+				"docs-install-site"
+			]
+		},
+		{
+			"name": "mcp",
+			"tool": null,
+			"writes": "nothing",
+			"summary": "Serve the hexdocs read-only tools over stdio as an MCP server.",
+			"positionals": [],
+			"flags": [],
+			"taughtBy": [
+				"docs-install-site"
+			]
+		}
+	]
+}
