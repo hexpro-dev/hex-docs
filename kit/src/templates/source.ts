@@ -41,7 +41,7 @@ import { UI_STRINGS } from '../../../src/ui/strings.js';
 import { MIRROR_SCRIPT_RELATIVE, siteRootLine } from '../source/allow-paths.js';
 
 import { PLACEHOLDER_DESCRIPTION, sourcePage } from './page.js';
-import { PUBLISH_WORKFLOW_PATH, publishWorkflow } from './workflow.js';
+import { BUNDLE_OUT, PUBLISH_WORKFLOW_PATH, publishWorkflow } from './workflow.js';
 
 /**
  * Where the toolchain is mounted, when nobody measured it.
@@ -61,9 +61,6 @@ export const DEFAULT_KIT_MOUNT = 'hex-docs';
  * repository's own CLAUDE.md states it in public.
  */
 const PUBLISH_REGION = 'ap-southeast-2';
-
-/** The directory the generated workflow builds into. A CI-only artefact. */
-const BUNDLE_OUT = '.hexdocs-bundle';
 
 /**
  * Tab-indented JSON with a final newline, matching every checked-in config in the estate.

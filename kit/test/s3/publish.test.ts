@@ -52,7 +52,7 @@ import {
 	type BundleManifest,
 } from '../../../src/contracts/manifest.js';
 import { buildBundle, type WrittenObject } from '../../src/compile/build.js';
-import { writeBundle } from '../../src/compile/bundle.js';
+import { verifyBundle, writeBundle } from '../../src/compile/bundle.js';
 import { sha256Hex } from '../../src/compile/serialise.js';
 import { ALL_RECIPES, HOLE, type Recipe, type RecipeId } from '../../src/exec/recipes.js';
 import { ExecRefusal, type Exec, type RunResult } from '../../src/exec/run.js';
@@ -228,6 +228,7 @@ class FakeS3 {
 // ---------------------------------------------------------------------------
 
 let root: string;
+let bundleOut: string;
 let directory: string;
 let manifest: BundleManifest;
 let objects: WrittenObject[];
@@ -241,9 +242,9 @@ beforeAll(() => {
 	expect(built.manifestProblems).toEqual([]);
 	manifest = built.manifest;
 	objects = built.objects;
-	const out = join(root, 'out');
-	mkdirSync(out, { recursive: true });
-	directory = writeBundle(out, manifest, objects).prefix;
+	bundleOut = join(root, 'out');
+	mkdirSync(bundleOut, { recursive: true });
+	directory = writeBundle(bundleOut, manifest, objects).prefix;
 	prefix = bundlePrefix(manifest.project, manifest.commit, manifest.ast);
 	manifestDigest = sha256Hex(readFileSync(join(directory, MANIFEST_KEY)));
 	// Below the pagination page size on purpose: every list test here sets its own smaller
@@ -346,44 +347,39 @@ describe('the exact argv of a first publish', () => {
 		expect(outcome.rows.every((entry) => entry.status === 'pass')).toBe(true);
 	});
 
-	test('the preflight is the first call, and it heads the manifest under the prefix', () => {
+	test('the preflight is a listing, and it is the first call', () => {
 		// Everything after it costs a call against a store that will never let the bytes be
-		// replaced, so the cheap question has to come first.
+		// replaced, so the cheap question has to come first. That it is a listing rather
+		// than a head is the load-bearing half: the publisher role holds `s3:ListBucket`
+		// only under a `StringLike` on `s3:prefix`, a HeadObject request carries no value
+		// for that key, and S3 answers a head on an absent key with 403 rather than 404 for
+		// a caller without ListBucket. Heading first therefore refused the role its own
+		// empty prefix on a first publish, and on a first publish only, which is the shape
+		// of defect a second run would have hidden for good.
 		expect(fake.calls[0]?.argv).toEqual([
 			'aws',
 			's3api',
-			'head-object',
+			'list-objects-v2',
 			'--bucket',
 			BUCKET,
-			'--key',
-			`${prefix}/${MANIFEST_KEY}`,
-			'--checksum-mode',
-			'ENABLED',
+			'--prefix',
+			`${prefix}/`,
+			'--max-items',
+			String(LIST_PAGE_SIZE),
 			'--output',
 			'json',
 		]);
 	});
 
-	test('the listing asks for a full page and heads nothing, because the prefix is empty', () => {
-		expect(fake.of('aws.list-objects').map((call) => call.argv)).toEqual([
-			[
-				'aws',
-				's3api',
-				'list-objects-v2',
-				'--bucket',
-				BUCKET,
-				'--prefix',
-				`${prefix}/`,
-				'--max-items',
-				String(LIST_PAGE_SIZE),
-				'--output',
-				'json',
-			],
-		]);
-		// One head, the preflight, and no per-object heads: a digest comparison against an
-		// empty prefix would be ninety-two calls answering a question the listing settled.
-		expect(fake.of('aws.head-object')).toHaveLength(1);
+	test('one listing, one page, and not a single head, because the prefix is empty', () => {
+		expect(fake.of('aws.list-objects')).toHaveLength(1);
 		expect(fake.of('aws.list-objects-page')).toHaveLength(0);
+		// Zero heads, and the number is the point. The manifest head is skipped because the
+		// listing did not name it, and the per-object heads are skipped because a digest
+		// comparison against an empty prefix is ninety-two calls answering a question the
+		// listing already settled. A first publish now asks S3 exactly one thing before it
+		// starts writing.
+		expect(fake.of('aws.head-object')).toHaveLength(0);
 	});
 
 	test('a gzipped page carries its type, its encoding, its checksum and the precondition', () => {
@@ -536,7 +532,7 @@ describe('the exact argv of a first publish', () => {
 // ---------------------------------------------------------------------------
 
 describe('a second run over a bundle that is already there', () => {
-	test('issues zero puts and asks exactly one question', async () => {
+	test('issues zero puts and asks exactly two questions', async () => {
 		const fake = new FakeS3();
 		const first = await run(fake);
 		expect(first.data['published']).toBe(true);
@@ -547,8 +543,11 @@ describe('a second run over a bundle that is already there', () => {
 
 		expect(second.code).toBe(0);
 		expect(second.data).toMatchObject({ published: true, skipped: true, written: 0 });
-		expect(calls.map((call) => call.id)).toEqual(['aws.head-object']);
-		expect(calls[0]?.holes[1]).toBe(`${prefix}/${MANIFEST_KEY}`);
+		expect(calls.map((call) => call.id)).toEqual(['aws.list-objects', 'aws.head-object']);
+		expect(calls[0]?.holes[1]).toBe(`${prefix}/`);
+		expect(calls[1]?.holes[1]).toBe(`${prefix}/${MANIFEST_KEY}`);
+		// The head runs here and not on a first publish, and the difference is the listing:
+		// it named the manifest, so the key is known to be there and 404 cannot arise.
 		// The reconcile and the upload are `skipped`, not `pass`. A pass would be a row
 		// claiming to have examined objects it never listed.
 		expect(row(second, 'publish-reconcile').status).toBe('skipped');
@@ -1041,5 +1040,43 @@ describe('the client, on the answers a good publish never produces', () => {
 		counting.head('a');
 		counting.list('p/');
 		expect(counting.calls).toBe(2);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// what `build` reports and what `publish` accepts
+// ---------------------------------------------------------------------------
+
+/**
+ * The seam the generated workflow crosses, asserted from this side.
+ *
+ * `kit/test/templates/workflow.test.ts` proves the publish step is not handed `build`'s
+ * `--out` value. This proves why that matters: the `--out` directory is not a bundle and
+ * the prefix reported by the same call is, so the two spellings are not interchangeable
+ * and never were. Nothing in the suite compared them until the generated workflow shipped
+ * a publish step that could not have worked, green in three thousand tests, because each
+ * command was asserted against a literal and the pair against nothing.
+ */
+describe('the directory build reports is the directory publish accepts', () => {
+	test('the reported prefix verifies as a bundle', () => {
+		const rows = verifyBundle(directory);
+		expect(rows.every((entry) => entry.status === 'pass')).toBe(true);
+	});
+
+	test('the --out directory does not, and says so by name', () => {
+		const rows = verifyBundle(bundleOut);
+		const manifestRow = rows.find((entry) => entry.id === 'bundle-manifest');
+		expect(manifestRow?.status).toBe('fail');
+		expect(manifestRow?.findings[0]?.message ?? '').toContain('has no manifest.json');
+		// The remediation already named the mistake the generated workflow was making,
+		// word for word, and no run ever reached it.
+		expect(manifestRow?.findings[0]?.remediation ?? '').toContain(
+			'Point at the ast-N directory of one bundle, not at the root of an output tree.',
+		);
+	});
+
+	test('the prefix is below the --out directory, by the project, commit and AST major', () => {
+		expect(directory).toBe(join(bundleOut, prefix));
+		expect(directory).not.toBe(bundleOut);
 	});
 });

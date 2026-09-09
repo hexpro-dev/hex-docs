@@ -66,6 +66,7 @@ import {
 } from '../templates/page.js';
 import {
 	BUCKET_VARIABLE,
+	BUNDLE_OUT,
 	PUBLISH_WORKFLOW_PATH,
 	ROLE_VARIABLE,
 	publishWorkflow,
@@ -88,9 +89,6 @@ type ScaffoldKind = (typeof SCAFFOLD_KINDS)[number];
  * deserves a sentence rather than a schema error.
  */
 const SITE_OPTIONAL: Param = { help: SITE.help, type: 'string' };
-
-/** The directory the generated workflow builds into. A CI-only artefact. */
-const BUNDLE_OUT = '.hexdocs-bundle';
 
 /**
  * Where this file sits inside the mounted toolchain, resolved at import time.

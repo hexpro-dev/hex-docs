@@ -1,4 +1,13 @@
 node_modules/
+
+# `kit/bin/hexdocs` falls back to `npm install` when pnpm is absent, and npm writes a
+# lockfile beside the package.json it read. This package is mounted as a submodule in
+# five repositories, and a submodule holding an untracked file reports as modified in
+# its superproject: hex-nfc's `scripts/sync-public.sh` runs `git status --porcelain`
+# and dies on any output, so one fallback install on a laptop would abort a release in
+# a repository nobody was working in. Ignored here rather than in each consumer,
+# because the file is this package's to produce.
+kit/package-lock.json
 dist/
 coverage/
 .DS_Store

@@ -1209,17 +1209,37 @@ returns no finding for a deliberately misspelled `token.actions.githubuserconten
 The first real workflow run is the only test, which is why the failure mode and its message are
 written down in `infra/README.md`.
 
-### `s3:ListBucket` is required, and the comment that said otherwise was backwards
+### `s3:ListBucket`, and the paragraph that had it backwards in both directions
 
 S3 answers `HeadObject` on a key that is not there with **403 rather than 404** when the caller
-lacks `s3:ListBucket`, and the publish preflight is exactly that call on a first publish. So a
-publisher granted `GetObject` and `PutObject` and nothing else fails its very first publish with
-an access denial, on a key that does not exist. `kit/src/s3/client.ts` said the rule the other
-way round, which is the sentence somebody would have read while tightening the policy.
+lacks `s3:ListBucket`. `kit/src/s3/client.ts` originally stated that rule the wrong way round,
+which is the sentence somebody would have read while tightening the policy. It was corrected in
+step 6, and then the paragraph replacing it drew a conclusion that contradicted its own premise:
+that the grant could carry an `s3:prefix` condition **because** a HeadObject carries no prefix.
 
-The grant is `s3:ListBucket` on the bucket ARN with an `s3:prefix` condition, because a
-HeadObject request carries no `s3:prefix` in its context and the disambiguation is decided by
-the permission rather than by the request.
+The opposite follows. An absent condition key makes a `StringLike` false, and a statement whose
+condition is false does not apply, so a prefix-conditioned `s3:ListBucket` does nothing for any
+request that is not a list. `publish` opened with `head-object` on `<prefix>/manifest.json`, so
+the publisher role would have read its own empty prefix as an access denial, **on its first
+publish and on no other**. That last clause is the reason this was not left to the first real
+run to settle: a head on a key that exists answers 200 on `s3:GetObject` alone, so publishing
+that manifest once by any other route, including the step 6 smoke publish signing as root, makes
+the run pass without ever exercising the permission it depends on.
+
+The preflight is a `list-objects-v2` under the prefix now, and the head that follows runs only
+on a key the listing named. `s3:prefix` is populated from the request parameter of the same
+name, so the listing carries it and the condition applies; the head needs `s3:GetObject` and
+nothing else. `reconcile` already worked this way and shares the one walk rather than making a
+second, because two listings are two ideas of what is under the prefix.
+
+The reader policy keeps the masking argument and is right to: `reader.tf` grants `s3:ListBucket`
+with **no** condition, so it applies to a GetObject, which is what makes `prefetch` report a
+missing label rather than a denial. The asymmetry is now written at both policies.
+
+What is still unmeasured is S3 itself: nobody here has watched a prefix-conditioned grant answer
+a real HeadObject, because assuming the publisher role needs a GitHub OIDC token. The reasoning
+above is IAM evaluation logic rather than an observation, and the fix is what makes the question
+stop mattering.
 
 ### Two step-5 defects that only a real bucket would have found
 
@@ -1433,6 +1453,74 @@ sits between a letter and a digit. Refusing a hex neighbour on either side produ
 across the repository and still catches an ARN, an assignment and a sentence. The row prints
 the file and the column and never the value, because a guard that reports a leaked account id
 by quoting it has put it in a CI log.
+
+## The publish workflow (step 7)
+
+`kit/src/templates/workflow.ts` is the file an app repository commits, and step 7 is the
+first time anything ran it. Three of its assumptions were wrong, and the shape they share is
+worth more than any of them: each was pinned green by a test asserting one side of a pair.
+
+### `build` and `publish` were each correct against a literal and wrong against each other
+
+`build --out X` writes to `X/<project>/<commit>/ast-N`, which its own `detail` states and
+which `verifyBundle`'s remediation spells out word for word: "Point at the ast-N directory of
+one bundle, not at the root of an output tree." The generated workflow ran `publish X`. Every
+run would have failed after a successful compile, with no AWS call made at all, and
+`kit/test/templates/workflow.test.ts` asserted exactly that argument as the expected string.
+
+The workflow reads the path back out of `build --json` now rather than spelling it. That is
+not a style preference. A spelled path carries an AST major frozen at the moment `hexdocs
+init` ran, in every app repository at once, and the next `AST_VERSION` bump would break each
+of them with a message about a missing manifest rather than about a version.
+
+`kit/test/s3/publish.test.ts` carries the other half: the prefix `build` reports verifies as a
+bundle and the `--out` directory does not. Neither test is worth much without the other, which
+is the whole lesson: a pair of commands asserted separately against literals is a pair nothing
+checks.
+
+### The preflight was a head, and a head is the one call the publisher may not make
+
+`publish` opened with `head-object` on `<prefix>/manifest.json`. S3 answers a head on a key
+that is not there with 403 rather than 404 for a caller without `s3:ListBucket`, and the
+publisher role holds that grant only under a `StringLike` on `s3:prefix`, which a HeadObject
+request carries no value for. An absent condition key makes the condition false and the
+statement does not apply, so the role built to publish would have read its own empty prefix as
+an access denial.
+
+The timing is what made it urgent rather than something to discover on the first run. It goes
+wrong **only** on the first publish into a prefix: a head on a key that exists answers 200 on
+`s3:GetObject` alone. Publishing that manifest once by any other route, including a laptop
+signing as root exactly as the step 6 smoke publish did, makes the CI run pass without ever
+exercising the permission it depends on. The obvious rehearsal would have settled the question
+the wrong way and permanently.
+
+The preflight is a `list-objects-v2` under the prefix now, `reconcile` shares that one walk
+rather than making a second, and the head runs only on a key the listing named. A first
+publish asks S3 exactly one question before it starts writing, and makes zero head calls.
+
+### One of the four pinned actions was not what the comment above it said
+
+The template's comment claimed every action was pinned to a major that runs on node24. Read
+rather than assumed, from each action's own `action.yml`: `actions/checkout` and
+`actions/setup-node` declare node24 at v5, v6 and v7 alike, and
+`aws-actions/configure-aws-credentials` declares **node20** at v5 and node24 only from v6. The
+pins are v7, v6, v7 and v6, and the comment now says what was measured.
+
+### Three spellings of one scratch directory
+
+`BUNDLE_OUT` was a private const in `templates/source.ts` and again in `commands/scaffold.ts`,
+and `docs-publish-version/SKILL.md` spelled it a third way as `.hexdocs-out`. Three names for
+one directory is three lines an app repository has to gitignore, and the one nobody adds is the
+one that gets committed. It is exported from `templates/workflow.ts` now, beside the workflow
+that is the only reason the name exists.
+
+### What the recon found in hex-nfc and step 7 did not fix
+
+Reported rather than repaired, because each is a defect in that repository and none blocks a
+publish. `sync-public.yml` gates its job on `github.repository == 'Hex-Pro/hex-nfc'` and the
+repository is `hexpro-dev/hex-nfc`, so the mirror job has never run; the mirror repository does
+not exist either. `hexdocs check` runs nowhere in that repository, so `wiring-allow-paths` and
+the deny scan gate a publish and not a mirror push.
 
 ## Code style
 

@@ -147,15 +147,23 @@ data "aws_iam_policy_document" "publisher" {
     resources = [local.bucket_arn]
 
     condition {
-      # Not optional, and for a real S3 behaviour rather than for tidiness. Without
-      # s3:ListBucket, S3 answers HeadObject on a key that is not there with 403 rather than
-      # 404. The publish preflight is exactly that call on a first publish, so a role holding
-      # GetObject and no ListBucket turns every first publish into an access denial the
-      # operator reads as a broken role. Measured against two public buckets, one granting
-      # anonymous list and one not, on the same missing key.
-      #
       # The condition is what keeps the grant from being the whole bucket: a listing with no
       # prefix, or with another repository's prefix, does not match and is denied.
+      #
+      # It is only safe because every call that needs this grant is a listing. s3:prefix is
+      # populated from the request parameter of the same name, so list-objects-v2 carries it
+      # and HeadObject does not; an absent condition key makes a StringLike false, and a
+      # statement whose condition is false does not apply. A grant written this way therefore
+      # does nothing at all for a request that is not a list.
+      #
+      # That was wrong here once, and the comment this replaces asserted the contradiction in
+      # its own two halves. S3 answers a head on a key that is not there with 403 rather than
+      # 404 for a caller without s3:ListBucket, publish opened with exactly that call, and this
+      # comment cited the masking as the reason for a grant conditioned on a key that call
+      # cannot carry. The preflight is a listing now, both because that makes the grant
+      # sufficient and because the failure was invisible in the worst way: it appears only on
+      # the first publish into a prefix, so one publish by any other identity would have
+      # settled the question the wrong way and permanently.
       test     = "StringLike"
       variable = "s3:prefix"
       values   = local.publisher_claims[each.key].list_prefixes

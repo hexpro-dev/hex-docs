@@ -20,7 +20,7 @@ happened.
 ### 1. Compile and read the report
 
 ```hexdocs-cli
-hexdocs build --out .hexdocs-out
+hexdocs build --out .hexdocs-bundle
 ```
 
 `build` writes the bundle **even when the lint has errors**, and says so. That split is
@@ -35,7 +35,7 @@ a compile that is not deterministic, and both are worth stopping over.
 ### 2. Verify what you are about to publish
 
 ```hexdocs-cli
-hexdocs bundle .hexdocs-out/<project>/<sha>/ast-1
+hexdocs bundle .hexdocs-bundle/<project>/<sha>/ast-1
 ```
 
 Five rows: the manifest parses and satisfies its own invariants, the AST major is one this
@@ -45,7 +45,7 @@ digest matches, and every page and index payload parses against its schema.
 ### 3. Publish
 
 ```hexdocs-cli
-hexdocs publish .hexdocs-out/<project>/<sha>/ast-1 --bucket "$HEXDOCS_BUCKET"
+hexdocs publish .hexdocs-bundle/<project>/<sha>/ast-1 --bucket "$HEXDOCS_BUCKET"
 ```
 
 There is no default bucket, deliberately: hex-docs is a public repository and a default

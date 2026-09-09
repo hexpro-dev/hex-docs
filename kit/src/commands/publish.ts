@@ -57,7 +57,14 @@ import { raw } from '../compile/types.js';
 import type { RawFinding } from '../compile/types.js';
 import { bundleManifestSchema } from '../contracts/bundle.schema.js';
 import { defineCommand } from '../registry/command.js';
-import { base64ToHex, checkFindings, s3Client, type Refusal, type S3Client } from '../s3/client.js';
+import {
+	base64ToHex,
+	checkFindings,
+	s3Client,
+	type HeadResult,
+	type Refusal,
+	type S3Client,
+} from '../s3/client.js';
 import { mediaFor, type ObjectMedia } from '../s3/keys.js';
 
 import { BUCKET, bucketOf, PROFILE, REGION, regionOf } from './common.js';
@@ -86,28 +93,39 @@ interface Reconciliation {
 }
 
 /**
+ * A listing's absolute keys, reduced to the bundle-relative spelling the manifest uses.
+ *
+ * The prefix filter is redundant against the one call that makes this listing, which
+ * asks for `${prefix}/` and can return nothing else. It is here because the trailing
+ * slash is what makes that true: S3 matches a list prefix as a string, so dropping it
+ * would return `<prefix>-old/manifest.json` as well, and this function would then hand
+ * back a key with a leading fragment of another bundle's name.
+ */
+function storedKeys(keys: readonly string[], prefix: string): Set<string> {
+	return new Set(
+		keys.filter((key) => key.startsWith(`${prefix}/`)).map((key) => key.slice(prefix.length + 1)),
+	);
+}
+
+/**
  * What is already there, compared object by object.
  *
- * One `list-objects-v2` walk answers "which keys exist", which is cheap and paginated.
- * The digest comparison then costs one `head-object` per key that does exist, and only
- * for those: a first publish into an empty prefix makes zero head calls. A re-publish of
- * the same sha is where the cost lands, and that is the case the preflight short circuits
+ * `present` is the single `list-objects-v2` walk this command makes, already reduced to
+ * bundle-relative keys, and it is handed in rather than taken here because the preflight
+ * needs the same answer. Two walks would be two ideas of what is under the prefix, and
+ * the case where they disagree is the one nobody would think to write a test for.
+ *
+ * The digest comparison costs one `head-object` per key that does exist, and only for
+ * those: a first publish into an empty prefix makes zero head calls. A re-publish of the
+ * same sha is where the cost lands, and that is the case the preflight short circuits
  * before this function is ever called.
  */
-function reconcile(client: S3Client, prefix: string, manifest: BundleManifest): Reconciliation {
-	const listed = client.list(`${prefix}/`);
-	if (listed.kind === 'refused') {
-		return { matched: [], mismatched: [], missing: [], stray: [], refusal: listed };
-	}
-
-	// Back to bundle-relative keys, which is the spelling the manifest uses and the only
-	// one anything downstream should see.
-	const present = new Set(
-		listed.keys
-			.filter((key) => key.startsWith(`${prefix}/`))
-			.map((key) => key.slice(prefix.length + 1)),
-	);
-
+function reconcile(
+	client: S3Client,
+	prefix: string,
+	manifest: BundleManifest,
+	present: ReadonlySet<string>,
+): Reconciliation {
 	const named = new Set(manifest.objects.map((object) => object.key));
 	const stray = [...present].filter((key) => key !== MANIFEST_KEY && !named.has(key)).sort();
 
@@ -324,8 +342,43 @@ export const publish = defineCommand({
 			output([...verified, mediaRow, ...rows], { prefix, published: false, why }, [why]);
 
 		// ---- preflight ------------------------------------------------------
+		//
+		// The listing comes first, and that ordering is the whole of this block.
+		//
+		// S3 answers a head on a key that is not there with 404 rather than 403 only for a
+		// caller holding `s3:ListBucket`, and the publisher role grants that under a
+		// `StringLike` on `s3:prefix`. A HeadObject request carries no value for that key, an
+		// absent key makes the condition false, and a statement whose condition is false does
+		// not apply. So heading first meant the role that exists to publish would read its own
+		// empty prefix as an access denial, on its first run and only on its first run.
+		//
+		// That last clause is why this is not a thing to leave and see. Publish the manifest
+		// once by any other route, including a laptop signing as somebody else, and the head
+		// answers 200 on `s3:GetObject` alone: the permission the publisher actually depends
+		// on is never exercised again, and the run that proves the wiring proves it for the
+		// wrong reason.
+		//
+		// `list-objects-v2` sends the prefix as a request parameter, so it is the one call
+		// here whose request context carries the key the policy conditions on, and it answers
+		// the only question the preflight was asking: is a manifest already stored here. The
+		// head that follows runs only on a key the listing named, where 404 cannot arise and
+		// `s3:GetObject` is the whole permission.
+		const listed = client.list(`${prefix}/`);
+		if (listed.kind === 'refused') {
+			return stop(
+				[
+					listed.credentials
+						? notRunRow('publish-preflight', 'manifests', listed.why)
+						: failedRow('publish-preflight', 0, 'manifests', listed.why),
+				],
+				listed.why,
+			);
+		}
+		const present = storedKeys(listed.keys, prefix);
 
-		const preflight = client.head(`${prefix}/${MANIFEST_KEY}`);
+		const preflight: HeadResult = present.has(MANIFEST_KEY)
+			? client.head(`${prefix}/${MANIFEST_KEY}`)
+			: { kind: 'absent' };
 		if (preflight.kind === 'refused') {
 			return stop(
 				[
@@ -337,9 +390,9 @@ export const publish = defineCommand({
 			);
 		}
 
-		// The head call answered, so the row is reported on every path below rather than
-		// only on the one that short circuits. A report whose row set changes with the
-		// answer is one nobody can compare two runs of.
+		// Both calls answered, so the row is reported on every path below rather than only on
+		// the one that short circuits. A report whose row set changes with the answer is one
+		// nobody can compare two runs of.
 		const preflightRow = checkRow('publish-preflight', 1, 'manifests', []);
 
 		if (preflight.kind === 'present') {
@@ -367,7 +420,7 @@ export const publish = defineCommand({
 
 		// ---- reconcile ------------------------------------------------------
 
-		const state = reconcile(client, prefix, manifest);
+		const state = reconcile(client, prefix, manifest, present);
 		if (state.refusal !== null) {
 			return stop(
 				[

@@ -18,7 +18,10 @@
 # Two details worth keeping when that day comes. `s3:ListBucket` is in it although prefetch
 # never lists: without it S3 answers a GetObject on a missing key with 403 rather than 404,
 # and a version label pointing at a sha nobody published would then report an access denial
-# instead of naming the label and the commit. And the grant is the whole bucket rather than a
+# instead of naming the label and the commit. That argument works here and does not work in
+# `publishers.tf`, and the difference is the condition: this grant carries none, so it applies
+# to a request that supplies no `s3:prefix`, which is every GetObject. And the grant is the
+# whole bucket rather than a
 # project prefix list, because one website mounts several documented projects and a
 # prefix-scoped reader would need an edit every time one is added, whose cost is a deploy
 # that aborts. Write access is the thing worth scoping, and a reader has none.

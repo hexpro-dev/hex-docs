@@ -812,7 +812,7 @@ function publisherBoundary(outputs, redact) {
 					bucketArn,
 					where,
 					'allowed',
-					`Without s3:ListBucket, S3 answers a head on a key that is not there with 403 rather than 404, so this publisher's first publish reads as an access denial.`,
+					`publish and prefetch both open with list-objects-v2 under this prefix, so without it every publish stops at its own preflight. The prefix is supplied here because the real request carries one: that is what makes the StringLike condition on s3:prefix apply at all.`,
 				);
 			}
 		}

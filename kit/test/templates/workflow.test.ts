@@ -51,6 +51,8 @@ interface Mapping {
 interface Row {
 	indent: number;
 	text: string;
+	/** The body of a literal block scalar, with the block's own indent removed. */
+	block?: string[];
 }
 
 /**
@@ -59,12 +61,43 @@ interface Row {
  * A comment is dropped whole and a comment after a value is not: this generator writes
  * neither, and a reader that stripped trailing `#` would silently eat a `#` inside a
  * value if one ever appeared.
+ *
+ * A literal block scalar is the one construct whose body is not lines of this document.
+ * It is shell, where the indentation is data and a `#` is a comment about something
+ * else, so it is consumed here before either rule above can reach it and travels on the
+ * row that opened it. Without this the reader threw on the first `run: |` the generator
+ * emitted, which is a reader refusing a construct rather than a generator writing a bad
+ * one, and the difference is worth keeping visible.
  */
 function rowsOf(source: string): Row[] {
-	return source
-		.split('\n')
-		.filter((line) => line.trim() !== '' && !line.trimStart().startsWith('#'))
-		.map((line) => ({ indent: line.length - line.trimStart().length, text: line.trim() }));
+	const lines = source.split('\n');
+	const rows: Row[] = [];
+	for (let at = 0; at < lines.length; at += 1) {
+		const line = lines[at] as string;
+		if (line.trim() === '' || line.trimStart().startsWith('#')) continue;
+		const indent = line.length - line.trimStart().length;
+		const text = line.trim();
+		if (!text.endsWith(': |')) {
+			rows.push({ indent, text });
+			continue;
+		}
+		const body: string[] = [];
+		let base: number | null = null;
+		while (at + 1 < lines.length) {
+			const next = lines[at + 1] as string;
+			if (next.trim() !== '' && next.length - next.trimStart().length <= indent) break;
+			at += 1;
+			if (next.trim() === '') {
+				body.push('');
+				continue;
+			}
+			base ??= next.length - next.trimStart().length;
+			body.push(next.slice(base));
+		}
+		while (body.length > 0 && body[body.length - 1] === '') body.pop();
+		rows.push({ indent, text, block: body });
+	}
+	return rows;
 }
 
 /** No type coercion at all: every leaf comes back as the characters that were written. */
@@ -101,6 +134,10 @@ class Reader {
 			const key = row.text.slice(0, colon);
 			const rest = row.text.slice(colon + 1).trim();
 			this.at += 1;
+			if (row.block !== undefined) {
+				map[key] = row.block.join('\n');
+				continue;
+			}
 			if (rest !== '') {
 				map[key] = scalar(rest);
 				continue;
@@ -346,14 +383,28 @@ describe('what the file must never carry', () => {
 		expect(ARN.test(leaked)).toBe(true);
 	});
 
-	test('every GitHub expression in the file is one of the two variable reads', () => {
+	test('the only configured values in the file are the two variable reads', () => {
 		const expressions = [...YAML.matchAll(/\$\{\{[^}]*\}\}/g)].map((match) => match[0]);
-		expect(new Set(expressions)).toEqual(
-			new Set([`\${{ vars.${ROLE_VARIABLE} }}`, `\${{ vars.${BUCKET_VARIABLE} }}`]),
-		);
+		expect(expressions.filter((text) => text.includes('vars.'))).toEqual([
+			`\${{ vars.${ROLE_VARIABLE} }}`,
+			`\${{ vars.${BUCKET_VARIABLE} }}`,
+		]);
 		// Two reads, each written once. A third would be a third thing to configure before
 		// the first publish, and this is the assertion that would name it.
-		expect(expressions).toHaveLength(2);
+		//
+		// The other two expressions are not configuration and are asserted as the closed
+		// set they are: `runner.temp` is a path the runner owns, and the step output is how
+		// the publish step learns where the build wrote. Neither names anything about an
+		// account, which is what this block is here to police.
+		expect(new Set(expressions)).toEqual(
+			new Set([
+				`\${{ vars.${ROLE_VARIABLE} }}`,
+				`\${{ vars.${BUCKET_VARIABLE} }}`,
+				'${{ runner.temp }}',
+				'${{ steps.build.outputs.prefix }}',
+			]),
+		);
+		expect(expressions).toHaveLength(4);
 	});
 });
 
@@ -369,9 +420,27 @@ describe('the steps that do the work', () => {
 
 	test('build then publish, both through the mounted toolchain', () => {
 		expect(runs.map((step) => step['run'])).toEqual([
-			`${KIT_MOUNT}/kit/bin/hexdocs build --out ${OUT}`,
-			`${KIT_MOUNT}/kit/bin/hexdocs publish ${OUT}`,
+			[
+				`${KIT_MOUNT}/kit/bin/hexdocs build --json --out ${OUT} > "$BUILD_JSON"`,
+				`node -p '"prefix=" + require(process.env.BUILD_JSON).prefix' >> "$GITHUB_OUTPUT"`,
+			].join('\n'),
+			`${KIT_MOUNT}/kit/bin/hexdocs publish "\${{ steps.build.outputs.prefix }}"`,
 		]);
+	});
+
+	test('publish is never handed the directory build was pointed at', () => {
+		// The defect this replaces, stated as the assertion that would have caught it.
+		// `build --out X` writes to X/<project>/<commit>/ast-N, so `publish X` finds no
+		// manifest and refuses, having made no AWS call at all. It was green in three
+		// thousand tests because the suite asserted each command against a literal and
+		// nothing asserted the pair. `kit/test/s3/publish.test.ts` carries the other half:
+		// that the value `build` reports is the directory `publish` accepts.
+		const publish = runs[1]?.['run'];
+		expect(publish).not.toBe(`${KIT_MOUNT}/kit/bin/hexdocs publish ${OUT}`);
+		expect(publish).not.toContain(` ${OUT}`);
+		// And not a spelled-out path either, which would freeze an AST major into every
+		// app repository the day `hexdocs init` ran there.
+		expect(publish).not.toContain('ast-');
 	});
 
 	test('the bucket reaches publish through the environment', () => {

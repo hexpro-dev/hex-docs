@@ -23,6 +23,17 @@
 export const PUBLISH_WORKFLOW_PATH = '.github/workflows/docs-publish.yml';
 
 /**
+ * The directory the generated workflow builds into. A CI-only artefact.
+ *
+ * Exported, and that is the whole point of it being here. It was declared twice as a
+ * private const, in `templates/source.ts` and in `commands/scaffold.ts`, and the skill an
+ * agent follows by hand spelled it a third way as `.hexdocs-out`. Three spellings of one
+ * scratch directory is three lines an app repository has to gitignore, and the one nobody
+ * added is the one that gets committed.
+ */
+export const BUNDLE_OUT = '.hexdocs-bundle';
+
+/**
  * The repository variable holding the publisher role's ARN.
  *
  * A variable and never a literal. The ARN carries the AWS account id, and this file is
@@ -92,11 +103,15 @@ export function publishWorkflow(options: PublishWorkflowOptions): string {
 		'  publish:',
 		'    runs-on: ubuntu-latest',
 		'    steps:',
-		'      # Every action below is pinned to a major that runs on node24. The runners force a',
-		'      # node20 action onto node24 today and print a deprecation, and they will stop',
-		'      # running one entirely; a bump here is a bump to a node24 major, never to whatever',
-		'      # tag is newest.',
-		'      - uses: actions/checkout@v5',
+		'      # Every action below is pinned to a major whose own action.yml declares node24, and',
+		'      # that was read rather than assumed, because it is the one line here nobody can',
+		'      # check by eye. Measured: actions/checkout and actions/setup-node declare node24 at',
+		'      # v5, v6 and v7 alike, but aws-actions/configure-aws-credentials declares node20 at',
+		'      # v5 and node24 only from v6, so the comment this replaces was false for one of its',
+		'      # own four pins. The runners force a node20 action onto node24 today and print a',
+		'      # deprecation, and they will stop running one at all; a bump here is a bump to a',
+		'      # major whose runs: block says node24, never to whatever tag is newest.',
+		'      - uses: actions/checkout@v7',
 		'        with:',
 		'          # The toolchain is a submodule. Without this the checkout is the app repository',
 		'          # on its own and there is no hexdocs to run.',
@@ -118,12 +133,12 @@ export function publishWorkflow(options: PublishWorkflowOptions): string {
 		'        with:',
 		`          package_json_file: ${options.kitMount}/kit/package.json`,
 		'',
-		'      - uses: actions/setup-node@v5',
+		'      - uses: actions/setup-node@v7',
 		'        with:',
 		'          # 22 is the floor the toolchain declares and what the estate runs.',
 		"          node-version: '22'",
 		'',
-		'      - uses: aws-actions/configure-aws-credentials@v5',
+		'      - uses: aws-actions/configure-aws-credentials@v6',
 		'        with:',
 		'          # A repository variable, never a literal. The ARN carries the account id, and',
 		'          # this file lives in an app repository whose public mirror is protected by an',
@@ -138,17 +153,34 @@ export function publishWorkflow(options: PublishWorkflowOptions): string {
 		"      # job rather than the compiler's; the refusal is this step's exit code, which is 3",
 		'      # when the envelope carries an error, so a failing tree never reaches the step',
 		'      # below.',
+		'      #',
+		'      # `--json` puts the answer on stdout and every human row on stderr, so the log',
+		'      # still reads as a ladder and the directory handed to `publish` below is the one',
+		'      # `build` says it wrote. That is not a convenience. `build` writes the bundle to',
+		'      # <out>/<project>/<commit>/ast-N, so a workflow spelling that path out would carry',
+		'      # an AST major frozen at the moment `hexdocs init` ran, in every app repository at',
+		'      # once, and the next AST bump would break each of them with a message about a',
+		'      # missing manifest rather than about the version. Reading it back is what keeps the',
+		'      # layout declared in exactly one place.',
 		'      - name: build the bundle',
-		`        run: ${hexdocs} build --out ${options.out}`,
+		'        id: build',
+		'        env:',
+		'          BUILD_JSON: ${{ runner.temp }}/hexdocs-build.json',
+		'        run: |',
+		`          ${hexdocs} build --json --out ${options.out} > "$BUILD_JSON"`,
+		'          node -p \'"prefix=" + require(process.env.BUILD_JSON).prefix\' >> "$GITHUB_OUTPUT"',
 		'',
 		'      # Write-once per key, enforced server side as well as here. A re-run on an',
 		'      # unchanged commit writes nothing and exits 0; a re-run on a commit whose content',
 		'      # changed refuses rather than overwriting, which is what makes a published bundle',
 		'      # a thing you can quote a digest for.',
+		'      #',
+		'      # The step above exits 3 without reaching its second line if the bundle was not',
+		'      # written, so the output read here is never absent or null.',
 		'      - name: publish the bundle',
 		'        env:',
 		`          ${BUCKET_VARIABLE}: \${{ vars.${BUCKET_VARIABLE} }}`,
-		`        run: ${hexdocs} publish ${options.out}`,
+		`        run: ${hexdocs} publish "\${{ steps.build.outputs.prefix }}"`,
 		'',
 	];
 
