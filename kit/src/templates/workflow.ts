@@ -14,9 +14,17 @@
  * This file is deliberately **not** added to a public mirror's allowlist. In hex-nfc,
  * `.github/workflows/` is allowlisted per file and `sync-public.yml` is excluded by
  * simply not being listed; a docs publish workflow is excluded by the same mechanism,
- * absence, and for the same reason: it names the bucket and the publisher role, which is
- * the pair an attacker would want and which a reader of the public mirror could not use
- * anyway.
+ * absence.
+ *
+ * The reason is what the file points at rather than what it contains, and the difference
+ * is worth stating because the older wording here said it names the bucket and the role.
+ * It does not: both are `vars.` reads, which is the entire purpose of them being
+ * repository variables, so somebody auditing the allowlist against that sentence would
+ * find no identifier in the file and conclude the exclusion was written for a version
+ * that no longer exists. What the file does publish is the shape of the estate: that a
+ * bundle store exists, that a role is assumed by OIDC from one branch, which region, and
+ * the two variable names to go looking for. That is reconnaissance rather than a
+ * credential, which is why this is an exclusion and not a refusal to write the file.
  */
 
 /** There is no other place GitHub Actions reads workflows from. */

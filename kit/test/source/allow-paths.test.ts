@@ -51,6 +51,7 @@ import {
 	siteRootLine,
 	type AllowPathsRefusalId,
 } from '../../src/source/allow-paths.js';
+import { BUCKET_VARIABLE, ROLE_VARIABLE, publishWorkflow } from '../../src/templates/workflow.js';
 
 /**
  * The allowlist of the one repository that has one, in its real shape.
@@ -366,12 +367,37 @@ describe('what a refusal says', () => {
 		expect(refusal.why).toContain('the exact shape of what is being withheld');
 	});
 
-	test('the publish workflow message names the bucket and the role as the reason', () => {
+	test('the publish workflow message gives the reason the file can be checked against', () => {
+		// It used to say the file names the bucket and the role. It does not: both are
+		// `vars.` reads, which is the entire purpose of them being repository variables, so
+		// an operator checking that sentence against the file would find no identifier and
+		// conclude the exclusion was written for a version that no longer exists. What the
+		// file publishes is the shape of the estate, and the message says so now. This is
+		// the copy an operator actually reads, which is why it is asserted here rather than
+		// left to the module header.
 		for (const entry of [PUBLISH_WORKFLOW_RELATIVE, '.github/workflows', '.github']) {
 			const refusal = onlyRefusal(withEntry(entry));
 			expect(refusal.id).toBe('publish-workflow');
-			expect(refusal.why).toContain('the bucket and the publishing role');
+			expect(refusal.why).toContain('carries neither the bucket nor the role');
+			expect(refusal.why).toContain('shape of the estate');
 			expect(refusal.why).toContain('absent from this array');
+		}
+	});
+
+	test('no refusal message claims the generated workflow carries an identifier', () => {
+		// The generator and this message are the pair: if `publishWorkflow` ever inlined a
+		// literal, the sentence above would become true and this test would be the one that
+		// has to change with it. Asserted against the rendered file rather than against the
+		// template source, because a literal could arrive through either.
+		const rendered = publishWorkflow({
+			kitMount: 'hex-docs',
+			region: 'ap-southeast-2',
+			out: '.hexdocs-bundle',
+		});
+		expect(rendered).not.toMatch(/arn:aws/);
+		expect(rendered).not.toMatch(/(?<![0-9a-fA-F])[0-9]{12}(?![0-9a-fA-F])/);
+		for (const name of [ROLE_VARIABLE, BUCKET_VARIABLE]) {
+			expect(rendered).toContain(`\${{ vars.${name} }}`);
 		}
 	});
 

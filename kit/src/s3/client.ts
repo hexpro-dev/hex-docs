@@ -316,9 +316,16 @@ export function s3Client(exec: Exec, auth: S3Auth, cwd: string): S3Client {
 		// because the caller can list the bucket. S3's rule is the opposite way round from
 		// what an earlier version of this comment claimed: with `s3:ListBucket` a missing
 		// key answers 404, and without it the same key answers 403, so an identity granted
-		// only `s3:GetObject` cannot tell the two apart. That is why the publisher's policy
-		// grants `s3:ListBucket` on the bucket as well as the object actions, and why the
-		// 403 below is reported rather than read as absence.
+		// only `s3:GetObject` cannot tell the two apart. That is why the 403 below is
+		// reported rather than read as absence.
+		//
+		// It is not why the publisher's policy grants `s3:ListBucket`, which is what this
+		// comment used to say next. That grant carries a `StringLike` on `s3:prefix`, a
+		// HeadObject supplies no value for that key, and an absent key makes the condition
+		// false, so it does nothing for the call described above. `publish` never makes that
+		// call blind now: its preflight is a listing, and the head that follows runs only on a
+		// key the listing named. The reader policy is the one that keeps this paragraph as its
+		// reason, because `reader.tf` grants ListBucket with no condition at all.
 		//
 		// Reading 404 as absent is safe on its own account: the publisher's next step is a
 		// put carrying `--if-none-match '*'`, which fails with a 412 if something is in

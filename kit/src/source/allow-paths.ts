@@ -335,10 +335,12 @@ function forbiddenMessage(value: string, normalised: string, covered: string): s
 
 function publishWorkflowMessage(value: string): string {
 	return (
-		`The allowlist entry "${value}" publishes the documentation publish workflow. It names ` +
-		'the bucket and the publishing role, and it is withheld the same way the mirror ' +
-		'workflow is, by being absent from this array. That is why workflows are listed here ' +
-		'one file at a time, and a reader of the public mirror cannot run it anyway.'
+		`The allowlist entry "${value}" publishes the documentation publish workflow. It ` +
+		'carries neither the bucket nor the role, which are repository variables, and it does ' +
+		'describe the shape of the estate: that a bundle store exists, that a role is assumed ' +
+		'by OIDC from one branch, and the two variable names to go looking for. It is withheld ' +
+		'the same way the mirror workflow is, by being absent from this array, which is why ' +
+		'workflows are listed here one file at a time.'
 	);
 }
 

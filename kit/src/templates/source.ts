@@ -208,6 +208,12 @@ export function denyList(options: { schemaRef: string | null }): string {
 				flags: '',
 				why: 'A long-lived AWS access key id. A page carrying one has published half a credential, and the half that names the account.',
 			},
+			{
+				id: 'aws-account-identifier',
+				pattern: 'arn:aws[a-z-]*:|(?<![0-9a-fA-F])[0-9]{12}(?![0-9a-fA-F])',
+				flags: '',
+				why: 'An AWS ARN or a bare twelve digit account id. The page likeliest to carry one is the page describing how this documentation is published, which an author writes with the workflow open beside them. The digit half refuses a hex neighbour on either side: a word boundary sits between a letter and a digit, so a plain twelve digit match hits every sha256 digest on the page.',
+			},
 		],
 	};
 	return json(list);
@@ -408,6 +414,16 @@ export function sourceScaffold(options: SourceScaffoldOptions): SourceScaffoldPl
 	);
 	notes.push(
 		'The publish workflow needs two repository variables before it can run: HEXDOCS_PUBLISH_ROLE and HEXDOCS_BUCKET. Neither is written into the file, because it is committed to a repository whose public mirror is protected by an allowlist rather than by a rule.',
+	);
+	// Asked for rather than written, because this command never edits a file it did not
+	// create and a repository already has a .gitignore with its own reasons in it. It is a
+	// note rather than silence because the directory lands in the repository root as a full
+	// object tree, and the next `git add -A` commits it: on a repository with a public
+	// mirror that is a directory nobody reviewed against the allowlist. The consumer half
+	// treats the same class of thing as first class, with a gitignore edit of its own and a
+	// `prefetch-gitignore` row; this side had nothing at all.
+	notes.push(
+		`Add ${BUNDLE_OUT}/ to .gitignore. That is where the publish workflow compiles, and a build run by hand in a checkout puts the whole object tree in the repository root as untracked files.`,
 	);
 	notes.push(
 		'Do not add the publish workflow to a public-mirror allowlist, and do not put a helper it calls in .github/scripts/, which hex-nfc allowlists as a whole directory. Exclusion by absence is what keeps the bucket name and the role name off the mirror.',

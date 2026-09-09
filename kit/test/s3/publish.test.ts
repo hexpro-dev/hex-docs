@@ -137,6 +137,16 @@ class FakeS3 {
 	/** Every call fails with this on stderr. Used for the credentials arm. */
 	failWith: string | null = null;
 
+	/**
+	 * Fail one recipe and answer every other normally.
+	 *
+	 * `failWith` cannot reach the preflight head at all. It refuses the first call, which
+	 * since the preflight became a listing is the listing, so the head below it is never
+	 * made. Measured with v8 over this file: the head refusal arm in `publish.ts` executed
+	 * zero times, which is a whole arm of the command reachable only in production.
+	 */
+	failOne: { id: RecipeId; stderr: string } | null = null;
+
 	put(key: string, bytes: Buffer): void {
 		// Base64 of the raw digest, computed here rather than through `hexToBase64`: this
 		// stands in for S3, which has never heard of that helper, and a fake that reused it
@@ -168,6 +178,9 @@ class FakeS3 {
 			env: { region: process.env['AWS_REGION'], profile: process.env['AWS_PROFILE'] },
 		});
 		if (this.failWith !== null) return { status: 255, stdout: '', stderr: this.failWith };
+		if (this.failOne !== null && this.failOne.id === id) {
+			return { status: 255, stdout: '', stderr: this.failOne.stderr };
+		}
 		return this.answer(id, holes);
 	};
 
@@ -822,6 +835,48 @@ describe('a call that could not be made', () => {
 		expect(String(preflight.note)).toContain('Unable to locate credentials');
 		expect(outcome.code).toBe(3);
 		expect(fake.puts()).toHaveLength(0);
+	});
+
+	test('a head that refuses after the listing named the key is a failure, not an absence', async () => {
+		// The arm the listing-first preflight created and nothing reached. The prefix is
+		// published, so the listing names manifest.json and the head is made; the head then
+		// refuses. Reading that as absence would republish over a bundle that is already
+		// there, which the put would refuse one object at a time.
+		const fake = new FakeS3();
+		const first = await run(fake);
+		expect(first.data['published']).toBe(true);
+
+		fake.failOne = {
+			id: 'aws.head-object',
+			stderr: 'An error occurred (403) when calling the HeadObject operation: Forbidden',
+		};
+		const outcome = await run(fake);
+
+		const preflight = row(outcome, 'publish-preflight');
+		expect(preflight.status).toBe('fail');
+		expect(String(preflight.note)).toContain('403');
+		expect(outcome.code).toBe(3);
+		// The listing was made and answered; only the head refused.
+		expect(fake.of('aws.list-objects').length).toBeGreaterThan(1);
+	});
+
+	test('a head that refuses for want of credentials is a not-run row, not a fail', async () => {
+		// Same arm, other branch. A session that expired between the listing and the head has
+		// not found anything wrong with the bundle, so the row must not read as a failure.
+		const fake = new FakeS3();
+		await run(fake);
+
+		fake.failOne = {
+			id: 'aws.head-object',
+			stderr:
+				'An error occurred (ExpiredToken) when calling the HeadObject operation: The provided token has expired.',
+		};
+		const outcome = await run(fake);
+
+		const preflight = row(outcome, 'publish-preflight');
+		expect(preflight.status).toBe('not-run');
+		expect(String(preflight.note)).toContain('ExpiredToken');
+		expect(outcome.code).toBe(3);
 	});
 
 	test('a bucket that does not exist is a failure rather than an empty prefix', async () => {

@@ -1546,8 +1546,12 @@ submodule by rewriting an https url, and can do nothing with an ssh one.
 Reported rather than repaired, because each is a defect in that repository and none blocks a
 publish. `sync-public.yml` gates its job on `github.repository == 'Hex-Pro/hex-nfc'` and the
 repository is `hexpro-dev/hex-nfc`, so the mirror job has never run; the mirror repository does
-not exist either. `hexdocs check` runs nowhere in that repository, so `wiring-allow-paths` and
-the deny scan gate a publish and not a mirror push.
+not exist either. `hexdocs check` runs nowhere in that repository, so `wiring-allow-paths` runs in no
+automation there at all. The deny scan is the half that does gate a publish, because
+`internal-leak` and `no-competitor-name` are lint rules `build` runs and `build` exits 3
+on an error envelope. Neither gates a mirror push, and `wiring-allow-paths` could not gate
+a publish even if `check` ran on every commit: it reads the mirror script, and publishing
+does not.
 
 ## Code style
 
