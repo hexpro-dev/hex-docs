@@ -1514,6 +1514,33 @@ one directory is three lines an app repository has to gitignore, and the one nob
 one that gets committed. It is exported from `templates/workflow.ts` now, beside the workflow
 that is the only reason the name exists.
 
+### What the first two runs measured
+
+A first publish makes **six AWS calls**: one `list-objects-v2` and five puts. Zero heads,
+because the listing came back empty and there was nothing to compare. That number is the
+evidence for the preflight change above, and it is the number the old code could not have
+produced: its first call was a head on a key that was not there.
+
+The second run was a `workflow_dispatch` on the same sha. It recompiled to byte-identical
+output, the preflight found the stored manifest carrying the same digest, and
+`publish-reconcile` and `publish-upload` both came back `SKIPPED` with the reason. Five
+objects and five versions in the bucket after two runs, so the write-once store holds and the
+compile is reproducible across two separate runner invocations rather than only across two
+runs on one machine.
+
+Everything the first run also settled, none of which any local test could: STS maps
+`ref`, `repository_id` and `sub` the way the trust policy assumes, so the OIDC condition keys
+are real and correctly spelled; `actions/checkout` fetches an https submodule with the
+job's own token and a public repository needs nothing further; `bin/hexdocs` installs its own
+dependencies on a clean runner in under two seconds; and `pnpm/action-setup` with
+`run_install` unset does not install, which matters because the workspace root has no
+`package.json` and an install there would have failed.
+
+The submodule is mounted with an **https** url, against the estate precedent of `git@`. Every
+other submodule in the estate lives in a repository with no CI, so a developer machine with an
+ssh key was the only thing that ever checked one out. `actions/checkout` authenticates a
+submodule by rewriting an https url, and can do nothing with an ssh one.
+
 ### What the recon found in hex-nfc and step 7 did not fix
 
 Reported rather than repaired, because each is a defect in that repository and none blocks a
