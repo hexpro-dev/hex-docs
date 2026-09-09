@@ -35,6 +35,8 @@
 		"lint": "node scripts/lint.mjs",
 		"paint": "node scripts/check-paint.mjs",
 		"check:cli": "node scripts/check-cli.mjs",
+		"check:infra": "node scripts/check-infra.mjs",
+		"check:stack": "node scripts/check-stack.mjs",
 		"check:deps": "node scripts/check-imports.mjs",
 		"schemas": "pnpm --dir kit schemas",
 		"format": "prettier --write .",

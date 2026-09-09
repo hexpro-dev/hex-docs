@@ -14,9 +14,9 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 import { check, notRun, render } from './lib/report.mjs';
 
@@ -56,10 +56,15 @@ function countTsconfigs() {
  *   that number smaller rather than making the row fail; the number of files collected is
  *   what can be compared against the disk.
  * @property {boolean} [allowZero]  Whether a row that examined nothing may still pass.
- *   True for exactly one step, and only because that step has its own notion of a
- *   deliberate non-run: the browser check reports SKIPPED when no browser is installed and
- *   FAILS when the same thing happens in CI, where the runner image ships one. Every other
- *   row that examined nothing has stopped examining something.
+ *   True for `paint` alone. `check-paint.mjs` produces a single row, and with no browser
+ *   installed that row is `skipped(...)`, so the whole guard really does exit 0 having
+ *   examined zero probes; in CI the same state is a failure, because the runner image ships
+ *   Chrome. Measured against the other candidate: `check-infra.mjs`'s first row is pure
+ *   JavaScript, runs on every machine and counts one assertion per thing it checked, so
+ *   `HEXDOCS_TERRAFORM=/nonexistent/terraform` gives a full invariants row and three SKIPPED
+ *   rows rather than a zero. A zero from that guard would mean a checkout with no
+ *   `infra/*.tf` in it, which is a failure and must stay one, so it carries no flag.
+ *   Every other row that examined nothing has stopped examining something.
  * @property {string} [note]
  */
 
@@ -233,6 +238,27 @@ export const STEPS = [
 		allowZero: true,
 	},
 	{
+		name: 'terraform',
+		// The infrastructure half, offline. `terraform fmt` needs nothing at all, and
+		// `validate` and `test` need neither network nor credentials once
+		// `init -backend=false` has run, which is what keeps this row inside the
+		// `permissions: contents: read` the CI job already declares. The credentialled
+		// verification is `pnpm check:stack`, and it is deliberately not here: a row that
+		// cannot run reports NOT RUN, NOT RUN fails the run, and a row needing an AWS profile
+		// would fail this ladder on every machine that does not have one.
+		argv: ['pnpm', 'check:infra'],
+		unit: 'things',
+		count: countExamined,
+		// No `allowZero`, deliberately, and this is the note that stops it coming back. The
+		// guard's own first row is pure JavaScript and always runs: with no terraform binary at
+		// all it still reports its whole invariants row and three SKIPPED rows. The only way
+		// this step can reach zero is a checkout with nothing under `infra/`, and `stackInvariants`
+		// answers that with a FAIL rather than an empty pass, so the guard exits 1 and this row
+		// is built from the exit code before any exemption is consulted. The flag was here for
+		// a state the guard cannot produce, which is a disarm sitting ready for the day
+		// somebody softens that arm.
+	},
+	{
 		name: 'formatting',
 		// The verbose variant, because `prettier --check` prints no file count and,
 		// worse, exits 0 when its pattern matched nothing at all. That is exactly the
@@ -330,7 +356,32 @@ export function run(steps = STEPS) {
 	return results;
 }
 
-if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+/**
+ * Whether this file is the program, resolved through symlinks on both sides.
+ *
+ * The text comparison the other guards here use, `import.meta.url` against
+ * `pathToFileURL(argv[1]).href`, is false through any symlink: node resolves
+ * `import.meta.url` through realpath and argv keeps the path the shell was given. The
+ * script then prints nothing and exits 0.
+ *
+ * That is a latent trap in the other guards and a live one here, which is why only this
+ * file is changed. Every other guard is spawned as `pnpm <script>` with a relative path,
+ * where the comparison cannot fire, and if one ever did go silent its ladder row would read
+ * zero and `check()` turns a zero into a FAIL. This file is the ladder. Nothing wraps it, it
+ * is the one a person or a CI step invokes by whatever path they happen to have, and a
+ * silent exit 0 from it is the whole verification reporting success having run nothing.
+ */
+function isProgram() {
+	const argv = process.argv[1];
+	if (argv === undefined) return false;
+	try {
+		return realpathSync(argv) === realpathSync(fileURLToPath(import.meta.url));
+	} catch {
+		return false;
+	}
+}
+
+if (isProgram()) {
 	const { ok } = render('hex-docs verification', run());
 	process.exit(ok ? 0 : 1);
 }

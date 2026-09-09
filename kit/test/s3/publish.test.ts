@@ -7,11 +7,26 @@
  * argv `spawnSync` would have been handed: a flag deleted from a template fails here. What
  * the fake supplies in return is my reading of the AWS CLI, taken from its error strings
  * and its `s3api` output shapes, and a fake that agrees with my reading of a tool is not
- * that tool. Three claims in particular are unproved until a bucket exists: that S3
- * rejects a second write to a key under `--if-none-match '*'` with a 412 whose message
- * matches `PRECONDITION_FAILED`, that `--checksum-sha256` is compared server side against
- * the body it arrives with, and that `head-object` returns the same base64 in
- * `ChecksumSHA256` that the put sent. Those are step 6's, when the bucket is real.
+ * that tool.
+ *
+ * **Three claims that were unproved here are now measured, and step 6 measured them
+ * against the real bucket.** S3 answers a second write to an existing key under
+ * `--if-none-match '*'` with `An error occurred (PreconditionFailed) ... At least one of
+ * the pre-conditions you specified did not hold`, which is what `PRECONDITION_FAILED`
+ * matches. `head-object` returns the same base64 the put sent, so a re-publish of an
+ * unchanged commit reconciles to zero uploads. And the bucket policy's own deny answers an
+ * unconditional put with `AccessDenied ... with an explicit deny in a resource-based
+ * policy`, to the account root user, which is the write-once guarantee holding against the
+ * strongest principal in the account.
+ *
+ * One claim from that list is still open, and it is worth keeping open: whether
+ * `--checksum-sha256` is compared server side against the body rather than stored as a
+ * label. Proving it needs a deliberately wrong digest, and the run that would prove it
+ * writes an object at a real key in a store where nothing can then delete it.
+ *
+ * Step 6 also found what a fake cannot: every test here injects an `Exec` and none of them
+ * reaches `runRecipe`, which refused `text/plain; charset=utf-8` outright. See the comment
+ * on `REFUSED_IN_ARGV` in `kit/src/exec/run.ts`.
  *
  * This is row 7 of the failure catalogue: a publish overwriting a labelled bundle. The
  * mutation that must turn it red is dropping `--if-none-match` from the put recipe, and
@@ -70,7 +85,7 @@ interface Recorded {
  * whole point: the assertions below pin the filled result, so a template that loses a
  * flag produces a different array here and the diff names the flag.
  *
- * The one thing it does not model is `runRecipe`'s metacharacter refusal. No hole in this
+ * The one thing it does not model is `runRecipe`'s own refusal. No hole in this
  * file carries one, and the arm that turns an `ExecRefusal` into a row is exercised
  * separately by the client's own caller.
  */
@@ -342,6 +357,8 @@ describe('the exact argv of a first publish', () => {
 			BUCKET,
 			'--key',
 			`${prefix}/${MANIFEST_KEY}`,
+			'--checksum-mode',
+			'ENABLED',
 			'--output',
 			'json',
 		]);
@@ -894,11 +911,12 @@ describe('the client, on the answers a good publish never produces', () => {
 	});
 
 	test('an ExecRefusal becomes a refusal row rather than a stack trace out of a prebuild', () => {
-		// Thrown for a hole carrying a shell metacharacter, and the realistic one is a cache
-		// directory under a home directory with a space in it.
+		// Thrown for exactly two things, an arity mismatch and a hole carrying a NUL. Whatever
+		// the reason, the honest report from a `prebuild` hook is a row naming the value, not a
+		// stack trace out of somebody's deploy.
 		const refusing = s3Client(
 			() => {
-				throw new ExecRefusal('a value contains a shell metacharacter: "/Users/A B/cache"');
+				throw new ExecRefusal('a value contains a NUL, which cannot be passed in an argv');
 			},
 			AUTH,
 			root,
@@ -906,7 +924,7 @@ describe('the client, on the answers a good publish never produces', () => {
 		const result = refusing.get('k', '/Users/A B/cache/k');
 		expect(result.kind).toBe('refused');
 		if (result.kind !== 'refused') throw new Error('expected a refusal');
-		expect(result.why).toContain('shell metacharacter');
+		expect(result.why).toContain('NUL');
 	});
 
 	test('anything else thrown by the exec is not swallowed', () => {
@@ -920,6 +938,101 @@ describe('the client, on the answers a good publish never produces', () => {
 			root,
 		);
 		expect(() => throwing.head('k')).toThrow(TypeError);
+	});
+
+	test('a 403 naming AccessDenied says both things it can mean, because S3 will not say which', () => {
+		// The commonest real failure on the read side, and the one whose raw message sends an
+		// operator to the wrong place. S3 answers a GetObject on a missing key with 403 rather
+		// than 404 for a caller without `s3:ListBucket`, so `AccessDenied` means either the
+		// object is absent or this identity may not know. Quoting the CLI verbatim names only
+		// the second.
+		//
+		// The operation in the fixture is GetObject and it used to be HeadObject, which cannot
+		// produce this string: a HEAD response has no body, so botocore has no code to print.
+		// That case is the test below, and attributing this message to a head made the arm that
+		// actually fires in production look covered when it never was.
+		const denied = client(() => ({
+			status: 255,
+			stdout: '',
+			stderr:
+				'\nAn error occurred (AccessDenied) when calling the GetObject operation: Access Denied\n',
+		}));
+
+		const got = denied.get('hex-nfc/abc/ast-1/manifest.json', join(root, 'out.json'));
+		expect(got.kind).toBe('refused');
+		if (got.kind !== 'refused') throw new Error('expected a refusal');
+		expect(got.why).toContain('missing object or a missing permission');
+		expect(got.why).toContain('s3:ListBucket');
+		// Not a credentials refusal. A credentials refusal becomes a `not-run` row naming the
+		// missing profile, and a policy that is present and too narrow is not that: the run
+		// did look, and what it found is a boundary.
+		expect(got.credentials).toBe(false);
+	});
+
+	test('a bare 403 on a head names the third state, because HeadObject cannot tell them apart', () => {
+		// Measured on aws-cli 2.36.19, byte for byte, from two different causes: a deactivated
+		// access key against a bucket that exists, and an unsigned head against a bucket that
+		// grants no anonymous access. A HEAD response has no body, so botocore synthesises the
+		// code from the status and every identity failure and every policy boundary prints this
+		// one line. `publish` heads the manifest before it does anything else, so this is where
+		// a rotated key lands, and the two-state sentence sent that operator to check the bundle
+		// and then the policy, neither of which is the problem.
+		const forbidden = client(() => ({
+			status: 255,
+			stdout: '',
+			stderr: '\nAn error occurred (403) when calling the HeadObject operation: Forbidden\n',
+		}));
+
+		const head = forbidden.head('hex-nfc/abc/ast-1/manifest.json');
+		expect(head.kind).toBe('refused');
+		if (head.kind !== 'refused') throw new Error('expected a refusal');
+		expect(head.why).toContain('credential this account no longer accepts');
+		// The masking guidance stays, because a narrow policy is still the commonest cause, and
+		// so does the one call that separates the three: `get-object` has a body.
+		expect(head.why).toContain('s3:ListBucket');
+		expect(head.why).toContain('get-object');
+		// Still not a credentials refusal, deliberately. Flipping this would turn a publisher
+		// role that is merely too narrow into a `not-run` row saying the machine is
+		// unconfigured, which is the same misreport in the other direction.
+		expect(head.credentials).toBe(false);
+	});
+
+	test('a dead access key is a credentials refusal wherever the CLI names it', () => {
+		// `InvalidAccessKeyId` and `InvalidToken` are what S3 prints for a deleted or
+		// deactivated key and for a malformed session token, and they arrive only where the
+		// response carries a body: on `get-object` and `list-objects-v2`, never on a head.
+		// Without them in `NO_CREDENTIALS` a rotated key is a plain FAIL row saying the bundle
+		// is wrong, and `publish`'s reconcile reads exactly this flag to choose between a
+		// `not-run` row and a failure.
+		const dead = client(() => ({
+			status: 255,
+			stdout: '',
+			stderr:
+				'\nAn error occurred (InvalidAccessKeyId) when calling the GetObject operation: The AWS Access Key Id you provided does not exist in our records.\n',
+		}));
+		const got = dead.get('hex-nfc/abc/ast-1/manifest.json', join(root, 'out.json'));
+		expect(got.kind).toBe('refused');
+		if (got.kind !== 'refused') throw new Error('expected a refusal');
+		expect(got.credentials).toBe(true);
+
+		const bogusToken = client(() => ({
+			status: 255,
+			stdout: '',
+			stderr:
+				'\nAn error occurred (InvalidToken) when calling the ListObjectsV2 operation: The provided token is malformed or otherwise invalid.\n',
+		}));
+		const listed = bogusToken.list('hex-nfc/abc/');
+		expect(listed.kind).toBe('refused');
+		if (listed.kind !== 'refused') throw new Error('expected a refusal');
+		expect(listed.credentials).toBe(true);
+	});
+
+	test('a 404 is still absence, and does not pick up the denial sentence', () => {
+		// The pair to the case above. Folding the two would make a first publish, whose
+		// preflight heads a manifest that is not there yet, report a permissions problem on
+		// every run.
+		const missing = client(() => ({ status: 255, stdout: '', stderr: NOT_FOUND_STDERR }));
+		expect(missing.head('k')).toEqual({ kind: 'absent' });
 	});
 
 	test('calls counts processes, which is what a row examined column reports', () => {

@@ -11,3 +11,26 @@ coverage/
 
 # Local bundle cache written by `hexdocs prefetch` and `hexdocs build`.
 .hexdocs-cache/
+
+# The terraform stack's working files. `.terraform/` is a provider cache the aws provider
+# alone makes 778 MB of; the tfvars carry the account id, the bucket name and the publisher
+# map, and the state and plan files carry every rendered policy. None of them belongs in a
+# public repository, and `scripts/check-infra.mjs` fails if git ever tracks one.
+#
+# `.terraform.lock.hcl` is deliberately absent from this list. It is committed, because
+# `~> 6.0` floats and the lock file is what makes CI and a laptop verify the same provider.
+#
+# These globs are narrower than `FORBIDDEN_TRACKED` in `scripts/check-infra.mjs` on
+# purpose, and they are not a copy of it. They cover the spellings an operator will really
+# have at `infra/` top level; the guard's predicates are wider, so that the invariants row
+# catches the shapes no glob here reaches, such as a `.tfstate` under `infra/tests/` or a
+# `.terraform` directory nested below the top level. A belt that matched the braces exactly
+# would catch nothing the braces missed.
+infra/.terraform/
+infra/*.tfvars
+# Terraform auto-loads `terraform.tfvars.json` and `*.auto.tfvars.json` exactly as it loads
+# their HCL twins, and `infra/*.tfvars` does not match either.
+infra/*.tfvars.json
+infra/*.tfstate
+infra/*.tfstate.*
+infra/*.tfplan

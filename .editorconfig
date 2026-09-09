@@ -8,9 +8,26 @@ indent_size = 2
 insert_final_newline = true
 trim_trailing_whitespace = true
 
+# Markdown is space indented everywhere in this tree, 49 files of it and not one tab, so
+# the `[*]` default above was wrong about the largest set of files in the repository. It
+# only ever mattered for a newly typed line, because EditorConfig has no reindent
+# semantics: `indent_style` applies at edit time and nothing in it rewrites existing
+# content. Saying so here is what stops the next new file being the odd one out.
 [*.md]
+indent_style = space
+indent_size = 2
 trim_trailing_whitespace = false
 
 [*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+# `terraform fmt` writes two spaces and has no option to write anything else, and
+# `scripts/check-infra.mjs`'s fmt row fails the ladder on a file it would reformat. Without
+# this section the `[*]` default tells an editor to type a tab into a `.tf` file, which
+# makes a guard the remedy for a hint the repository itself gave. `*.hcl` covers
+# `infra/tests/policies.tftest.hcl` and `infra/.terraform.lock.hcl` as well, because
+# EditorConfig's `*` matches dots.
+[*.{tf,tfvars,hcl}]
 indent_style = space
 indent_size = 2

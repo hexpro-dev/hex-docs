@@ -5,11 +5,13 @@ import {
 	readdirSync,
 	readFileSync,
 	rmSync,
+	symlinkSync,
 	writeFileSync,
 } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 
@@ -299,7 +301,7 @@ describe('the verification ladder', () => {
 		}
 	});
 
-	test('the ladder covers typecheck, both suites, the surface, both guards, paint and formatting', () => {
+	test('the ladder covers typecheck, both suites, the surface, the guards, paint, terraform and formatting', () => {
 		const names = (STEPS as { name: string }[]).map((step) => step.name);
 		expect(names).toEqual([
 			'typecheck',
@@ -309,16 +311,27 @@ describe('the verification ladder', () => {
 			'dependency gate',
 			'house lint',
 			'paint',
+			'terraform',
 			'formatting',
 		]);
 	});
 
-	test('exactly one step may report zero and still pass, and it is the browser one', () => {
-		// Every other row that examined nothing has stopped examining something, which is
-		// the rule this ladder exists to hold. The paint row is the exception because it has
-		// its own notion of a deliberate non-run: it reports SKIPPED where no browser is
-		// installed and FAILS when the same thing happens in CI, where the runner image
-		// ships one.
+	test('only paint may report zero, and terraform is deliberately not beside it', () => {
+		// Every other row that examined nothing has stopped examining something, which is the
+		// rule this ladder exists to hold. `paint` is the one exception, and it is a real one:
+		// `check-paint.mjs` produces a single row, that row is `skipped(...)` with no browser
+		// installed, so the guard genuinely exits 0 having examined zero probes. In CI the
+		// same state is a failure, because the runner image ships Chrome.
+		//
+		// `terraform` carried the flag too and could not use it. Measured with
+		// `HEXDOCS_TERRAFORM=/nonexistent/terraform`: `check-infra.mjs` still reports a full
+		// invariants row, which is pure JavaScript and always runs, plus three SKIPPED rows,
+		// and it exits 0 having examined a great deal. The only state that reaches zero is a
+		// checkout with nothing under `infra/` to parse, and the guard answers that with a
+		// FAIL, so this row is built from the exit code before any exemption is read. It was
+		// a disarm sitting ready for the day somebody softens that arm, which is the one
+		// thing this ladder exists to refuse. Pinned in both directions, so a second row
+		// granted the exemption has to say so in a diff to this test.
 		const permissive = (STEPS as { name: string; allowZero?: boolean }[]).filter(
 			(step) => step.allowZero === true,
 		);
@@ -422,6 +435,41 @@ describe('the ladder runner', () => {
 	});
 });
 
+describe('the ladder is still the program through a symlink', () => {
+	test('invoked by a symlinked absolute path it prints its report rather than nothing', () => {
+		// The trap, measured: `import.meta.url === pathToFileURL(argv[1]).href` is false
+		// through any symlink, because node resolves `import.meta.url` through realpath and
+		// argv keeps the path the shell was given. The file then prints nothing and exits 0.
+		// On this machine that is not hypothetical geometry: `/tmp` is itself a symlink to
+		// `private/tmp` and `/var` to `private/var`, so the temporary directory below is
+		// symlinked before the deliberate link is added.
+		//
+		// Fired rather than grepped for. A scan asserting that no file under `scripts/`
+		// contains the text comparison is satisfied by a literal in a branch nothing reaches,
+		// which is the shape this repository refuses everywhere else.
+		//
+		// `pnpm` is kept off PATH on purpose, so the ladder's first step cannot be spawned,
+		// every row becomes NOT RUN and the whole thing finishes in milliseconds. What is
+		// under test is whether the file runs at all, not what it concludes.
+		const box = mkdtempSync(join(tmpdir(), 'hexdocs-symlink-'));
+		const link = join(box, 'repo');
+		symlinkSync(fileURLToPath(new URL('..', import.meta.url)), link, 'dir');
+		const bin = join(box, 'bin');
+		mkdirSync(bin);
+		symlinkSync(process.execPath, join(bin, 'node'));
+
+		const spawned = spawnSync(process.execPath, [join(link, 'scripts', 'verify.mjs')], {
+			encoding: 'utf8',
+			env: { ...process.env, PATH: bin, NO_COLOR: '1', FORCE_COLOR: '0' },
+		});
+
+		expect(spawned.stdout).toContain('hex-docs verification');
+		expect(spawned.stdout).toContain('did not run');
+		expect(spawned.status).toBe(1);
+		rmSync(box, { recursive: true, force: true });
+	});
+});
+
 describe('the git history check', () => {
 	const root = mkdtempSync(join(tmpdir(), 'hexdocs-git-'));
 
@@ -459,10 +507,14 @@ describe('the git history check', () => {
 			join(empty, 'kit', 'schema', 'house-rules.json'),
 		);
 		writeFileSync(join(empty, 'README.md'), 'Clean.\n');
-		const row = (runHouseLint(empty) as CheckResult[]).find(
-			(r) => r.name === 'no AI attribution in git history',
+		const rows = runHouseLint(empty) as CheckResult[];
+		expect(rows.find((r) => r.name === 'no AI attribution in git history')?.state).toBe('SKIPPED');
+		// Both rows, in every state. Two checks come out of this section now, and an early
+		// return that pushed only one would quietly lower the "n/n checks ran" footer the
+		// four-state report is built on.
+		expect(rows.find((r) => r.name === 'no estate identifiers in git history')?.state).toBe(
+			'SKIPPED',
 		);
-		expect(row?.state).toBe('SKIPPED');
 		rmSync(empty, { recursive: true, force: true });
 	});
 
@@ -491,6 +543,34 @@ describe('the git history check', () => {
 		expect(row?.state).toBe('FAIL');
 		expect(row?.examined).toBe(2);
 		expect(row?.problems?.[0]).toMatch(/^[0-9a-f]{8} contains a co-author trailer\.$/);
+	});
+
+	test('an account id in a commit message is caught, and the value is never printed', () => {
+		// The gap this closes was measured, not imagined. The history loop iterated
+		// `ATTRIBUTION_PATTERNS` and nothing else, so `git commit -m "Apply the bundle store
+		// to account <id>"`, which is the natural message for the commit that lands the
+		// stack, left the run at exit 0 with every row green. In a public repository a commit
+		// message is as visible as a file and far harder to retract, and two of the patterns
+		// it skipped are access key ids rather than account ids.
+		//
+		// Assembled from parts, so this test file stays clean under the rule it drives.
+		const planted = ['0123', '4567', '8901'].join('');
+		writeFileSync(join(root, 'README.md'), 'A third change.\n');
+		git('add', '-A');
+		git('commit', '-q', '-m', `Apply the bundle store to account ${planted} in ap-southeast-2`);
+
+		const rows = runHouseLint(root) as CheckResult[];
+		const row = rows.find((r) => r.name === 'no estate identifiers in git history');
+		expect(row?.state).toBe('FAIL');
+		expect(row?.examined).toBe(3);
+		expect(row?.problems?.[0]).toMatch(/^[0-9a-f]{8} contains a twelve digit run/);
+		// Reported by shape and short sha only. A guard that quotes the value has copied it
+		// into a CI log, which is one of the places it was not supposed to reach.
+		expect(row?.problems?.[0]).not.toContain(planted);
+		// Under its own name, not the attribution row's. An account id reported as an AI
+		// attribution is a mislabelled report, which is worse than no report.
+		const attribution = rows.find((r) => r.name === 'no AI attribution in git history');
+		expect(attribution?.problems?.join(' ')).not.toContain('twelve digit run');
 	});
 });
 
@@ -641,6 +721,34 @@ describe('the per-root file count', () => {
 		rmSync(root, { recursive: true, force: true });
 	});
 
+	test('a root file no list names is scanned, because the list comes off the disk', () => {
+		// `SCANNED_FILES` used to be the whole statement of what gets read at the top level
+		// and it named three files out of eight. Measured: an account id appended to
+		// `vitest.config.ts`, thirteen kilobytes of prose comment that already discusses
+		// calls against a real AWS account, left the run at exit 0 with every row green. Same
+		// for `tsconfig.json`, `tsconfig.test.json`, `pnpm-lock.yaml` and `.prettierrc.json`.
+		const root = mkdtempSync(join(tmpdir(), 'hexdocs-rootfile-'));
+		for (const dir of REQUIRED_DIRS as string[]) {
+			mkdirSync(join(root, dir), { recursive: true });
+			writeFileSync(join(root, dir, 'a.ts'), 'export const a = 1;\n');
+		}
+		mkdirSync(join(root, 'kit', 'schema'), { recursive: true });
+		copyFileSync(
+			new URL('../kit/schema/house-rules.json', import.meta.url),
+			join(root, 'kit', 'schema', 'house-rules.json'),
+		);
+		// Assembled from parts, so this test file stays clean under the rule it drives.
+		const planted = ['0123', '4567', '8901'].join('');
+		writeFileSync(join(root, 'vitest.config.ts'), `// measured against account ${planted}\n`);
+		const row = (runHouseLint(root) as CheckResult[]).find(
+			(r) => r.name === 'no estate identifiers in source',
+		);
+		expect(row?.state).toBe('FAIL');
+		expect(row?.problems?.[0]).toContain('vitest.config.ts:1');
+		expect(row?.problems?.[0]).not.toContain(planted);
+		rmSync(root, { recursive: true, force: true });
+	});
+
 	test('a required root that contributes nothing fails, naming it', () => {
 		const root = mkdtempSync(join(tmpdir(), 'hexdocs-roots-'));
 		mkdirSync(join(root, 'kit', 'schema'), { recursive: true });
@@ -729,11 +837,15 @@ describe('a shallow clone', () => {
 			join(root, 'kit', 'schema', 'house-rules.json'),
 		);
 
-		const row = (runHouseLint(root) as CheckResult[]).find(
-			(r) => r.name === 'no AI attribution in git history',
-		);
+		const rows = runHouseLint(root) as CheckResult[];
+		const row = rows.find((r) => r.name === 'no AI attribution in git history');
 		expect(row?.state).toBe('NOT RUN');
 		expect(row?.note).toContain('fetch-depth: 0');
+		// The same early return has to push both history rows, or a shallow checkout drops
+		// one and the footer's count shrinks with nothing saying so.
+		const identifiers = rows.find((r) => r.name === 'no estate identifiers in git history');
+		expect(identifiers?.state).toBe('NOT RUN');
+		expect(identifiers?.note).toContain('fetch-depth: 0');
 
 		rmSync(root, { recursive: true, force: true });
 		rmSync(origin, { recursive: true, force: true });

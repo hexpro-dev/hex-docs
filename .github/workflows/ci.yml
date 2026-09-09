@@ -65,9 +65,63 @@ jobs:
             exit 1
           fi
 
+      # Terraform is not on the ubuntu-24.04 image that ubuntu-latest resolves to, and the
+      # 22.04 image that does carry it began deprecation in September 2026. So the ladder's
+      # terraform row installs it here rather than hoping for it. v4 is the first
+      # setup-terraform major whose action.yml declares node24, which is what the pin rule
+      # above requires, and `terraform_wrapper: false` matters because the wrapper replaces
+      # the binary on PATH with a shim that captures stdout into step outputs, and
+      # `scripts/check-infra.mjs` parses that stdout.
+      #
+      # The row it feeds needs no credentials: `fmt` needs nothing, and `validate` and `test`
+      # need neither network nor credentials once `init -backend=false` has run. That is what
+      # keeps this job inside the `permissions: contents: read` declared at the top, on a
+      # workflow that also runs on pull_request, which is exactly where a job holding a role
+      # in the account that owns the bundle store would be a larger hole than the stack
+      # closes.
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: '1.14.7'
+          terraform_wrapper: false
+
+      # The provider comes down once per matrix leg on every push and every pull request,
+      # 191 MB on the wire and 815 MB unpacked, so the two legs of a run that changed a
+      # markdown file are two independent chances for a registry fetch to be the thing that
+      # reddens it. Terraform reads the cache from this directory and never writes into the
+      # checkout, so it has to exist before init and has to sit outside `github.workspace`:
+      # a cache directory at the repository root would be a top-level name the house lint's
+      # root cross-check reports as a directory nothing lints.
+      #
+      # The lock file is what makes this safe rather than a reason to set
+      # `plugin_cache_may_break_dependency_lock_file`. `infra/README.md` requires
+      # `providers lock -platform=linux_amd64 -platform=darwin_arm64`, so the committed lock
+      # carries an `h1:` hash for the Linux runner as well as for a laptop, and an init
+      # served from the cache can verify what it found instead of rewriting the file.
+      - name: point terraform at a plugin cache
+        run: |
+          echo "TF_PLUGIN_CACHE_DIR=$HOME/.terraform.d/plugin-cache" >> "$GITHUB_ENV"
+          mkdir -p "$HOME/.terraform.d/plugin-cache"
+
+      # Keyed on the lock file alone, with no `restore-keys`. A prefix match would hand init
+      # a cache holding some other provider version, which is a slower miss dressed up as a
+      # hit; a lock file change should be a clean download. Both legs share one key, so on a
+      # cold cache they race to save it and the loser logs a 409 and carries on.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: terraform-plugins-${{ runner.os }}-${{ hashFiles('infra/.terraform.lock.hcl') }}
+
+      # `validate` and `test` both refuse to run without a provider, and the install is the
+      # only part of the terraform row that touches the network. It stays inside the matrix
+      # rather than being gated to one leg: the row is three node functions that parse what
+      # terraform printed, so it is exactly the kind of code the second leg exists to run,
+      # and `scripts/check-infra.mjs` turns a missing binary into a FAIL when `CI` is set
+      # rather than a quiet skip.
+      - run: terraform -chdir=infra init -backend=false -input=false
+
       # Typecheck, both suites with coverage, the command surface through the real
-      # launcher, the dependency gate, the house lint, the browser paint check and
-      # formatting, in one ladder that reports what each step examined.
+      # launcher, the dependency gate, the house lint, the browser paint check, the
+      # terraform stack and formatting, in one ladder that reports what each step examined.
       #
       # The kit install above is the full tree rather than `--prod`, and the command
       # surface row needs it: the MCP protocol is hand written and the SDK is a

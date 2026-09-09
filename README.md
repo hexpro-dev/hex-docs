@@ -24,6 +24,12 @@ JSON Schemas. It has its own `package.json` and lockfile, installs its own
 **`fixtures/`** is neither. It is the corpus both suites read, and no website ever sees
 it.
 
+**`infra/`** is the Terraform stack behind the whole thing: one private S3 bucket holding
+bundles, the account's GitHub Actions OIDC provider, and one prefix-scoped publisher role
+per app repository. It names no account, no bucket and no role: every value that
+identifies an estate arrives at apply time and leaves through `terraform output`.
+`infra/README.md` is the runbook.
+
 ## Where it mounts
 
 | Repository                                 | Path                    | Role                        |
@@ -38,7 +44,7 @@ it.
 pnpm install
 pnpm --dir kit install
 
-pnpm verify        # typecheck, both suites, both guards, formatting
+pnpm verify        # the whole ladder, nine rows
 pnpm test          # the runtime half
 pnpm test:kit      # the toolchain half
 pnpm schemas       # regenerate kit/schema from the Zod schemas
@@ -46,7 +52,15 @@ pnpm schemas       # regenerate kit/schema from the Zod schemas
 
 `pnpm verify` is the one command that answers whether the repository is in a good
 state. Every row it prints carries a count of what that step examined, and a step that
-could not run says so rather than being left out.
+could not run says so rather than being left out. The nine are the typecheck, both test
+suites, the command surface through the real launcher, the dependency gate, the house
+lint, a browser paint check, the Terraform stack offline, and formatting.
+
+Two of those rows need a tool this repository does not install. With no browser the paint
+guard skips, and its ladder row is the one row allowed to pass having examined nothing.
+Terraform is the one that surprises a first clone: with the binary on PATH but no
+`infra/.terraform` yet, `validate` and `test` report NOT RUN, and a NOT RUN fails the run.
+The row prints the one-line fix, and `infra/README.md` has it too.
 
 ## The contracts
 
@@ -110,6 +124,6 @@ reading the diff is the point of them existing.
 
 ## Status
 
-The contracts, the scaffolding, the fixture corpus and the compiler are in place. The
-renderer, the CLI, the MCP server, the infrastructure and the first wired site are not
-yet built.
+The contracts, the fixture corpus, the compiler, the renderer, the CLI, the MCP server
+and the Terraform stack are in place. What is not yet built is the publish workflow in an
+app repository, the first wired site, and the first documentation set to go through it.

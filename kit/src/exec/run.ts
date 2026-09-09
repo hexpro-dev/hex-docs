@@ -7,9 +7,10 @@
  * live: `mcp/src/context.ts` reaches for `execSync` over an interpolated path while
  * `lib/exec.ts` beside it carries the allowlist.
  *
- * `spawnSync` with an argv array and `shell: false`. No string is ever handed to a
- * shell, which is what makes the metacharacter check below belt and braces rather than
- * the guard: the guard is that the template is a literal and a hole is one argv element.
+ * `spawnSync` with an argv array and `shell: false`. No string is ever handed to a shell:
+ * the guarantee is that the template is a literal in `recipes.ts` and a hole is one argv
+ * element. `REFUSED_IN_ARGV` below refuses the NUL and nothing else, and the paragraph
+ * there says why the rest of the class it used to be went.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -42,24 +43,62 @@ export interface Exec {
 }
 
 /**
- * Characters refused in a caller-supplied value.
+ * The one character refused in a caller-supplied value.
  *
  * Only the holes are checked. The template is a literal in `recipes.ts` and cannot carry
- * one, and a hole is a path, a sha, a bucket name or a key out of a config file.
+ * one, and a hole is a path, a sha, a bucket name, a content type or a key out of a
+ * config file.
  *
  * The NUL is written as an escape because it has to be. It stood here as a raw byte,
  * invisible in every diff and every review, which is exactly the failure the house rule
  * about writing non-ASCII as an escape exists to stop, in the one file where a reviewer
  * most needs to read the characters literally.
  *
- * **A space is deliberately not a member.** It is the separator a shell splits on, so it
- * looks like it belongs, and refusing it would break a repository checked out under a
- * path containing one, which on macOS is ordinary. What makes that safe is that this
- * class is not the guarantee: `spawnSync` is called with an argv array and
- * `shell: false`, so no value is ever parsed by anything. The fixed template is the
- * guarantee and this is belt and braces over it.
+ * **This used to be a class of shell metacharacters, and step 6 deleted the rest of it.**
+ * The reason is worth the paragraph, because the deletion reads like a control being
+ * removed and is the opposite.
+ *
+ * `spawnSync` below is called with an argv array and `shell: false`, so no value here is
+ * ever parsed by a shell: the fixed template is the guarantee and the class was belt and
+ * braces over it. The class already carried one exception, for the space, on the grounds
+ * that refusing it would break a repository checked out under an ordinary macOS path. The
+ * first publish against a real bucket found the same argument one step along and settled
+ * it: `s3/keys.ts` sends `text/plain; charset=utf-8` as the content type for `llms/*.txt`
+ * and `text/markdown; charset=utf-8` for the raw markdown, both of them literals this
+ * repository chose, and the semicolon refused both. Two objects went up and the publish
+ * stopped. Nothing in the suite could see it, because every test injects a fake `Exec` and
+ * never reaches this function.
+ *
+ * The general form of that defect is not the semicolon. A cache directory named with an
+ * ampersand, a repository under a path with a backtick, a Windows-style backslash: each is
+ * a legitimate value the class would have refused, and each would have surfaced as a
+ * publish or a prefetch that stopped halfway with a message about a shell that is not
+ * there. A tripwire that refuses correct input more often than it catches anything is not
+ * defence in depth, it is a second, worse guarantee competing with the real one.
+ *
+ * What is left after the shell is the program the value is handed to, which reads its own
+ * argv, and the deleted class covered none of that either. Measured on aws-cli 2.36.19: a
+ * value beginning with `file://` is replaced by the contents of that file before the
+ * request is built, on `--key` and on `--bucket` alike, and a value that looks like a flag
+ * is taken as one, so `--key --debug` turns the CLI's own debug logging on and exits on a
+ * usage error. `gh api` separately substitutes `{owner}`, `{repo}` and `{branch}` in its
+ * endpoint argument from the repository at the cwd, and that argument is the `gh.api`
+ * recipe's only hole. None of it is reachable today, because every hole is a computed key,
+ * a content type from a table, a local path, a digest, a sha or a bucket name out of a
+ * config file this repository owns. The one value that comes from outside is
+ * `--starting-token`, which is the continuation token S3 itself just returned, and base64
+ * carries neither a colon nor a leading dash. That inventory is the sentence to check when
+ * a hole is next filled from somewhere else, a pull request title or an action input, and
+ * the check
+ * belongs where the value enters rather than here: a `file://` refusal in this function
+ * would be the deleted class's mistake again, refusing a legitimate value shape no caller
+ * produces, in the wrong place.
+ *
+ * The NUL stays, and for a different reason from the rest. Node refuses it itself, with a
+ * `TypeError` out of `spawnSync` naming neither the recipe nor the value, so this is a
+ * named refusal in place of a stack trace rather than a security control.
  */
-const METACHARACTER = /[`$;|&><\\\n\r\u0000]/;
+const REFUSED_IN_ARGV = /\u0000/;
 
 export class ExecRefusal extends Error {}
 
@@ -96,9 +135,9 @@ export function runRecipe(id: RecipeId, holes: readonly string[], options: RunOp
 		);
 	}
 	for (const value of holes) {
-		if (METACHARACTER.test(value)) {
+		if (REFUSED_IN_ARGV.test(value)) {
 			throw new ExecRefusal(
-				`Refusing "${id}": a value contains a shell metacharacter: ${JSON.stringify(value)}.`,
+				`Refusing "${id}": a value contains a NUL, which cannot be passed in an argv: ${JSON.stringify(value)}.`,
 			);
 		}
 	}

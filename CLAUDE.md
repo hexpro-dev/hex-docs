@@ -1001,7 +1001,9 @@ hex-terraform has that defect live: its `context.ts` reaches for `execSync` whil
 **A space is deliberately not refused.** It is the separator a shell splits on, so it looks
 like it belongs, and refusing it would break a repository checked out under a path
 containing one. What makes that safe is that the class is not the guarantee: `spawnSync`
-takes an argv array with `shell: false`, so nothing ever parses a value. The NUL is written
+takes an argv array with `shell: false`, so no shell parses a value. What the program at the
+other end still does with one is at `REFUSED_IN_ARGV`, and step 6 deleted the rest of this
+class for exactly that reason. The NUL is written
 as an escape, because it stood in that class as a raw byte for a while, invisible in every
 diff, in the one file where a reviewer most needs to read the characters literally.
 
@@ -1107,12 +1109,340 @@ language nobody here reads.
 `hexdocs coverage --strings` is refuted rather than deferred: the only app with strings
 keys them by their English source text, so there are no screen prefixes to group by.
 
+## The bundle store (step 6)
+
+`infra/` is a self-contained Terraform stack: one private S3 bucket, one GitHub Actions OIDC
+provider, and one publisher role per app repository. `infra/README.md` is the runbook. What
+follows is what would otherwise be rediscovered.
+
+### The write-once guarantee is enforced at S3, not only in the client
+
+Step 5 shipped `--if-none-match '*'` inside the put recipe and left the server side unproved.
+It is real now, and it is in the **bucket policy** rather than in the role, because of what
+this account actually is: the deploy profile authenticates as the AWS **account root user**
+with a long-lived access key. Root is not the subject of any identity policy, cannot be
+scoped and cannot assume a role, so a resource-based Deny is the only control that reaches
+it. Every rule that has to hold against the operator's own terminal is therefore in
+`bucket-policy.tf`, and the role policy holds only what has to be true of the GitHub
+publisher.
+
+Five denies, and each closes something the others do not:
+
+- `DenyUnconditionalObjectCreation` is `Null: {"s3:if-none-match": "true"}` plus
+  `Bool: {"s3:ObjectCreationOperation": "true"}`. The condition key is real and is on exactly
+  one IAM action, `s3:PutObject`, which is enough because CopyObject, CreateMultipartUpload,
+  UploadPart, UploadPartCopy and CompleteMultipartUpload are not separate IAM actions. The
+  `ObjectCreationOperation` clause is what keeps the deny off the three multipart calls that
+  cannot carry a conditional header; without it every multipart upload fails at its first
+  part.
+- `DenyObjectDeletion` is what turns no-overwrite into immutability, and the reason is not
+  obvious. On a versioned bucket a simple DELETE is not blocked by a conditional-write deny:
+  it inserts a delete marker, the marker becomes the current version, and AWS states that "if
+  the current object version is a delete marker, the write operation succeeds". So without
+  this statement anybody who can delete can free a published key and write different bytes to
+  it. **Object Lock does not close this either**, even in COMPLIANCE mode, which is one of the
+  two reasons the bucket does not have it.
+- `DenyReplicationIntoStore` is the statement without which replication walks past both of
+  the above. A replication rule is configured on the **source** bucket, so any other bucket in
+  the account can name this one as its destination, and the destination-side writes authorise
+  as `s3:ReplicateObject`, `s3:ReplicateDelete` and `s3:ReplicateTags`. None of the three is
+  `s3:PutObject` and none is `s3:DeleteObject`, so neither object deny evaluates them.
+  Measured before the statement existed: all three returned `allowed` against the applied
+  policy in the same run where the three denies beside them returned `explicitDeny`.
+  Same-account replication needs no destination bucket policy at all, so nothing had to be
+  granted for that to work.
+- `DenyStoreReconfiguration` covers `DeleteBucket`, `PutBucketObjectLockConfiguration`,
+  `PutBucketPublicAccessBlock`, `PutBucketVersioning`, `PutLifecycleConfiguration` and
+  `PutReplicationConfiguration`. The lifecycle one is the sharpest of the routes around the
+  object denies: AWS says that "even if your bucket policy denies all actions for all
+  principals, your S3 Lifecycle configuration still functions as normal", so an expiration
+  rule is a delete no other statement in the policy can see. `PutReplicationConfiguration` is
+  the **source** side and is not the same thing as the statement above: denying it stops this
+  bucket becoming a replication source, and neither statement closes the other's direction.
+  `PutBucketObjectLockConfiguration` is the odd one out and is not a route around anything: S3
+  enables Object Lock on a bucket that already exists as long as it is versioned, so the deny
+  is what holds the flag off, and it is the only entry here whose effect lifting the policy
+  cannot undo.
+- `DenyInsecureTransport` carries `BoolIfExists` on `aws:PrincipalIsAWSService`, not the
+  `Bool` AWS publishes. The key is absent from an anonymous request context, a plain operator
+  against an absent key is false, and every key in a condition block has to resolve true, so
+  the published spelling does not deny anonymous plaintext at all.
+
+The three bucket-policy actions are deliberately **not** denied, because AWS gives the account
+root user a documented carve-out for exactly `GetBucketPolicy`, `PutBucketPolicy` and
+`DeleteBucketPolicy`. Denying them would bind every principal except the one the policy
+defends against, and would turn a wrong policy into a support ticket. That carve-out is also
+the recovery path for everything above, and it is why removing a published object is a
+deliberate three-step act rather than a command.
+
+The price is stated rather than hidden: Terraform cannot change any of the six reconfigured
+settings after the first apply without the policy being lifted first, and the bucket cannot be
+a target for access logging, CloudTrail or load balancer logs, each of which authorises as
+`s3:PutObject`, cannot carry an If-None-Match header, and so fails with a 403. Replication is
+refused too, and by a different statement: it authorises as `s3:ReplicateObject`, which the
+write-once deny never evaluates, so the reason is `DenyReplicationIntoStore` rather than the
+absence of a service-principal exemption.
+
+### The trust policy pins claims, not names, and one absence is load bearing
+
+`aud`, `repository_id`, `ref`, and `sub` as a two-value `StringLike`. Measured: hex-nfc was
+created before the 2026-07-15 immutable-subject cutover and
+`gh api repos/<owner>/<repo>/actions/oidc/customization/sub` reports `use_immutable_subject
+false`, so it emits `repo:<owner>/<repo>:ref:refs/heads/main` today and the `@<id>` form after
+any rename or org-level opt-in. Both spellings are in the condition, so that flip is a no-op.
+
+`sub` is not redundant with `ref`. A pull_request token's subject is
+`repo:<owner>/<repo>:pull_request` with **no `:ref:` segment at all**, and for
+`pull_request_target` the `ref` claim is the base branch, so a policy resting on `ref` alone
+passes a token minted from a fork's code.
+
+**`repository_owner_id` is deliberately absent**, although AWS's own worked example uses it.
+Repository ids are globally unique so it scopes nothing new, and its mapping is disputed
+between AWS's documentation and a third-party analysis of the February 2026 STS claim launch.
+An unmapped claim key is absent from the request context, `StringEquals` on an absent key is
+false, and the result would be that every publish is denied. No `...IfExists` operator appears
+anywhere in the file for the mirror-image reason: absence evaluates **true** under those, so
+one misspelled claim name would grant rather than deny.
+
+Nothing verifies OIDC claim names ahead of time. Measured: `aws accessanalyzer validate-policy`
+returns no finding for a deliberately misspelled `token.actions.githubusercontent.com:` key.
+The first real workflow run is the only test, which is why the failure mode and its message are
+written down in `infra/README.md`.
+
+### `s3:ListBucket` is required, and the comment that said otherwise was backwards
+
+S3 answers `HeadObject` on a key that is not there with **403 rather than 404** when the caller
+lacks `s3:ListBucket`, and the publish preflight is exactly that call on a first publish. So a
+publisher granted `GetObject` and `PutObject` and nothing else fails its very first publish with
+an access denial, on a key that does not exist. `kit/src/s3/client.ts` said the rule the other
+way round, which is the sentence somebody would have read while tightening the policy.
+
+The grant is `s3:ListBucket` on the bucket ARN with an `s3:prefix` condition, because a
+HeadObject request carries no `s3:prefix` in its context and the disambiguation is decided by
+the permission rather than by the request.
+
+### Two step-5 defects that only a real bucket would have found
+
+**`aws s3api head-object` returns no checksum at all without `--checksum-mode ENABLED`.**
+Measured against a real object both ways: without the flag the response carries
+`ContentLength` and `ETag` and nothing else. The CLI's own model has no `httpChecksum` block
+for HeadObject, so botocore's auto-injection never fires. Every publish after the first would
+have read "S3 holds no checksum" for every object, which makes identical content
+indistinguishable from changed content and turns the write-once preflight into an existence
+test.
+
+**`aws s3api get-object` returns it today only by grace of a default.** GetObject does declare
+the block, so botocore sets the mode when `response_checksum_validation` is `when_supported`.
+Measured: `AWS_RESPONSE_CHECKSUM_VALIDATION=when_required` removes `ChecksumSHA256` from the
+output with exit code 0. Both recipes carry the flag now, which is the whole point of a closed
+argv template.
+
+The put recipes were checked on the wire against a loopback listener and are correct as they
+stand. **Do not add `--checksum-algorithm SHA256`**: supplying `--checksum-sha256` already
+short-circuits botocore's default-checksum resolution, so the request carries exactly
+`x-amz-checksum-sha256` and no CRC, and adding the algorithm flag adds a second header S3
+cross-checks, which turns a future one-sided edit into a BadDigest 400.
+
+### The stack is testable without an account, and that decided how the ARNs are written
+
+`infra/tests/policies.tftest.hcl` asserts the rendered policy JSON, statement by statement,
+under `terraform test` with a static provider and no credentials. That is only possible because
+`local.bucket_arn` and `local.oidc_provider_arn` are **composed from the name and the account
+id rather than read off the resources**: a resource attribute is unknown until apply, and a
+policy document referencing one renders as "(known after apply)" in every plan, which makes it
+unassertable and unreviewable at the same time. The dependency edges a reference would have
+given are written as explicit `depends_on`, on the bucket policy and on each publisher role.
+Delete those and a first apply can fail with a 403 on the lifecycle put, or with
+MalformedPolicyDocument on a role created before its provider.
+
+Every one of the seven run blocks was mutation tested. Dropping `s3:DeleteObjectVersion`,
+dropping the `ObjectCreationOperation` clause, widening the subject to the organisation and
+changing one `StringEquals` to `StringEqualsIfExists` each turn exactly one row red.
+
+**What holds those run blocks in place afterwards is weaker than it looks**, and the guard says
+so now rather than claiming the opposite. `scripts/check-infra.mjs` cross-checks the `sid` of
+every declared statement against the text of the test file in both directions, which catches a
+statement no test ever mentioned and a test naming a statement no document declares. It does
+not ask which run block names a Sid, or whether anything is asserted about it, and
+`terraform test`'s passed-against-declared pair takes both of its numbers off the same file.
+Measured: five of the seven original run blocks could each be deleted with all four rows green,
+because the first block lists every bucket Sid as a literal inside its own assertion and so
+covers for the blocks that carry the real assertions about them. Deleting a run block whose
+Sids appear nowhere else is caught, and that is the whole of it.
+
+Two smaller things the test file forced. `aws_iam_policy_document` does not render an action
+list in the order it was declared, so assertions sort both sides; a positional comparison there
+fails on a correct policy, which is the worst kind of red row. And an `override_data` value
+accepts neither a function call nor a variable, so the fixture's account id is not
+account-shaped at all: the repository-wide identifier scan fails on a twelve-digit run
+anywhere, and this repository has exactly one exemption mechanism, scoped to `fixtures/`.
+
+### What the first real publish found
+
+The plan's step 6 ends with a manual publish, and its stated purpose was that a failure at
+that point would be a credentials problem and nothing else. It was not. Four things came out
+of the run, and three of them were invisible to a green suite of three thousand tests.
+
+**`runRecipe` refused this repository's own content type.** `kit/src/exec/run.ts` carried a
+class of shell metacharacters refused in any hole, and `s3/keys.ts` sends
+`text/plain; charset=utf-8` for `llms/*.txt` and `text/markdown; charset=utf-8` for the raw
+markdown. The publish uploaded two objects and stopped. Nothing in the suite could see it,
+because every test injects a fake `Exec` and none of them reaches that function.
+
+The class is gone except for the NUL, and the reasoning is at `REFUSED_IN_ARGV`. The short
+form: `spawnSync` is called with an argv array and `shell: false`, so no value is ever parsed
+by anything, and the module's own comment already said the class was belt and braces over a
+boundary that cannot be crossed. It had one exception already, for the space, on the grounds
+that refusing it would break an ordinary macOS path. The semicolon is the same argument one
+step along, and an ampersand in a cache directory name is the next one waiting. A tripwire
+that refuses correct input more often than it catches anything is not defence in depth. The
+NUL stays because node refuses it anyway, so what it buys is a named refusal rather than a
+`TypeError` naming neither the recipe nor the value.
+
+**`--resource-owner` takes an ARN.** `scripts/check-stack.mjs` passed the bare account id and
+IAM answered `InvalidInput: '<id>' is not a valid as a Resource Owner`, so the publisher
+boundary row went red against a correct stack. The account root ARN is the documented
+spelling.
+
+**Three claims step 5 recorded as unproved are now measured**, and the test headers that named
+them say so. S3 answers a second conditional write with `PreconditionFailed`. `head-object`
+returns the base64 the put sent, so an unchanged commit reconciles to zero uploads: the two
+objects left behind by the failed first attempt were recognised by checksum and skipped. And
+`get-object` writes stored bytes rather than decoding `Content-Encoding`, measured on a
+`.gz` key that came back byte for byte equal to the manifest digest and still passed
+`gunzip -t`.
+
+**The bucket policy's write-once deny holds against the account root user**, which is the
+whole reason it is a bucket policy. An unconditional put by root answers
+`AccessDenied ... with an explicit deny in a resource-based policy`. The cleanup afterwards
+exercised the documented recovery once for real: lift the policy, delete ninety-three
+versions, put the policy back, and `pnpm check:stack` compares the restored document against
+the rendered one statement by statement.
+
+One thing the run deliberately did not prove: whether `--checksum-sha256` is verified server
+side or stored as a label. It needs a deliberately wrong digest, and the write that would
+prove it lands at a real key in a store where nothing can then delete it.
+
+### Two guards, and only one of them is on the ladder
+
+`scripts/check-infra.mjs` is offline. `terraform fmt` needs nothing at all, and `validate` and
+`test` need neither network nor credentials once `init -backend=false` has run, which is what
+keeps the CI job inside the `permissions: contents: read` it already declares. Its first row is
+pure JavaScript and always runs, so a machine with no terraform still examines something rather
+than reporting a page of skips.
+
+`scripts/check-stack.mjs` is credentialled, read-only, and deliberately **not** a ladder row. A
+row that cannot run reports `NOT RUN`, `NOT RUN` fails the run, and a credentialled row would
+fail `pnpm verify` on every machine without an AWS profile, which is most of them and all of
+CI. It proves the publisher boundary with `aws iam simulate-principal-policy` rather than by
+attempting a write, which is the difference between a verification an operator will re-run and
+one they will do once.
+
+Everything underneath that guard's calls is `scripts/lib/policy-diff.mjs`, and the split is a
+coverage decision with a correctness argument behind it. The comparison of the applied bucket
+policy against the rendered one is the one piece of the guard a bug can make silently wrong:
+every other failure is loud, and a wrong comparison reports no drift on a policy that has
+changed. It is also the only piece a suite with no credentials can hold. In the guard it was
+three hundred statements of untestable-by-association code dragging two coverage floors down;
+in the library it is held at 100 statements and 95 branches, and `scripts/check-stack.mjs` is
+excluded from coverage with the measurement of what a floor over it would have cost.
+
+Terraform is not on the `ubuntu-latest` runner image. Measured: the ubuntu-24.04 README lists
+no terraform, and the 22.04 image that has it began deprecation in September 2026. CI installs
+it with `hashicorp/setup-terraform@v4`, which is the first major whose `action.yml` declares
+node24, with `terraform_wrapper: false` because the wrapper replaces the binary with a shim
+that captures stdout into step outputs and the guard parses that stdout.
+
+### What the adversarial review changed
+
+Sixty-one agents over six dimensions, each finding attacked by an independent skeptic: 55
+findings, 41 survived, 14 refuted. The ones worth knowing before touching this again, because
+each was green in a nine-row ladder and none is visible from the stack itself.
+
+**Two guards had a hole where their strongest claim was.** `DESTRUCTIVE_LIFECYCLE` anchors the
+block name at the start of a line, so `dynamic "expiration"` never reached the alternation:
+measured, a fmt-clean, valid plant of exactly that reported all clear. And the Sid coverage
+scan added to close the deleted-run-block hole is a substring match over the whole file, so
+five of the seven run blocks could be deleted with every row green, because the first block
+already names all four bucket Sids. The regex is fixed; the second one could not be, and the
+comment now says what the scan catches rather than what it was hoped to.
+
+**Replication writes into the store were denied nowhere.** `s3:PutReplicationConfiguration` is
+called on the source bucket, so denying it here only stops the store becoming a source.
+Configure replication on any other bucket in the account with this one as the destination and
+the writes authorise as `s3:ReplicateObject`, `s3:ReplicateDelete` and `s3:ReplicateTags`,
+which carry neither conditional-write key. Measured with `simulate-custom-policy`: allowed,
+against `explicitDeny` for the three the policy did name. `DenyReplicationIntoStore` is the
+fifth statement.
+
+**`DenyEverythingElse` was proving nothing.** Measured by simulating the role's document with
+and without it: the decision does not move, because the bucket policy denies the same actions,
+so the row was green over a role that had lost the statement its own comment says it watches.
+`check-stack.mjs` now requires the role's own policy among the matched statements, and the
+measurement is recorded at the claim.
+
+**Object Lock can be enabled on an existing bucket.** `bucket.tf` said it could not, which made
+the absence of the flag look self-enforcing. It is held by
+`s3:PutBucketObjectLockConfiguration` sitting in the reconfiguration deny and by nothing else,
+and the asymmetry is why: turning it on is one console call, turning it off is impossible.
+
+**Twelve confirmed overstating comments**, which by this repository's own standard are worse
+than none. The `depends_on` rule was false for one of its own entries, `providers.tf` claimed a
+`check` block cannot fail a run when `terraform test` is the exception, `stripComments` named
+the scan that cannot need it, `versions.tf` justified its version floor with a guard behaviour
+that does not exist, and the paragraph deleting the metacharacter class claimed no value is
+parsed by anything. That last one is now measured rather than asserted: the AWS CLI expands a
+`file://` value into that file's contents, on any parameter, and takes a value that looks like
+a flag as one. Neither is reachable today, because the only hole filled from outside this
+repository is S3's own continuation token, and the check belongs where a value enters.
+
+**A state bucket name from the estate was committed**, in the same file whose opening paragraph
+says the stack names no bucket, and in the same commit as a lint row whose comment says no
+committed file has a reason to hold one. It is a placeholder now.
+
+Two guards grew a claims table out of it. `test/infra.test.ts` holds `ARM_CLAIMS`, one sentence
+per assertion id in the invariants row, checked against the ids the guard actually evaluated in
+both directions, which is `rules-fire.test.ts`'s shape applied to a guard rather than to a rule
+set. And the house lint gained `no estate identifiers in git history`, because an account id in
+a commit message passed it clean.
+
+### There is no reader role, and the absence is the finding
+
+`hexdocs prefetch` runs from a consuming site's `prebuild` on the deploy host, signing with the
+ambient profile, and that profile is the account root user. Root cannot be the subject of an
+identity policy, so a reader role would have no principal to trust and a reader policy would
+have nothing to attach to. `reader.tf` therefore creates nothing and outputs the rendered
+document, so the day a non-root deploy identity exists it is one attach away.
+
+That is worth stating as what it is: the reader is unscoped because the identity is unscoped,
+and no policy this stack writes can change that. `providers.tf` carries a `check` block that
+warns on every plan while it is true, and goes quiet on its own when it stops being true.
+
+### The house lint reads `.tf`, and now looks for estate identifiers
+
+`infra/` was already in `OPTIONAL_DIRS`, and `.tf` was in no extension list, so the directory
+would have contributed zero files and failed the every-root-contributes-files row on the day it
+appeared. Both extensions are listed now, and `.terraform` is excluded from the walk because
+gitignoring it is not enough: the walk reads the filesystem and the aws provider alone is a
+778 MB binary.
+
+The new `no estate identifiers in source` row is what makes the public-repository rule a guard
+rather than a sentence in this file. The pattern is deliberately not `\b[0-9]{12}\b`: measured,
+that matched nine sha256 digests in `kit/test/golden/manifest.json`, because a word boundary
+sits between a letter and a digit. Refusing a hex neighbour on either side produces zero matches
+across the repository and still catches an ARN, an assignment and a sentence. The row prints
+the file and the column and never the value, because a guard that reports a leaked account id
+by quoting it has put it in a CI log.
+
 ## Code style
 
 Tabs. TypeScript strict, `verbatimModuleSyntax`, ES2022 / ESNext / bundler. Prettier with
 `useTabs`, `tabWidth` 2, `singleQuote`, `trailingComma: all`, `printWidth` 100, `semi`,
 `arrowParens: always`. `.editorconfig`: lf, tab, final newline, trim trailing except in
-markdown, spaces in yaml. Node `>=22`, CI matrix on 22 and 24.
+markdown, spaces in yaml, terraform and markdown. The terraform section is not cosmetic:
+`terraform fmt` writes two spaces and has no option to write anything else, so without it the
+`[*]` default tells an editor to type a tab into a `.tf` file and the ladder's fmt row becomes
+the remedy for a hint the repository itself gave. Node `>=22`, CI matrix on 22 and 24.
 
 Relative imports carry a `.js` extension, matching `@hex-pro/i18n`.
 

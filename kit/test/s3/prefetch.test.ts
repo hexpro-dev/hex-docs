@@ -6,8 +6,12 @@
  * handed, and the counting tests below are counts of calls that were about to be made.
  * What it cannot prove is that `aws s3api get-object` writes the stored bytes rather than
  * a decoded copy of them: the whole gzip half of the digest checking rests on that, and it
- * is a claim about a tool this repository does not run. Step 6 owns it, when a bucket
- * exists to fetch a key back out of.
+ * is a claim about a tool this repository does not run.
+ *
+ * **Step 6 measured it.** A `search/en.idx.json.gz` fetched back out of the real bucket,
+ * stored with `Content-Encoding: gzip`, came down byte for byte equal to the manifest's
+ * digest and still passed `gunzip -t`. The CLI does not decode the encoding, and the
+ * digest check rests on solid ground.
  *
  * The property worth the most here is the cheapest to lose. `prefetch` hangs off
  * `prebuild`, which the deploy runs on the host, so **a warm cache must make zero exec
@@ -502,6 +506,8 @@ describe('a cold cache', () => {
 				'--key',
 				`${prefix}/${MANIFEST_KEY}`,
 				join(cache, ...prefix.split('/'), MANIFEST_KEY),
+				'--checksum-mode',
+				'ENABLED',
 				'--output',
 				'json',
 			]);

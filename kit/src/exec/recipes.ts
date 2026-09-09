@@ -91,7 +91,28 @@ export const READ_RECIPES = {
 	},
 	'aws.head-object': {
 		bin: 'aws',
-		argv: ['s3api', 'head-object', '--bucket', HOLE, '--key', HOLE, '--output', 'json'],
+		// `--checksum-mode ENABLED` is not optional and its absence is silent. S3 returns
+		// `ChecksumSHA256` on a head only when the request carries `x-amz-checksum-mode`,
+		// and the CLI's own model has no `httpChecksum` block for HeadObject, so botocore's
+		// handler never sets it by default. Measured against a real object on both spellings:
+		// without the flag the response carried `ContentLength` and `ETag` and nothing else;
+		// with it, `ChecksumSHA256` and `ChecksumType`. The publish preflight compares the
+		// stored checksum against the manifest's, so without this every object reads as
+		// stored-with-no-checksum, a re-run of an unchanged commit cannot tell identical
+		// content from changed content, and the reconcile reports a mismatch on bytes that
+		// are already correct.
+		argv: [
+			's3api',
+			'head-object',
+			'--bucket',
+			HOLE,
+			'--key',
+			HOLE,
+			'--checksum-mode',
+			'ENABLED',
+			'--output',
+			'json',
+		],
 		why: 'The publish preflight, and resolving a labelled sha to a bundle that exists.',
 	},
 	'aws.list-objects': {
@@ -130,7 +151,26 @@ export const READ_RECIPES = {
 	},
 	'aws.get-object': {
 		bin: 'aws',
-		argv: ['s3api', 'get-object', '--bucket', HOLE, '--key', HOLE, HOLE, '--output', 'json'],
+		// The same flag, for a different reason. GetObject does declare a `httpChecksum`
+		// block, so botocore sets the mode itself whenever `response_checksum_validation`
+		// is `when_supported`, which is today's default. That default is a setting: measured,
+		// `AWS_RESPONSE_CHECKSUM_VALIDATION=when_required` in the environment, or the same
+		// line in `~/.aws/config`, removes `ChecksumSHA256` from the output with exit code 0
+		// and no warning. A recipe is a closed template precisely so that what it does cannot
+		// depend on the machine it runs on, so the flag is written here rather than inherited.
+		argv: [
+			's3api',
+			'get-object',
+			'--bucket',
+			HOLE,
+			'--key',
+			HOLE,
+			HOLE,
+			'--checksum-mode',
+			'ENABLED',
+			'--output',
+			'json',
+		],
 		why: 'Prefetch. The third hole is the output path, which s3api takes positionally.',
 	},
 } as const satisfies Readonly<Record<string, Recipe>>;

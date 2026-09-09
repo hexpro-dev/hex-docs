@@ -127,9 +127,37 @@ const NO_BUCKET = /NoSuchBucket|AllAccessDisabled|InvalidBucketName/;
  * developer's laptop is an expired SSO session, and the common case in a container is no
  * credential source at all. Both are the same answer to the caller: this run did not
  * look.
+ *
+ * `InvalidAccessKeyId` and `InvalidToken` are the codes S3 itself returns for a key that
+ * has been deleted or deactivated and for a malformed session token, and they arrive only
+ * where the response carries a body. Measured on aws-cli 2.36.19 against a dead key: a
+ * `get-object` prints `An error occurred (InvalidAccessKeyId) ...` and so does a
+ * `list-objects-v2`, while the same request as `head-object` prints
+ * `An error occurred (403) when calling the HeadObject operation: Forbidden` and names
+ * nothing, because a HEAD response has no body and botocore synthesises the code from the
+ * status. So these two fix `get` and `list`, where a rotated key used to read as a plain
+ * failure, and they cannot fix `head`, where the text they would match is never printed.
+ * What `head` does instead is at `denial()`.
  */
 const NO_CREDENTIALS =
-	/Unable to locate credentials|ExpiredToken|InvalidClientTokenId|SignatureDoesNotMatch|security token included in the request is (?:expired|invalid)|The SSO session|Error when retrieving token|The config profile \(.*\) could not be found|UnrecognizedClientException/i;
+	/Unable to locate credentials|ExpiredToken|InvalidClientTokenId|InvalidAccessKeyId|InvalidToken|SignatureDoesNotMatch|security token included in the request is (?:expired|invalid)|The SSO session|Error when retrieving token|The config profile \(.*\) could not be found|UnrecognizedClientException/i;
+
+/**
+ * Denied, which on a read is not the same answer as absent and must not be folded into
+ * one.
+ *
+ * S3 masks a missing object as a 403 for a caller that cannot list the bucket: with
+ * `s3:ListBucket` a `head-object` on a key that is not there answers 404, and without it
+ * the same call answers 403, so the two states are indistinguishable from the message
+ * alone. Measured against two public buckets, one granting anonymous list and one not, on
+ * the same missing key.
+ *
+ * It is matched only so the refusal can say what a 403 can mean, which on a `head-object`
+ * is three things rather than two: see `denial()`. Reading a 403 as absent would be worse
+ * than the raw stderr: `publish` would upload nine hundred objects one denial at a time,
+ * and `prefetch` would report a bundle missing when what is missing is a permission.
+ */
+const ACCESS_DENIED = /AccessDenied|\(403\)|Forbidden/;
 
 const PRECONDITION_FAILED = /PreconditionFailed|\(412\)/;
 
@@ -146,6 +174,39 @@ function refusal(what: string, result: RunResult): Refusal {
 		why: `${prefix}: ${detail || 'no output'}`,
 		credentials: result.status === null ? false : NO_CREDENTIALS.test(result.stderr),
 	};
+}
+
+/**
+ * The same refusal, with the sentence a 403 needs and an ordinary one cannot carry.
+ *
+ * A reader whose credentials are fine and whose bundle is missing gets `AccessDenied`
+ * from S3 and nothing else, because of the masking rule above. Quoting that verbatim
+ * sends an operator to IAM, which is the wrong half of the answer roughly half the time.
+ * Naming the states costs one sentence and is the difference between a fifteen minute
+ * search and a one minute one.
+ *
+ * How many states there are depends on whether the service named a code, which is why
+ * this branches rather than printing the shorter list both times. A HeadObject error has
+ * no body, so botocore synthesises the code from the status and the CLI prints
+ * `An error occurred (403) when calling the HeadObject operation: Forbidden` and nothing
+ * else. Measured on aws-cli 2.36.19: a deactivated access key and a policy that simply
+ * says no print that line byte for byte, while the same request as `get-object` does
+ * carry a body and names `InvalidAccessKeyId` in the first case and `AccessDenied` in the
+ * second. So a 403 naming `AccessDenied` is the two-state answer this used to assert
+ * everywhere, and a 403 naming no code at all is a three-state one.
+ *
+ * `credentials` stays false on both, deliberately, and the sentence is the whole fix. A
+ * bare 403 read as a credentials refusal would become a `not-run` row saying the run
+ * never looked, which is the same error the other way round and worse: a publisher role
+ * that is merely too narrow would be reported as an unconfigured machine.
+ */
+function denial(what: string, result: RunResult): Refusal {
+	const base = refusal(what, result);
+	const named = /AccessDenied/.test(result.stderr);
+	const sentence = named
+		? 'That is either a missing object or a missing permission: S3 answers a caller without s3:ListBucket with 403 rather than 404, so the two look identical here. Check the labelled commit has a published bundle, then check the policy grants s3:GetObject on the object prefix and s3:ListBucket on the bucket.'
+		: 'That is a missing object, a missing permission, or a credential this account no longer accepts. S3 answers a caller without s3:ListBucket with 403 rather than 404, and an error with no code named in it is a HeadObject failure, which has no body for the CLI to read, so all three read the same here. Re-run the same key as `aws s3api get-object`, which does carry a body and does name the code, then check the labelled commit has a published bundle and that the policy grants s3:GetObject on the object prefix and s3:ListBucket on the bucket.';
+	return { ...base, why: `${base.why} ${sentence}` };
 }
 
 /**
@@ -211,10 +272,13 @@ export function s3Client(exec: Exec, auth: S3Auth, cwd: string): S3Client {
 	/**
 	 * `ExecRefusal` is turned into a refusal rather than allowed to escape.
 	 *
-	 * It is thrown for a hole carrying a shell metacharacter, and the values here are a
-	 * bucket name from a flag, a key from a manifest and an output path built from a
-	 * cache directory. A cache directory under a home directory with a space in it is
-	 * the realistic one, and the honest report for it is a row naming the path, not a
+	 * It is thrown for exactly two things, an arity mismatch and a hole carrying a NUL, so
+	 * it is a programming error or a config value with a NUL in it rather than a state an
+	 * operator reaches. The values passed here are a bucket name from a flag, a key from a
+	 * manifest, an output path built from a cache directory and a content type from
+	 * `s3/keys.ts`. That last one is why the shell metacharacter class this comment used to
+	 * name is gone: `text/plain; charset=utf-8` was refused by it, on this code path, in
+	 * production. Whatever the reason, the honest report is a row naming the value, not a
 	 * stack trace out of a prebuild hook.
 	 */
 	const call = (id: Parameters<Exec>[0], holes: readonly string[]): RunResult => {
@@ -248,12 +312,19 @@ export function s3Client(exec: Exec, auth: S3Auth, cwd: string): S3Client {
 				bytes: typeof parsed.ContentLength === 'number' ? parsed.ContentLength : -1,
 			};
 		}
-		// A 404 from `head-object` means "not there" or "not permitted to know", because
-		// S3 answers a caller without `s3:ListBucket` with a 404 rather than a 403. The
-		// publisher's next step is the same either way: it puts the object with
-		// `--if-none-match '*'`, which fails with a 412 if something is in fact there. So
-		// this reads as absent and the precondition is what makes that safe.
+		// A 404 from `head-object` means the object is not there, and it means that only
+		// because the caller can list the bucket. S3's rule is the opposite way round from
+		// what an earlier version of this comment claimed: with `s3:ListBucket` a missing
+		// key answers 404, and without it the same key answers 403, so an identity granted
+		// only `s3:GetObject` cannot tell the two apart. That is why the publisher's policy
+		// grants `s3:ListBucket` on the bucket as well as the object actions, and why the
+		// 403 below is reported rather than read as absence.
+		//
+		// Reading 404 as absent is safe on its own account: the publisher's next step is a
+		// put carrying `--if-none-match '*'`, which fails with a 412 if something is in
+		// fact there.
 		if (!NO_BUCKET.test(result.stderr) && NOT_FOUND.test(result.stderr)) return { kind: 'absent' };
+		if (ACCESS_DENIED.test(result.stderr)) return denial(`head-object on ${key}`, result);
 		return refusal(`head-object on ${key}`, result);
 	};
 
@@ -330,6 +401,7 @@ export function s3Client(exec: Exec, auth: S3Auth, cwd: string): S3Client {
 		const result = call('aws.get-object', [auth.bucket, key, outPath]);
 		if (result.status === 0) return { kind: 'ok' };
 		if (!NO_BUCKET.test(result.stderr) && NOT_FOUND.test(result.stderr)) return { kind: 'absent' };
+		if (ACCESS_DENIED.test(result.stderr)) return denial(`get-object on ${key}`, result);
 		return refusal(`get-object on ${key}`, result);
 	};
 

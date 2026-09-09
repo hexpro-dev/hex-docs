@@ -332,9 +332,15 @@ describe('what the file must never carry', () => {
 	test('and the two patterns match what they are for, so a clean scan means something', () => {
 		// The positive control again. `\d{12}` inside a template literal is one edit away from
 		// matching nothing, and a scan that cannot fail is a green row over an unread file.
+		// The fake id is assembled from two halves rather than written out, for the same
+		// reason `ATTRIBUTION_PATTERNS` in `scripts/lint.mjs` spells its needles `C[l]aude`.
+		// That guard fails on a twelve digit run anywhere in this repository, so a positive
+		// control carrying one would be a file the repository-wide scan reports, and the only
+		// ways out of that are an exemption naming this file or a weaker rule. Splitting the
+		// literal costs one line and keeps both guards unqualified.
 		const leaked = YAML.replace(
 			`\${{ vars.${ROLE_VARIABLE} }}`,
-			'arn:aws:iam::012345678901:role/hexdocs-publish',
+			`arn:aws:iam::${'01234567'}${'8901'}:role/hexdocs-publish`,
 		);
 		expect(ACCOUNT_ID.test(leaked)).toBe(true);
 		expect(ARN.test(leaked)).toBe(true);

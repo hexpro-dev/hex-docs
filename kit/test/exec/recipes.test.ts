@@ -11,10 +11,14 @@
  * than a line added to a record.
  *
  * Nothing in this file starts a process, and that is deliberate rather than incidental.
- * `runRecipe` checks arity and then metacharacters before it reaches `spawnSync`, so every
- * refusal is reachable without a binary, and a correct call to a zero-hole recipe is the
- * one shape that would spawn. The two places that shape would arise are named at the
- * assertions that skip them.
+ * Two separate things hold it, and neither is obvious from a diff. `runRecipe` checks
+ * arity and then the NUL before it reaches `spawnSync`, so every refusal is reachable with
+ * no binary installed; and the calls that are meant to get past those checks, the ones
+ * asserting which characters reach the child, pass `cwd: '/nonexistent'`, where `spawnSync`
+ * fails before it execs anything and answers `status: null`. That argument is load-bearing:
+ * an edit passing `process.cwd()` there would start running `gh` and `aws` from inside the
+ * suite. A correct call to a zero-hole recipe is the remaining shape that would spawn, and
+ * the test pinning those four says so where they are named.
  */
 
 import { readFileSync } from 'node:fs';
@@ -83,6 +87,8 @@ const ARGV: Readonly<Record<string, readonly string[]>> = {
 		'<hole>',
 		'--key',
 		'<hole>',
+		'--checksum-mode',
+		'ENABLED',
 		'--output',
 		'json',
 	],
@@ -120,6 +126,8 @@ const ARGV: Readonly<Record<string, readonly string[]>> = {
 		'--key',
 		'<hole>',
 		'<hole>',
+		'--checksum-mode',
+		'ENABLED',
 		'--output',
 		'json',
 	],
@@ -173,7 +181,7 @@ const recipeOf = (id: RecipeId): Recipe => ALL_RECIPES[id] as Recipe;
 const shown = (id: RecipeId): string[] =>
 	recipeOf(id).argv.map((slot) => (slot === HOLE ? '<hole>' : slot));
 
-/** A hole value that passes the metacharacter check, so arity is what a call fails on. */
+/** A hole value that passes the NUL check, so arity is what a call fails on. */
 const SAFE = 'safe-value';
 const fill = (id: RecipeId, value = SAFE): string[] => Array(holeCount(id)).fill(value) as string[];
 
@@ -409,9 +417,9 @@ describe('runRecipe refuses before it spawns', () => {
 				expect((thrown as Error).message).toContain(`"${id}"`);
 			});
 
-			test(`${id} refuses a value carrying a shell metacharacter`, () => {
+			test(`${id} refuses a value carrying a NUL`, () => {
 				const poisoned = fill(id);
-				poisoned[0] = '$(id)';
+				poisoned[0] = `x\u0000y`;
 				let thrown: unknown;
 				try {
 					runRecipe(id, poisoned, options);
@@ -420,7 +428,7 @@ describe('runRecipe refuses before it spawns', () => {
 				}
 				expect(thrown).toBeInstanceOf(ExecRefusal);
 				expect((thrown as Error).message).toContain(`"${id}"`);
-				expect((thrown as Error).message).toContain('metacharacter');
+				expect((thrown as Error).message).toContain('NUL');
 			});
 		}
 
@@ -439,54 +447,64 @@ describe('runRecipe refuses before it spawns', () => {
 		});
 	}
 
-	test('every shell metacharacter the class names is refused', () => {
-		// One recipe, and the limit is stated rather than implied: this proves the class, not
-		// that the class is applied to every hole. The per-recipe loop above is what proves
-		// that, and it poisons the first hole only.
-		const refused = ['`', '$', ';', '|', '&', '>', '<', '\\', '\n', '\r'];
-		for (const character of refused) {
+	test('a shell metacharacter reaches the child, and the semicolon is why', () => {
+		// This assertion is the inverse of the one it replaces, and the inversion was forced
+		// by the first publish against a real bucket rather than by an argument.
+		//
+		// `runRecipe` used to refuse a class of shell metacharacters in any hole. Two of the
+		// content types this repository itself sends carry a semicolon:
+		// `text/plain; charset=utf-8` for `llms/*.txt` and `text/markdown; charset=utf-8` for
+		// the raw markdown. The publish uploaded two objects and stopped, and no test in this
+		// suite could have seen it, because every one of them injects a fake `Exec` and never
+		// reaches this function.
+		//
+		// The semicolon is only the instance. An ampersand in a cache directory name and a
+		// backtick in a checkout path are the same defect waiting, and the module's own
+		// comment already said why none of them is dangerous: `spawnSync` takes an argv array
+		// with `shell: false`, so no shell parses a value. The child still applies its own
+		// argument semantics to whatever it is handed, which is what `REFUSED_IN_ARGV`'s
+		// paragraph names and none of these characters is part of. Each is asserted here as a
+		// value that gets through, so restoring the class turns this red with the reason
+		// beside it.
+		const admitted = ['`', '$', ';', '|', '&', '>', '<', '\\', ' '];
+		for (const character of admitted) {
 			expect(
-				() => runRecipe('gh.api', [`repos/x${character}y`], { cwd: process.cwd() }),
-				`${JSON.stringify(character)} was not refused`,
-			).toThrow(ExecRefusal);
+				() => runRecipe('gh.api', [`repos/x${character}y`], { cwd: '/nonexistent' }),
+				`${JSON.stringify(character)} was refused`,
+			).not.toThrow(ExecRefusal);
 		}
-		// The control. A value with none of them gets past the check, which is what says the
-		// ten above failed for the character rather than for the shape of the call. The cwd
-		// does not exist, so `spawnSync` returns an error rather than reaching the network.
+		// The real value, spelled exactly as `s3/keys.ts` sends it. Named separately from the
+		// loop because this is the one the bucket refused.
 		expect(() =>
-			runRecipe('gh.api', ['repos/hexpro-dev/hex-nfc'], { cwd: '/nonexistent' }),
+			runRecipe(
+				'aws.put-object',
+				['bucket', 'llms/en.txt', '/tmp/body', 'text/plain; charset=utf-8', 'AAAA'],
+				{ cwd: '/nonexistent' },
+			),
 		).not.toThrow(ExecRefusal);
 	});
 
 	/**
-	 * A defect in `kit/src/exec/run.ts`, left standing and marked rather than fixed.
+	 * How this assertion got here, because the history is the argument for it.
 	 *
-	 * `METACHARACTER` on line 52 reads, in an editor and in every diff, as
-	 * ``/[`$;|&><\\\n\r ]/`` with a space as the last member. It is not a space. The last
-	 * character in that class is a raw U+0000, written into the file as a byte rather than
-	 * as an escape, so the class refuses NUL and admits the space it appears to name.
+	 * It began as a marked failure against a defect in `kit/src/exec/run.ts`. The class
+	 * there was written ``/[`$;|&><\\\n\r ]/``, which reads in an editor and in every diff
+	 * as ending with a space. It did not: the last character was a raw U+0000, written into
+	 * the file as a byte, so the class refused the NUL and admitted the space it appeared to
+	 * name. An invisible control character in shipped source is the failure the house rule
+	 * about writing non-ASCII as `\uXXXX` exists to stop, in the one file where a reviewer
+	 * most needs to read the characters literally.
 	 *
-	 * Two things follow, and the second is why this is worth a marked failure rather than a
-	 * note. Node's own `spawnSync` already refuses an argv element containing a NUL with
-	 * `ERR_INVALID_ARG_VALUE`, so that member buys a nicer error type and nothing else,
-	 * while a value carrying a space now reaches the child. `shell: false` and an argv array
-	 * mean that is not a shell injection today, which is exactly what the module's own
-	 * comment says: the class is belt and braces for "the case where a value reaches
-	 * something further down that does involve a shell", and a space is the separator that
-	 * case turns on. And an invisible control character in shipped source is the failure the
-	 * house rule about writing non-ASCII as `\uXXXX` exists to stop: nobody reviewing this
-	 * line can see what it says.
-	 *
-	 * When the byte is replaced with a space this turns red, which is the signal to delete
-	 * the `.fails` and keep the assertion.
+	 * Both halves were then settled the other way round from the way the marked failure
+	 * argued. The class is gone except for the NUL, which node refuses on its own account,
+	 * so what is left buys a named refusal rather than an `ERR_INVALID_ARG_VALUE` naming
+	 * neither the recipe nor the value. And the space stays admitted, on purpose, which is
+	 * what this test now pins.
 	 */
 	test('a value containing a space reaches the child, deliberately', () => {
-		// This was a marked failure arguing the space belonged in the class. It does not,
-		// and the reasoning changed rather than the code being left alone.
-		//
 		// A space is the separator a shell splits on, so it looks like it belongs. What
-		// makes leaving it out safe is that this class is not the guarantee: `spawnSync` is
-		// called with an argv array and `shell: false`, so nothing ever parses a value. The
+		// makes leaving it out safe is that no class here is the guarantee: `spawnSync` is
+		// called with an argv array and `shell: false`, so no shell ever parses a value. The
 		// fixed template is the guarantee. What makes leaving it out necessary is that a
 		// hole is often a filesystem path, and refusing a space would break a repository
 		// checked out under a path containing one, which on macOS is ordinary.
@@ -498,17 +516,19 @@ describe('runRecipe refuses before it spawns', () => {
 		);
 	});
 
-	test('the class refuses U+0000, and it is written as an escape', () => {
-		// The NUL is still refused, which buys a named error rather than node's own
-		// `ERR_INVALID_ARG_VALUE`, and the source now spells it `\u0000` rather than
-		// carrying the raw byte. An invisible character in a security boundary is the one
-		// place the house rule about escapes matters most: nobody reviewing that line could
-		// see what it said.
+	test('U+0000 is still refused, and it is written as an escape', () => {
+		// The one member left. It buys a named refusal rather than node's own
+		// `ERR_INVALID_ARG_VALUE`, which names neither the recipe nor the value, and it is a
+		// message rather than a security control: node refuses it either way.
+		//
+		// The source spells it `\u0000` rather than carrying the raw byte. An invisible
+		// character in this file is the one place the house rule about escapes matters most,
+		// and it stood here as a byte once: nobody reviewing that line could see what it said.
 		expect(() => runRecipe('gh.api', [`repos/x\u0000y`], { cwd: '/nonexistent' })).toThrow(
 			ExecRefusal,
 		);
 		const source = readFileSync(join(import.meta.dirname, '../../src/exec/run.ts'), 'utf8');
-		const line = source.split('\n').find((row) => row.includes('const METACHARACTER')) ?? '';
+		const line = source.split('\n').find((row) => row.includes('const REFUSED_IN_ARGV')) ?? '';
 		expect(line).not.toContain('\u0000');
 		expect(line).toContain('u0000');
 	});
