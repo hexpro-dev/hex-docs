@@ -7,21 +7,32 @@
  * shell script, its first-run install probe, tsx resolution, the process exit code, and
  * whether stdout stays clean when the same launcher is serving a protocol.
  *
- * Four rows, and the third is the one worth having. `hexdocs mcp` writes JSON-RPC to
+ * Five rows, and the third is the one worth having. `hexdocs mcp` writes JSON-RPC to
  * stdout, so a single stray line from anything else in the process is a parse error the
  * client reports as a broken server with no cause attached. Nothing else in this
  * repository tests that, and it is the failure the launcher's stderr redirect exists for.
+ * The fifth is the only row that runs the launcher's first-run install at all.
  *
  * Zero dependencies, plain `.mjs`, because it runs from the ladder and reads the emitted
  * catalogue rather than importing TypeScript.
  */
 
 import { spawn, spawnSync } from 'node:child_process';
-import { readFileSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import {
+	cpSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { check, notRun, renderAndExit } from './lib/report.mjs';
+import { check, notRun, renderAndExit, skipped } from './lib/report.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
@@ -239,6 +250,140 @@ async function checkMcp(root, tools) {
 	return check('mcp handshake', advertised.length, 'tools', problems);
 }
 
+/**
+ * The launcher's first run, in the shape a consuming site gives it.
+ *
+ * Every other row runs a launcher whose `node_modules` already exists, so the install
+ * branch at the top of `kit/bin/hexdocs` never executes anywhere in the ladder. That branch
+ * is the one a deploy meets after every submodule bump, and step 8 found it broken in
+ * hex-web's shape: without `--ignore-workspace`, pnpm walks up from the kit to the site's
+ * workspace root and installs that instead.
+ *
+ * So the kit is copied without its `node_modules` to `common/docs/kit` inside a throwaway
+ * pnpm workspace that excludes the mount the way hex-web's does, and `--help` is run from
+ * the site directory with stdin closed and `CI` set, which is what the deploy's build step
+ * gives it. Four things are asserted: the exit code and the command list; output
+ * byte-identical, on both streams, to a second run once the kit is installed, so the install
+ * added nothing to either (the deploy reports the tail of stderr, and install chatter there
+ * would bury the row that says why a build failed); and no `node_modules` at the workspace
+ * root.
+ *
+ * The install is forced offline through `npm_config_offline`, which pnpm reads as its own
+ * setting (measured: an empty store then fails with `ERR_PNPM_NO_OFFLINE_TARBALL`). A
+ * ladder row that reached the registry would pass or fail on the network. The flags under
+ * test are unaffected. A store without the kit's packages is `SKIPPED` with that reason,
+ * and so is a machine with no pnpm; both are `FAIL` with `CI` set, because the job installs
+ * the kit with pnpm before this runs and so has both.
+ *
+ * @param {string} root
+ * @returns {import('./lib/report.mjs').CheckResult}
+ */
+export function checkFirstRun(root) {
+	const name = 'first run';
+	const unit = 'installs';
+	const unusable = (reason) =>
+		process.env.CI === 'true'
+			? check(name, 0, unit, [
+					`${reason} CI installs the kit with pnpm before the ladder runs, so this is a broken environment rather than a skip.`,
+				])
+			: skipped(name, unit, reason);
+
+	const probe = spawnSync('pnpm', ['--version'], {
+		encoding: 'utf8',
+		stdio: ['ignore', 'pipe', 'pipe'],
+	});
+	if (probe.error !== undefined || probe.status !== 0) {
+		return unusable('pnpm is not on PATH, so the first-run install cannot be exercised.');
+	}
+
+	const workspace = mkdtempSync(join(tmpdir(), 'hexdocs-first-run-'));
+	try {
+		writeFileSync(
+			join(workspace, 'pnpm-workspace.yaml'),
+			"packages:\n  - 'apps/*'\n  - '!common/docs'\n",
+			'utf8',
+		);
+		writeFileSync(
+			join(workspace, 'package.json'),
+			`${JSON.stringify({ name: 'first-run-probe', private: true }, null, '\t')}\n`,
+			'utf8',
+		);
+		const site = join(workspace, 'apps', 'front');
+		mkdirSync(site, { recursive: true });
+		writeFileSync(
+			join(site, 'package.json'),
+			`${JSON.stringify({ name: 'front', private: true }, null, '\t')}\n`,
+			'utf8',
+		);
+		// The kit, and the runtime half beside it that the kit imports from `../../../src`.
+		// Dereferenced, because a test copy of this repository links trees in rather than
+		// copying them, and a link here would carry the probe's writes back into the original.
+		const mount = join(workspace, 'common', 'docs');
+		const skip = new Set(['node_modules', 'coverage']);
+		for (const tree of ['kit', 'src']) {
+			cpSync(join(root, tree), join(mount, tree), {
+				recursive: true,
+				dereference: true,
+				filter: (source) => !skip.has(basename(source)),
+			});
+		}
+
+		const env = { ...process.env, CI: 'true', NO_COLOR: '1', npm_config_offline: 'true' };
+		delete env.HEXDOCS_PROJECT_ROOT;
+		const launch = () =>
+			spawnSync(join(mount, 'kit', 'bin', 'hexdocs'), ['--help'], {
+				cwd: site,
+				encoding: 'utf8',
+				env,
+				stdio: ['ignore', 'pipe', 'pipe'],
+				timeout: 180_000,
+			});
+		const spawned = launch();
+
+		const said = `${spawned.stdout}${spawned.stderr}`;
+		if (spawned.status !== 0 && said.includes('ERR_PNPM_NO_OFFLINE_TARBALL')) {
+			return unusable(
+				'The pnpm store on this machine does not hold the kit dependencies, and the install is run offline. Run `pnpm --dir kit install` once to fill it.',
+			);
+		}
+
+		const problems = [];
+		if (spawned.status !== 0) {
+			const tail = said.trim().split('\n').slice(-6).join(' | ');
+			problems.push(`The first run exited ${spawned.status}: ${tail}`);
+		}
+		if (helpNames(said).length === 0) {
+			problems.push('The first run printed no command list.');
+		}
+		// Against a warm run rather than against an empty stream, because `--help` itself
+		// writes to stderr. What must not be there is anything the install added.
+		const warm = launch();
+		for (const stream of /** @type {const} */ (['stdout', 'stderr'])) {
+			const first = spawned[stream];
+			const second = warm[stream];
+			if (first !== second) {
+				// What the first run added, wherever it put it, when the warm run's output is
+				// still inside it; the whole of the first run's output when it is not.
+				const extra = first.replace(second, '');
+				problems.push(
+					`The first run wrote ${first.length - second.length} more characters to ${stream} than a warm run, where a deploy's failure message is taken from: ${JSON.stringify(extra.slice(0, 200))}`,
+				);
+			}
+		}
+		if (existsSync(join(workspace, 'node_modules'))) {
+			problems.push(
+				'The install created node_modules at the workspace root, so it installed the consuming workspace rather than the kit.',
+			);
+		}
+		if (!existsSync(join(mount, 'kit', 'node_modules', '.bin', 'tsx'))) {
+			problems.push('The kit has no node_modules/.bin/tsx after its first run.');
+		}
+		return check(name, 1, unit, problems);
+	} finally {
+		rmSync(workspace, { recursive: true, force: true });
+	}
+}
+
 /** Both launchers are executable. A submodule checked out without the bit is unusable. */
 function checkModes(root) {
 	const problems = [];
@@ -274,7 +419,13 @@ export async function run_(root = ROOT) {
 			),
 		];
 	}
-	return [checkHelp(root, tools), checkJson(root), await checkMcp(root, tools), checkModes(root)];
+	return [
+		checkHelp(root, tools),
+		checkJson(root),
+		await checkMcp(root, tools),
+		checkModes(root),
+		checkFirstRun(root),
+	];
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {

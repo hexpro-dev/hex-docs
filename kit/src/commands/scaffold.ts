@@ -17,7 +17,7 @@
  * cannot clobber and the others can" is a distinction nobody remembers under pressure.
  *
  * The refusals are not silent. A dropped file, a `sync-public.sh` this code will not edit,
- * a config left deliberately incomplete: each is a line in `notes`, which the CLI prints
+ * a site config that would not validate: each is a line in `notes`, which the CLI prints
  * and the tool returns.
  *
  * The table of files a source tree starts with lives in `templates/source.ts` and is
@@ -30,15 +30,17 @@ import { relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { notRunRow } from '../../../src/contracts/diagnostics.js';
-import { LOCALES, SOURCE_LOCALE, matchLocale } from '../../../src/contracts/locales.js';
+import { LOCALES, SOURCE_LOCALE } from '../../../src/contracts/locales.js';
 import type { Locale } from '../../../src/contracts/locales.js';
 import {
 	PROJECT_ID_PATTERN,
 	REPO_PATTERN,
 	SITE_ROOT_RELATIVE,
 } from '../../../src/contracts/project.js';
+import type { DocsSiteConfig } from '../../../src/contracts/site.js';
 import { parseSlug } from '../../../src/contracts/slug.js';
 import { readFrontMatter } from '../compile/frontmatter.js';
+import { docsSiteConfigSchema, versionTableProblems } from '../contracts/config.schema.js';
 import { defineCommand } from '../registry/command.js';
 import type { CommandOutput } from '../registry/command.js';
 import type { Param } from '../registry/params.js';
@@ -72,7 +74,18 @@ import {
 	publishWorkflow,
 } from '../templates/workflow.js';
 
-import { LOCALE_MANY, REGION, ROOT, SITE, rootOf } from './common.js';
+import {
+	COMMIT,
+	LOCALE_MANY,
+	REGION,
+	RELEASED,
+	ROOT,
+	SITE,
+	VERSION,
+	entryShapeProblems,
+	isoDate,
+	rootOf,
+} from './common.js';
 
 const SCAFFOLD_KINDS = ['page', 'source', 'site', 'workflow'] as const;
 
@@ -329,6 +342,10 @@ interface KindInput {
 	title: string | undefined;
 	productName: string | undefined;
 	repo: string | undefined;
+	commit: string | undefined;
+	version: string | undefined;
+	/** Already defaulted to today in UTC, the way `label` defaults it. */
+	released: string;
 }
 
 function mountNote(input: KindInput, what: string): string {
@@ -518,15 +535,22 @@ function scaffoldSite(input: KindInput): CommandOutput {
 	const missing: string[] = [];
 	if (input.project === undefined) missing.push('--project');
 	if (input.site === undefined) missing.push('--site');
+	if (input.commit === undefined) missing.push('--commit');
+	if (input.version === undefined) missing.push('--version');
 	if (missing.length > 0) {
 		return refuse(
 			'site',
 			input.root,
-			`scaffold site needs ${missing.join(', ')}. The project id joins this file to docs/site/docs.json and to the S3 key prefix, and the site is which application in this repository the documentation mounts into.`,
+			`scaffold site needs ${missing.join(', ')}. The project id joins this file to docs/site/docs.json and to the S3 key prefix, the site is which application in this repository the documentation mounts into, and the commit and version are the first labelled bundle, which the schema requires and a scaffolder cannot know: writing a plausible sha would put a fabricated commit into the file the version picker reads.`,
 		);
 	}
 	const project = input.project as string;
 	const site = (input.site as string).replace(/^\.?\/+/, '').replace(/\/+$/, '');
+	const version = {
+		label: input.version as string,
+		commit: input.commit as string,
+		released: input.released,
+	};
 
 	if (!PROJECT_ID_PATTERN.test(project)) {
 		return refuse(
@@ -535,36 +559,48 @@ function scaffoldSite(input: KindInput): CommandOutput {
 			`"${project}" is not a project id. It is an S3 key prefix and a URL segment, so it is lower case ASCII words joined by single hyphens: "hex-nfc".`,
 		);
 	}
-
-	const plan = new Plan(input.root);
-	if (!input.mount.measured) plan.note(mountNote(input, 'the $schema path'));
+	const shape = entryShapeProblems({ ...version, version: version.label });
+	if (shape.length > 0) return refuse('site', input.root, shape.join(' '));
 
 	// `<site>/app/docs/` is where `verify-install` and `prefetch` both look for these files,
 	// so the location is part of the contract rather than a convention.
 	const path = `${site}/app/docs/${project}.docs.json`;
-
-	// A project id that is also a language code produces a basePath whose first segment is
-	// a locale, which the schema refuses outright: the locale prefix is added per request,
-	// because English is unprefixed and the other six are not, so a basePath carrying one
-	// would have to exist seven times.
 	const basePath = `/${project}/docs`;
-	if (matchLocale(project).ok) {
-		plan.note(
-			`"${project}" is also a language code, so ${basePath} starts with a locale segment and the schema refuses it. Mount the documentation somewhere else and edit basePath by hand.`,
+	const contents = siteConfig({
+		project,
+		basePath,
+		schemaRef: schemaRefFor(path, input.mount.path, 'site-1.json'),
+		version,
+	});
+
+	// The file every other command reads is held to the schema they read it with before it
+	// is returned. A scaffold that emitted a config its own schema refuses is the dead end
+	// this kind used to be, and the case that still reaches here is a project id that is
+	// also a language code: its basePath starts with a locale segment, which is refused
+	// because the locale prefix is added per request and a basePath carrying one would have
+	// to exist seven times.
+	const parsed = docsSiteConfigSchema.safeParse(JSON.parse(contents));
+	const problems = parsed.success
+		? versionTableProblems(parsed.data as DocsSiteConfig)
+		: parsed.error.issues.map((issue) => issue.message);
+	if (problems.length > 0) {
+		return refuse(
+			'site',
+			input.root,
+			`The config for "${project}" would not validate: ${problems.join(' ')} scaffold site mounts a project at /<project>/docs and has no flag for anywhere else, so write this one by hand against kit/schema/site-1.json.`,
 		);
 	}
 
+	const plan = new Plan(input.root);
+	if (!input.mount.measured) plan.note(mountNote(input, 'the $schema path'));
+
 	plan.create(
 		path,
-		siteConfig({
-			project,
-			basePath,
-			schemaRef: schemaRefFor(path, input.mount.path, 'site-1.json'),
-		}),
-		'The whole docs mount, as this website sees it: the routes, LOCALISED_PATHS, the hreflang set, the sitemap and the theme class are all derived from this one file.',
+		contents,
+		'The whole docs mount, as this website sees it: the routes, the hreflang set, the sitemap and the theme class are all derived from this one file.',
 	);
 	plan.note(
-		'versions comes back empty, so the file does not validate yet. The schema needs at least one entry and an entry needs a real 40-character commit sha, which a scaffolder cannot know; writing a plausible one would put a fabricated commit into the file the version picker reads. Run hexdocs label to produce the first entry.',
+		`versions holds one entry, ${version.label} at ${version.commit.slice(0, 12)}, marked default: the version served at the unprefixed address. hexdocs label checks and returns the patch for every later version, and hexdocs prefetch fails until a bundle for this commit has been published.`,
 	);
 	plan.note(
 		'pages stays empty. hexdocs sync writes it from the bundle, and it has to be a build input because root.tsx renders the canonical link and all eight hreflang alternates above <Meta />, where a route cannot correct them.',
@@ -638,6 +674,12 @@ export const scaffold = defineCommand({
 			help: 'owner/name, for kind=source: the "edit this page" target',
 			type: 'string',
 		},
+		// `label`'s own three, spread from `common.ts` rather than redeclared, so the help an
+		// agent reads for `--commit` is one sentence in both places. Required for kind=site
+		// and checked there, for the reason `SITE_OPTIONAL` gives.
+		commit: COMMIT,
+		version: VERSION,
+		released: RELEASED,
 	},
 	positionals: ['kind'],
 	taughtBy: ['docs-init-source', 'docs-authoring', 'docs-install-site'],
@@ -653,6 +695,9 @@ export const scaffold = defineCommand({
 			title: input.title,
 			productName: input['product-name'],
 			repo: input.repo,
+			commit: input.commit,
+			version: input.version,
+			released: input.released ?? isoDate(ctx.now()),
 		};
 
 		switch (input.kind) {

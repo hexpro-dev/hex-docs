@@ -10,10 +10,9 @@
  * parity is `strict`, against one where the key is in the wrong object, and against one
  * that is not JSON at all.
  *
- * `siteConfig` is the exception and it is asserted as one. That file is deliberately
- * incomplete, so the test is that it fails validation for exactly one reason and that
- * filling in that one field makes it pass. "It does not validate" on its own would be
- * satisfied by a file with three other things wrong with it.
+ * `siteConfig` used to be the exception, a file left without a version entry, and it was
+ * pinned as one. That state was a dead end for every command that reads the file, so it is
+ * held to the same rule now: it validates, and its version table has nothing wrong with it.
  *
  * Deliberately not covered here: what `hexdocs init` does with this plan, which is
  * `kit/test/commands/init.test.ts`, and what `hexdocs scaffold source` does with it
@@ -35,13 +34,14 @@ import {
 	DOCS_CONFIG_VERSION,
 	SITE_ROOT_RELATIVE,
 } from '../../../src/contracts/project.js';
-import { SITE_CONFIG_VERSION } from '../../../src/contracts/site.js';
+import { SITE_CONFIG_VERSION, type DocsSiteConfig } from '../../../src/contracts/site.js';
 import { UI_STRINGS } from '../../../src/ui/strings.js';
 import {
 	denyListSchema,
 	docsProjectConfigSchema,
 	docsSiteConfigSchema,
 	navTreeSchema,
+	versionTableProblems,
 } from '../../src/contracts/config.schema.js';
 import { MIRROR_SCRIPT_RELATIVE, normaliseEntry } from '../../src/source/allow-paths.js';
 import {
@@ -60,6 +60,11 @@ import { PUBLISH_WORKFLOW_PATH } from '../../src/templates/workflow.js';
 const PROJECT = 'fixture-app';
 const PRODUCT = 'Fixture App';
 const REPO = 'hexpro-dev/fixture-app';
+const FIRST_VERSION = {
+	label: '1.0.0',
+	commit: '67a7f22c66619693ab861f82cd1cc5fb2f1788a6',
+	released: '2026-04-08',
+} as const;
 
 /** The repository this test file is in, so a `$schema` reference can be resolved for real. */
 const HEX_DOCS_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
@@ -83,7 +88,12 @@ describe('the JSON these builders write', () => {
 		}),
 		navTree({ schemaRef: null }),
 		denyList({ schemaRef: null }),
-		siteConfig({ project: PROJECT, basePath: `/${PROJECT}/docs`, schemaRef: null }),
+		siteConfig({
+			project: PROJECT,
+			basePath: `/${PROJECT}/docs`,
+			schemaRef: null,
+			version: FIRST_VERSION,
+		}),
 	];
 
 	test('is tab indented and ends in a newline, matching every checked-in config', () => {
@@ -245,40 +255,36 @@ describe('denyList', () => {
 // ---------------------------------------------------------------------------
 
 describe('siteConfig', () => {
-	const text = siteConfig({ project: PROJECT, basePath: `/${PROJECT}/docs`, schemaRef: null });
+	const text = siteConfig({
+		project: PROJECT,
+		basePath: `/${PROJECT}/docs`,
+		schemaRef: null,
+		version: FIRST_VERSION,
+	});
 	const value = parseJson(text) as Record<string, unknown>;
 
-	test('does not validate, and versions is the only reason', () => {
+	test('validates, with nothing wrong in its version table', () => {
+		// The inversion of the test that used to pin `versions: []` as intended. That file
+		// failed the schema, `label` could not anchor its patch on it, and `prefetch` and
+		// `sync` refused it, so every tool downstream of the scaffold was a dead end.
 		const parsed = docsSiteConfigSchema.safeParse(value);
-		expect(parsed.success).toBe(false);
-		// One reason, named. "It does not validate" on its own would be satisfied by a file
-		// with three other things wrong with it, which is precisely the state this file must
-		// not be shipped in.
-		expect((parsed.error?.issues ?? []).map((issue) => issue.path.join('.'))).toEqual(['versions']);
-	});
-
-	test('and one real version entry is all it needs', () => {
-		const parsed = docsSiteConfigSchema.safeParse({
-			...value,
-			versions: [
-				{
-					label: '1.0',
-					commit: '0'.repeat(40),
-					released: '2026-01-01',
-					default: true,
-				},
-			],
-		});
 		expect(parsed.error?.issues ?? []).toEqual([]);
 		expect(parsed.success).toBe(true);
+		expect(versionTableProblems(parsed.data as DocsSiteConfig)).toEqual([]);
+	});
+
+	test('carries exactly the one version it was given, and marks it default', () => {
+		expect(value['versions']).toEqual([{ ...FIRST_VERSION, default: true }]);
 	});
 
 	test('pages comes back empty, because hexdocs sync writes it as a build input', () => {
 		expect(value['pages']).toEqual([]);
 		expect(value['site']).toBe(SITE_CONFIG_VERSION);
 		// Absent rather than empty. `hidden` is optional and a hidden slug must also be in
-		// `pages`, so an empty array here would be a key saying nothing.
+		// `pages`, so an empty array here would be a key saying nothing, and `redirects` is
+		// the same for the same reason.
 		expect('hidden' in value).toBe(false);
+		expect('redirects' in value).toBe(false);
 		// Absent is a supported state and means the documentation takes this package's own
 		// palette, which is the case that has to work for the package to be reusable at all.
 		expect('themeClass' in value).toBe(false);

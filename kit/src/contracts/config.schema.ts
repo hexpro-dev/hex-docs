@@ -48,6 +48,7 @@ import { SEVERITIES } from '../../../src/contracts/diagnostics.js';
 import { MAX_NAV_DEPTH, NAV_GROUP_ID_PATTERN, NAV_VERSION } from '../../../src/contracts/nav.js';
 import type { NavItem, NavTree } from '../../../src/contracts/nav.js';
 import { SITE_CONFIG_VERSION } from '../../../src/contracts/site.js';
+import { parseSlug, slugToPath } from '../../../src/contracts/slug.js';
 import type { DocsSiteConfig, VersionEntry } from '../../../src/contracts/site.js';
 import {
 	commitShaSchema,
@@ -414,7 +415,58 @@ export const docsSiteConfigSchema = z
 	.refine(
 		(config) => (config.hidden ?? []).every((slug) => config.pages.includes(slug)),
 		'Every slug in `hidden` must also be in `pages`: hiding a page keeps it published.',
-	);
+	)
+	// The same kind of relationship, for redirects. The route table is built from `pages`
+	// and from the keys of `redirects`, and a request is answered from one lookup keyed by
+	// address, so a redirect source that shares an address with a page, or with another
+	// source, is an address with two answers. Compared by address rather than by slug,
+	// because a leaf and a section root are one address once addresses carry no trailing
+	// slash: `guide` as a source beside a `guide/index` page is the same collision as
+	// `guide` beside `guide`. A redirect whose target is not a page is a 301 to a 404.
+	//
+	// The compiler drops a redirect from a slug it published and one to a slug it did not,
+	// but it compares slugs rather than addresses (`build.ts`, where the manifest's redirects
+	// are filtered), so a `redirectFrom: guide` on one page beside a `guide/index` page can
+	// reach a bundle. This is where that is refused, along with a hand edit, and it is the
+	// refusal `sync` reports when the file it was about to write would carry one.
+	.superRefine((config, context) => {
+		const owners = new Map<string, string>();
+		for (const slug of config.pages) owners.set(addressOf(slug), `the page "${slug}"`);
+		const pages = new Set(config.pages);
+		for (const [from, to] of Object.entries(config.redirects ?? {})) {
+			const address = addressOf(from);
+			const owner = owners.get(address);
+			if (owner !== undefined) {
+				context.addIssue({
+					code: 'custom',
+					path: ['redirects', from],
+					message: `The redirect source "${from}" has the same address as ${owner}. An address has one answer: remove one of them.`,
+				});
+			} else {
+				owners.set(address, `the redirect source "${from}"`);
+			}
+			if (!pages.has(to)) {
+				context.addIssue({
+					code: 'custom',
+					path: ['redirects', from],
+					message: `"${from}" redirects to "${to}", which is not in \`pages\`, so the redirect would answer with a 404.`,
+				});
+			}
+		}
+	});
+
+/**
+ * A slug's address under the mount, which is what two routes can collide on.
+ *
+ * `slugSchema` has already refused anything that is not slug-shaped, and beyond that shape
+ * `parseSlug` refuses only a reserved root or `index` used as a directory. A slug it will
+ * not take is compared as it is spelled, so the one collision this can miss is between
+ * two slugs the compiler would already have refused to publish.
+ */
+function addressOf(slug: string): string {
+	const parsed = parseSlug(slug);
+	return parsed.ok ? slugToPath(parsed.slug) : slug;
+}
 
 /**
  * The version table's invariants: exactly one default, no repeated label, no repeated
@@ -438,14 +490,29 @@ export function versionTableProblems(config: DocsSiteConfig): string[] {
 
 	// A label is a URL segment under /v/<label>/, so two entries sharing one means two
 	// bundles at one address and whichever the lookup finds first wins.
-	const seenLabels = new Set<string>();
+	//
+	// Compared case-folded, because two labels that differ only in case are one address
+	// twice over. React Router matches `/v/<label>` without regard to case, and `prefetch`
+	// extracts each label into a directory of that name, which on a case-insensitive
+	// filesystem is the same directory. Measured on APFS: with `1.0.0-RC` present, a write
+	// under `1.0.0-rc` lands inside it and `readdirSync` goes on reporting the old case,
+	// while the Linux container that serves `public/` is case-sensitive, so the search index
+	// and the assets would 404 there and nowhere else. The labels are ASCII by
+	// `VERSION_LABEL_PATTERN`, so lower-casing is the whole of the fold.
+	const seenLabels = new Map<string, string>();
 	for (const entry of config.versions) {
-		if (seenLabels.has(entry.label)) {
+		const folded = entry.label.toLowerCase();
+		const earlier = seenLabels.get(folded);
+		if (earlier === entry.label) {
 			problems.push(
 				`Two versions are labelled "${entry.label}". A label is a URL segment and must be unique.`,
 			);
+		} else if (earlier !== undefined) {
+			problems.push(
+				`Versions "${earlier}" and "${entry.label}" differ only in case. The route matches /v/<label>/ without regard to case and a case-insensitive filesystem stores both in one directory, so they are one address.`,
+			);
 		}
-		seenLabels.add(entry.label);
+		if (earlier === undefined) seenLabels.set(folded, entry.label);
 	}
 
 	// Two labels on one commit is legal in principle and almost always a copy-paste, so

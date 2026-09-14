@@ -48,7 +48,10 @@ import type { DocsSiteConfig } from '../../../src/contracts/site.js';
 import { buildBundle } from '../../src/compile/build.js';
 import { writeBundle } from '../../src/compile/bundle.js';
 import { sha256Hex } from '../../src/compile/serialise.js';
+import { label } from '../../src/commands/label.js';
+import { scaffold } from '../../src/commands/scaffold.js';
 import { sync } from '../../src/commands/sync.js';
+import { docsSiteConfigSchema, versionTableProblems } from '../../src/contracts/config.schema.js';
 import { NO_EXEC } from '../../src/exec/run.js';
 import { fileWriter } from '../../src/io/write.js';
 import { exitCodeFor, invoke, type CommandOutput, type Ctx } from '../../src/registry/command.js';
@@ -268,14 +271,15 @@ describe('the bytes', () => {
 		expect(second.text.endsWith('\n\n')).toBe(false);
 	});
 
-	test('every byte outside pages, hidden and versions[].digest is unchanged', async () => {
+	test('every byte outside pages, hidden, redirects and versions[].digest is unchanged', async () => {
 		const root = siteRepo();
 		const { text } = await runSync(root, fullCache);
 
-		// Hand-authored: the fixture with exactly the two edits this command owns applied to
-		// it, and nothing else. The `1.1.0` entry already carries a digest, so its value is
+		// Hand-authored: the fixture with exactly the edits this command owns applied to it,
+		// and nothing else. The `1.1.0` entry already carries a digest, so its value is
 		// replaced in place; the `1.0.0` entry carries none, so one is appended after
-		// `released` at that entry's own indent.
+		// `released` at that entry's own indent. The checked-in fixture predates `redirects`,
+		// and the bundle carries one, so the member arrives above `pages`, expanded.
 		const expected = fixtureText
 			.replace(
 				'"3f1c0a2b9d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8"',
@@ -284,19 +288,27 @@ describe('the bytes', () => {
 			.replace(
 				'"released": "2026-01-12"',
 				`"released": "2026-01-12",\n\t\t\t"digest": ${JSON.stringify(digests.get('1.0.0'))}`,
+			)
+			.replace(
+				'\t"pages": [',
+				'\t"redirects": {\n\t\t"first-tag": "guide/first-tag"\n\t},\n\t"pages": [',
 			);
 		expect(text).toBe(expected);
 
-		// Said again as a count, so the claim is not resting on one `toBe`. One line is added
-		// and three differ from anything in the original: the replaced `1.1.0` digest, the
-		// `1.0.0` released line that gains a comma, and the appended `1.0.0` digest. Every
-		// other line in the file is one the original already had, in its original order.
+		// Said again as a count, so the claim is not resting on one `toBe`. Four lines are
+		// added and five differ from anything in the original: the replaced `1.1.0` digest,
+		// the `1.0.0` released line that gains a comma, the appended `1.0.0` digest, and the
+		// opening and single member of `redirects`. Its closing `\t},` is a line the original
+		// already had, which is why it is not in the count. Every other line in the file is
+		// one the original already had, in its original order.
 		const before = fixtureText.split('\n');
 		const after = text.split('\n');
-		expect(after.length).toBe(before.length + 1);
+		expect(after.length).toBe(before.length + 4);
 		const changed = after.filter((line) => !before.includes(line));
-		expect(changed).toHaveLength(3);
-		expect(changed.every((line) => /"digest"|"released"/.test(line))).toBe(true);
+		expect(changed).toHaveLength(5);
+		expect(changed.every((line) => /"digest"|"released"|"redirects"|"first-tag"/.test(line))).toBe(
+			true,
+		);
 
 		// And the fields this command does not own kept their bytes, their key order and
 		// their packing.
@@ -304,9 +316,13 @@ describe('the bytes', () => {
 			expect(text).toContain(`"${key}"`);
 		}
 		expect(text).toContain('"zh": "文档"');
-		expect(Object.keys(JSON.parse(text) as object)).toEqual(
-			Object.keys(JSON.parse(fixtureText) as object),
-		);
+		const keysBefore = Object.keys(JSON.parse(fixtureText) as object);
+		expect(Object.keys(JSON.parse(text) as object)).toEqual([
+			...keysBefore.slice(0, keysBefore.indexOf('pages')),
+			'redirects',
+			'pages',
+		]);
+		expect(keysBefore[keysBefore.length - 1]).toBe('pages');
 	});
 });
 
@@ -420,6 +436,207 @@ describe('a slug that is no longer in the bundle', () => {
 		expect(output.lines.join('\n')).toContain(
 			'Removed, with a redirect: first-tag to guide/first-tag',
 		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// redirects
+// ---------------------------------------------------------------------------
+
+let doctored = 0;
+
+/**
+ * A copy of the full cache whose default-version manifest has had its redirects replaced.
+ *
+ * Written with `JSON.stringify` rather than through the bundle writer, because the point is
+ * a manifest the compiler would never have produced. Its digest changes with it, which
+ * `sync` reports as a re-pin and which none of these tests is about.
+ */
+function cacheWithRedirects(redirects: Record<string, string>): string {
+	doctored += 1;
+	const cache = join(scratch, `cache-redirects-${doctored}`);
+	cpSync(fullCache, cache, { recursive: true });
+	const path = join(cache, bundlePrefix(PROJECT, VERSIONS[0].commit), MANIFEST_KEY);
+	const value = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+	writeFileSync(path, JSON.stringify({ ...value, redirects }), 'utf8');
+	return cache;
+}
+
+describe('redirects', () => {
+	test('the bundle carries one, and the config gains it as an expanded member above pages', async () => {
+		expect(manifest.redirects).toEqual({ 'first-tag': 'guide/first-tag' });
+		const root = siteRepo();
+		const { data, text, exit } = await runSync(root, fullCache);
+		const config = JSON.parse(text) as DocsSiteConfig;
+
+		expect(exit).toBe(0);
+		expect(config.redirects).toEqual(manifest.redirects);
+		expect(Object.keys(config)).toEqual([
+			'$schema',
+			'site',
+			'project',
+			'basePath',
+			'themeClass',
+			'navLabel',
+			'versions',
+			'hidden',
+			'redirects',
+			'pages',
+		]);
+		expect(text).toContain('\t"redirects": {\n\t\t"first-tag": "guide/first-tag"\n\t},\n');
+		expect((data as unknown as { redirects: unknown }).redirects).toEqual(manifest.redirects);
+	});
+
+	test('a config already saying the same thing in another shape is left as it is', async () => {
+		// Value-gated, like `pages`. A packed object says what the expanded one says, and
+		// rewriting it would be the diff a formatter and this command fight over.
+		const root = siteRepo();
+		await runSync(root, fullCache);
+		const path = configPathOf(root);
+		const packed = readFileSync(path, 'utf8').replace(
+			'"redirects": {\n\t\t"first-tag": "guide/first-tag"\n\t}',
+			'"redirects": { "first-tag": "guide/first-tag" }',
+		);
+		writeFileSync(path, packed, 'utf8');
+
+		const again = await runSync(root, fullCache);
+		expect(again.data.written).toBe(false);
+		expect(again.text).toBe(packed);
+	});
+
+	test('a bundle with no redirects takes the member out, and a second run changes nothing', async () => {
+		const root = siteRepo((config) => {
+			config.redirects = { 'first-tag': 'guide/first-tag' };
+		});
+		const cache = cacheWithRedirects({});
+
+		const first = await runSync(root, cache);
+		expect(first.exit).toBe(0);
+		expect('redirects' in (JSON.parse(first.text) as object)).toBe(false);
+		expect(first.text).not.toContain('"redirects"');
+
+		const second = await runSync(root, cache);
+		expect(second.data.written).toBe(false);
+		expect(second.text).toBe(first.text);
+	});
+
+	const REFUSED: readonly { name: string; redirects: Record<string, string>; says: string }[] = [
+		{
+			name: 'a source that is also a page',
+			redirects: { 'guide/first-tag': 'index' },
+			says: 'The redirect source "guide/first-tag" has the same address as the page "guide/first-tag"',
+		},
+		{
+			// A leaf and a section root are one address once addresses carry no trailing slash,
+			// so this is the same collision spelled so that a comparison of slugs misses it.
+			name: 'a leaf source at the address of a section root',
+			redirects: { guide: 'index' },
+			says: 'The redirect source "guide" has the same address as the page "guide/index"',
+		},
+		{
+			name: 'a target that is not a page',
+			redirects: { 'old-page': 'guide/renamed' },
+			says: '"old-page" redirects to "guide/renamed", which is not in `pages`',
+		},
+	];
+
+	for (const entry of REFUSED) {
+		test(`${entry.name} is refused, naming it, and nothing is written`, async () => {
+			const root = siteRepo();
+			const before = readFileSync(configPathOf(root));
+
+			const { data, exit, output } = await runSync(root, cacheWithRedirects(entry.redirects));
+
+			expect(data.written).toBe(false);
+			expect(data.why).toContain('does not validate, so nothing was written');
+			expect(data.why).toContain(entry.says);
+			expect(output.rows.map((row) => row.status)).toEqual(['not-run', 'not-run']);
+			expect(readFileSync(configPathOf(root))).toEqual(before);
+			expect(exit).toBe(3);
+		});
+	}
+});
+
+// ---------------------------------------------------------------------------
+// a new config, end to end
+// ---------------------------------------------------------------------------
+
+describe('a config scaffold wrote, label extended and sync then filled in', () => {
+	test('validates at every step, and sync accepts it with nothing left to report', async () => {
+		// The dead end this replaces: `scaffold site` used to return `versions: []`, which the
+		// schema refuses, `label` could not anchor on, and `sync` and `prefetch` both refused.
+		// Every tool here is the real command, and the only hand step is the one a person
+		// takes with Edit, applying the patch `label` returned.
+		const root = join(scratch, 'end-to-end');
+		mkdirSync(root, { recursive: true });
+		const older = VERSIONS[1];
+		const newer = VERSIONS[0];
+
+		const scaffolded = await invoke(
+			scaffold,
+			{
+				kind: 'site',
+				root,
+				project: PROJECT,
+				site: SITE,
+				commit: older.commit,
+				version: older.label,
+				released: older.at.slice(0, 10),
+			},
+			{ ...context(root), write: null },
+		);
+		expect(exitCodeFor(scaffolded)).toBe(0);
+		const file = (scaffolded.data as unknown as { files: { path: string; contents: string }[] })
+			.files[0];
+		expect(file?.path).toBe(`${SITE}/app/docs/${PROJECT}.docs.json`);
+		mkdirSync(dirname(configPathOf(root)), { recursive: true });
+		writeFileSync(configPathOf(root), file?.contents ?? '', 'utf8');
+		const initial = docsSiteConfigSchema.safeParse(JSON.parse(file?.contents ?? ''));
+		expect(initial.success).toBe(true);
+
+		const labelled = await invoke(
+			label,
+			{
+				root,
+				project: PROJECT,
+				commit: newer.commit,
+				version: newer.label,
+				released: newer.at.slice(0, 10),
+				cache: fullCache,
+			},
+			context(root),
+		);
+		expect(labelled.rows.map((row) => row.status)).toEqual(['pass', 'pass', 'skipped']);
+		const patch = (labelled.data as unknown as { patch: { anchor: string; insert: string } | null })
+			.patch;
+		expect(patch).not.toBeNull();
+		const text = readFileSync(configPathOf(root), 'utf8');
+		expect(text.split(patch?.anchor ?? '').length).toBe(2);
+		writeFileSync(
+			configPathOf(root),
+			text.replace(patch?.anchor ?? '', `${patch?.anchor ?? ''}\n${patch?.insert ?? ''}`),
+			'utf8',
+		);
+		const patched = docsSiteConfigSchema.safeParse(
+			JSON.parse(readFileSync(configPathOf(root), 'utf8')),
+		);
+		expect(patched.success).toBe(true);
+		expect(versionTableProblems(patched.data as DocsSiteConfig)).toEqual([]);
+
+		const synced = await runSync(root, fullCache);
+		expect(synced.exit).toBe(0);
+		expect(synced.output.rows.map((row) => row.status)).toEqual(['pass', 'pass']);
+		const config = JSON.parse(synced.text) as DocsSiteConfig;
+		expect(config.versions.map((entry) => [entry.label, entry.default === true])).toEqual([
+			[newer.label, false],
+			[older.label, true],
+		]);
+		expect(config.versions.map((entry) => entry.digest)).toEqual([
+			digests.get(newer.label),
+			digests.get(older.label),
+		]);
+		expect(docsSiteConfigSchema.safeParse(config).success).toBe(true);
+		expect((await runSync(root, fullCache)).data.written).toBe(false);
 	});
 });
 

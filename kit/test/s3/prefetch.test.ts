@@ -21,12 +21,15 @@
  */
 
 import {
+	chmodSync,
+	cpSync,
 	existsSync,
+	lstatSync,
 	mkdirSync,
 	readFileSync,
 	readdirSync,
 	rmSync,
-	statSync,
+	symlinkSync,
 	writeFileSync,
 } from 'node:fs';
 import { mkdtempSync } from 'node:fs';
@@ -60,7 +63,7 @@ import { writeBundle } from '../../src/compile/bundle.js';
 import { sha256Hex } from '../../src/compile/serialise.js';
 import { prefetch } from '../../src/commands/prefetch.js';
 import { ALL_RECIPES, HOLE, type Recipe, type RecipeId } from '../../src/exec/recipes.js';
-import { fileWriter } from '../../src/io/write.js';
+import { fileWriter, recordingWriter } from '../../src/io/write.js';
 import type { Exec, RunResult } from '../../src/exec/run.js';
 import { exitCodeFor, invoke, type Ctx } from '../../src/registry/command.js';
 import type { Writer } from '../../src/registry/command.js';
@@ -69,6 +72,12 @@ const BUCKET = 'hexdocs-fixture-bucket';
 const KIT_VERSION = '@hex-pro/docs-kit@0.0.0';
 const LABEL = '1.1.0';
 const PROJECT = 'fixture-app';
+/** A pinned version beside the default, served at `/v/1.0.0/` and compiled from its own commit. */
+const OLDER = {
+	label: '1.0.0',
+	commit: 'bec42b4a2f4d59371ae29e19d9e8b441165b186b',
+	released: '2026-01-12',
+} as const;
 
 /**
  * The digest the checked-in site config pins, which is deliberately not this bundle's.
@@ -125,12 +134,15 @@ class FakeS3 {
 	constructor(
 		private readonly serve: string | null,
 		private readonly prefix: string,
+		/** What a bucket that serves nothing prints, so a credentials refusal can be staged. */
+		private readonly refusal: string | null = null,
 	) {}
 
 	readonly exec: Exec = (id, holes) => {
 		this.calls.push({ id, holes: [...holes], argv: fill(id, holes) });
 		if (id !== 'aws.get-object' || this.serve === null) {
-			return { status: 255, stdout: '', stderr: `the fake has no answer for ${id}` };
+			const stderr = this.refusal ?? `the fake has no answer for ${id}`;
+			return { status: 255, stdout: '', stderr };
 		}
 		const key = (holes[1] ?? '').slice(this.prefix.length + 1);
 		const source = join(this.serve, ...key.split('/'));
@@ -175,6 +187,13 @@ beforeAll(() => {
 	cachedBundle = writeBundle(bundleRoot, manifest, built.objects).prefix;
 	prefix = bundlePrefix(manifest.project, manifest.commit, manifest.ast);
 	expect(manifest.project).toBe(PROJECT);
+	// A second commit of the same corpus, for the pinned version beside the default one.
+	const older = buildBundle(corpus.root, {
+		generator: KIT_VERSION,
+		commit: OLDER.commit,
+		commitTimestamp: '2026-01-12T09:00:00Z',
+	});
+	writeBundle(bundleRoot, older.manifest, older.objects);
 
 	// `bucketOf` falls back to this, so a developer with one exported would otherwise make
 	// the no-credentials tests below pass for the wrong reason.
@@ -195,6 +214,10 @@ interface ConfigOptions {
 	readonly digest?: string;
 	/** Replaces the page list, for the two skew directions. */
 	readonly pages?: readonly string[];
+	/** Replaces the one version's label, for a relabel. */
+	readonly label?: string;
+	/** Anything else, applied last to the parsed object before it is written. */
+	readonly edit?: (config: Record<string, unknown>) => void;
 }
 
 /**
@@ -214,7 +237,7 @@ function siteConfigText(options: ConfigOptions = {}): string {
 		...fixture,
 		versions: [
 			{
-				label: LABEL,
+				label: options.label ?? LABEL,
 				commit: manifest.commit,
 				released: '2026-04-08',
 				default: true,
@@ -223,6 +246,7 @@ function siteConfigText(options: ConfigOptions = {}): string {
 		],
 		...(options.pages === undefined ? {} : { pages: [...options.pages] }),
 	};
+	options.edit?.(config);
 	return `${JSON.stringify(config, null, '\t')}\n`;
 }
 
@@ -234,11 +258,16 @@ interface Site {
 
 function makeSite(shape: ConsumerShape, options: ConfigOptions = {}): Site {
 	const consumer = materialiseConsumer(shape);
-	const directory = join(consumer.root, consumer.site);
-	const target = join(directory, 'app', 'docs', `${PROJECT}.docs.json`);
+	const site: Site = { consumer, directory: join(consumer.root, consumer.site) };
+	writeConfig(site, options);
+	return site;
+}
+
+/** Rewrites the site's one config, which is how a test relabels between two runs. */
+function writeConfig(site: Site, options: ConfigOptions = {}): void {
+	const target = join(site.directory, 'app', 'docs', `${PROJECT}.docs.json`);
 	mkdirSync(join(target, '..'), { recursive: true });
 	writeFileSync(target, siteConfigText(options), 'utf8');
-	return { consumer, directory };
 }
 
 interface Outcome {
@@ -256,11 +285,13 @@ interface RunOptions {
 	readonly bucket?: string;
 	readonly offline?: boolean;
 	readonly fake?: FakeS3;
+	/** A writer other than the real one, for the dry-run case. */
+	readonly writer?: Writer;
 }
 
 async function run(site: Site, options: RunOptions = {}): Promise<Outcome> {
 	const fake = options.fake ?? new FakeS3(options.serve ?? null, prefix);
-	const writer = fileWriter();
+	const writer = options.writer ?? fileWriter();
 	const ctx: Ctx = {
 		cwd: site.consumer.root,
 		kitVersion: KIT_VERSION,
@@ -451,31 +482,35 @@ describe.each(CONSUMER_SHAPES)('a warm cache, on the %s consumer', (shape) => {
 		expect(checked).toBe(outcome.data['files'] as number);
 	});
 
-	test('the gitignore gains both entries and keeps what the consumer already had', () => {
-		const path = join(site.directory, '.gitignore');
-		const text = readFileSync(path, 'utf8');
-		expect(text.startsWith('.react-router/\nbuild/\n')).toBe(true);
-		expect(text).toContain('app/docs/_bundles/');
-		expect(text).toContain('public/_docs/');
-		expect(text).toContain('# Written by hexdocs prefetch.');
-		expect(row(outcome, 'prefetch-gitignore').status).toBe('pass');
-		expect(outcome.writer.written).toContain(path);
+	test('the rows are the five this command reports, in order, and there is no gitignore row', () => {
+		// The gitignore lines are `install`'s to write and `verify-install`'s to check. A
+		// second writer of the same two lines in a prebuild hook is how a consumer's file
+		// comes to carry them twice under two headers.
+		expect(outcome.rows.map((entry) => entry.id)).toEqual([
+			'prefetch-configs',
+			'prefetch-trees',
+			'prefetch-cache',
+			'prefetch-extract',
+			'prefetch-skew',
+		]);
+		expect(outcome.writer.written.some((path) => path.endsWith('.gitignore'))).toBe(false);
 	});
 
-	test('a second run writes nothing at all, which is what makes it safe on every build', async () => {
-		const before = readFileSync(join(site.directory, '.gitignore'), 'utf8');
+	test('a second run writes nothing and removes nothing, which is what makes it safe on every build', async () => {
 		const second = await run(site);
 
 		expect(second.code).toBe(0);
 		expect(second.data['written']).toBe(0);
+		expect(second.data['removed']).toBe(0);
 		expect(second.data['unchanged']).toBe(outcome.data['files']);
 		expect(second.fake.calls).toEqual([]);
-		// The writer is the measurement rather than a diff: `written` is the list of paths
-		// whose bytes actually changed, so an idempotency claim is an assertion about a
-		// length. The gitignore is in it, and it is the one a second run is most likely to
-		// append to twice.
+		// The writer is the measurement rather than a diff: `written` and `removed` are the
+		// lists of paths that actually changed, so an idempotency claim is an assertion about
+		// two lengths. A keep set that disagreed with what extraction writes would show here
+		// as a file removed and then written back on every run.
 		expect(second.writer.written).toEqual([]);
-		expect(readFileSync(join(site.directory, '.gitignore'), 'utf8')).toBe(before);
+		expect(second.writer.removed).toEqual([]);
+		expect(String(row(second, 'prefetch-extract').note)).toContain('0 removed');
 	});
 });
 
@@ -660,50 +695,560 @@ describe('the page set the host will route against the page set the bundle carri
 });
 
 // ---------------------------------------------------------------------------
-// The gitignore, on its own
+// Pruning: the trees hold what the configs name, and nothing else
 // ---------------------------------------------------------------------------
 
-describe('the gitignore entries', () => {
-	test('are added once and adding them twice changes nothing', async () => {
+/** `<site>/app/docs/_bundles` and `<site>/public/_docs`. */
+function trees(site: Site): { bundle: string; public: string } {
+	return {
+		bundle: join(site.directory, 'app', 'docs', '_bundles'),
+		public: join(site.directory, 'public', '_docs'),
+	};
+}
+
+function plant(path: string, contents = 'planted\n'): string {
+	mkdirSync(join(path, '..'), { recursive: true });
+	writeFileSync(path, contents, 'utf8');
+	return path;
+}
+
+describe('pruning', () => {
+	test('a stale label, a stale project and a stale file in a live label are removed and counted', async () => {
 		const site = makeSite('glob-workspace');
-		const path = join(site.directory, '.gitignore');
 		try {
-			const original = readFileSync(path, 'utf8');
 			await run(site);
-			const afterFirst = readFileSync(path, 'utf8');
-			const size = statSync(path).size;
+			const { bundle, public: publicTree } = trees(site);
+			// One of each shape the prune exists for. A label nothing configures any more, in
+			// both trees; a project no config names; and a file inside the live label that no
+			// manifest record accounts for, at two depths.
+			const stale = [
+				plant(join(bundle, PROJECT, '1.0.0', 'pages', 'en', 'index.json')),
+				plant(join(publicTree, PROJECT, '1.0.0', 'search', 'en.idx.json')),
+				plant(join(bundle, 'retired-app', '2.0.0', 'manifest.json')),
+				plant(join(bundle, PROJECT, LABEL, 'pages', 'en', 'deleted-page.json')),
+				plant(join(publicTree, PROJECT, LABEL, 'stray.txt')),
+			];
 
-			await run(site);
-			await run(site);
+			const second = await run(site);
 
-			expect(readFileSync(path, 'utf8')).toBe(afterFirst);
-			expect(statSync(path).size).toBe(size);
-			// One header and one of each entry, however many times this runs.
-			expect(afterFirst.split('app/docs/_bundles/')).toHaveLength(2);
-			expect(afterFirst.split('public/_docs/')).toHaveLength(2);
-			expect(afterFirst.split('# Written by hexdocs prefetch.')).toHaveLength(2);
-			expect(afterFirst.startsWith(original)).toBe(true);
+			expect(second.code).toBe(0);
+			for (const path of stale) expect([path, existsSync(path)]).toEqual([path, false]);
+			// The directories the walk emptied went with them, and the live trees are intact.
+			expect(readdirSync(bundle)).toEqual([PROJECT]);
+			expect(readdirSync(join(bundle, PROJECT))).toEqual([LABEL]);
+			expect(readdirSync(join(publicTree, PROJECT))).toEqual([LABEL]);
+			expect(tree(join(bundle, PROJECT, LABEL))).toEqual(expectedFiles().bundle);
+			expect(tree(join(publicTree, PROJECT, LABEL))).toEqual(expectedFiles().public);
+
+			// Counted: five files, and the seven directories they left empty. Every removal is
+			// on the writer's list, so the number on the row is a length rather than a claim.
+			const removedDirectories = [
+				join(bundle, PROJECT, '1.0.0', 'pages', 'en'),
+				join(bundle, PROJECT, '1.0.0', 'pages'),
+				join(bundle, PROJECT, '1.0.0'),
+				join(publicTree, PROJECT, '1.0.0', 'search'),
+				join(publicTree, PROJECT, '1.0.0'),
+				join(bundle, 'retired-app', '2.0.0'),
+				join(bundle, 'retired-app'),
+			];
+			expect([...second.writer.removed].sort()).toEqual([...stale, ...removedDirectories].sort());
+			expect(second.data['removed']).toBe(12);
+			expect(String(row(second, 'prefetch-extract').note)).toContain('12 removed');
+			// Nothing the live label needed was removed and written back.
+			expect(second.data['written']).toBe(0);
 		} finally {
 			removeConsumer(site.consumer);
 		}
 	});
 
-	test('a site with the entries already present is left byte for byte alone', async () => {
-		// The check and the writer share one answer: the entries are compared line by line
-		// after trimming, so a hand-added entry counts and is not duplicated beneath a header.
-		const site = makeSite('literal-workspace');
-		const path = join(site.directory, '.gitignore');
+	test('a symbolic link inside a label directory is unlinked, and what it points at survives', async () => {
+		const site = makeSite('glob-workspace');
+		const outside = join(root, 'outside-the-site');
 		try {
-			const planted = 'build/\napp/docs/_bundles/\npublic/_docs/\n';
-			writeFileSync(path, planted, 'utf8');
+			await run(site);
+			mkdirSync(outside, { recursive: true });
+			writeFileSync(join(outside, 'precious.txt'), 'not the site\n', 'utf8');
+			const { bundle } = trees(site);
+			const linkedDirectory = join(bundle, PROJECT, LABEL, 'pages', 'elsewhere');
+			symlinkSync(outside, linkedDirectory);
+			// And a link sitting exactly where a destination file belongs. A prune that kept it
+			// because the path is in the keep set would leave extraction writing through it.
+			const destination = join(bundle, PROJECT, LABEL, MANIFEST_KEY);
+			const manifestBytes = readFileSync(destination);
+			rmSync(destination);
+			symlinkSync(join(outside, 'precious.txt'), destination);
+
+			const second = await run(site);
+
+			expect(second.code).toBe(0);
+			expect(() => lstatSync(linkedDirectory)).toThrow();
+			expect(lstatSync(destination).isSymbolicLink()).toBe(false);
+			expect(readFileSync(destination)).toEqual(manifestBytes);
+			expect(readFileSync(join(outside, 'precious.txt'), 'utf8')).toBe('not the site\n');
+			expect(second.writer.removed).toEqual(expect.arrayContaining([linkedDirectory, destination]));
+		} finally {
+			removeConsumer(site.consumer);
+			rmSync(outside, { recursive: true, force: true });
+		}
+	});
+
+	test('a relabel by case alone lands in the configured case, and the run after it changes nothing', async () => {
+		// Measured on APFS before this existed: with `1.1.0-RC` on disk, a write under
+		// `1.1.0-rc` lands inside the old directory and `readdirSync` goes on reporting the
+		// old case, while the Linux container that serves `public/` is case-sensitive.
+		// Pruning before extraction is what empties the old spelling first, on either kind of
+		// filesystem, so this passes on a laptop and on the CI runner alike.
+		const site = makeSite('glob-workspace', { label: '1.1.0-RC' });
+		try {
+			expect((await run(site)).code).toBe(0);
+			writeConfig(site, { label: '1.1.0-rc' });
+
+			const relabelled = await run(site);
+			expect(relabelled.code).toBe(0);
+			const { bundle, public: publicTree } = trees(site);
+			expect(readdirSync(join(bundle, PROJECT))).toEqual(['1.1.0-rc']);
+			expect(readdirSync(join(publicTree, PROJECT))).toEqual(['1.1.0-rc']);
+			expect(tree(join(bundle, PROJECT, '1.1.0-rc'))).toEqual(expectedFiles().bundle);
+
+			const settled = await run(site);
+			expect(settled.code).toBe(0);
+			expect(settled.writer.written).toEqual([]);
+			expect(settled.writer.removed).toEqual([]);
+		} finally {
+			removeConsumer(site.consumer);
+		}
+	});
+
+	test('a pinned version is kept beside the default, and removing it from the config removes its trees', async () => {
+		const withOlder = (config: Record<string, unknown>): void => {
+			(config['versions'] as Record<string, unknown>[]).push({ ...OLDER });
+		};
+		const site = makeSite('glob-workspace', { edit: withOlder });
+		try {
+			const both = await run(site);
+			expect(both.code).toBe(0);
+			expect(row(both, 'prefetch-cache').examined).toBe(2);
+			// Only the default version is compared with `pages`, because a pinned version lives
+			// at `/v/<label>/` and the config's page list does not describe it.
+			expect(row(both, 'prefetch-skew').examined).toBe(1);
+			const { bundle, public: publicTree } = trees(site);
+			expect(readdirSync(join(bundle, PROJECT)).sort()).toEqual([OLDER.label, LABEL]);
+			expect(tree(join(bundle, PROJECT, OLDER.label))).toEqual(expectedFiles().bundle);
+			expect(tree(join(publicTree, PROJECT, OLDER.label))).toEqual(expectedFiles().public);
+			const olderFiles =
+				tree(join(bundle, PROJECT, OLDER.label)).length +
+				tree(join(publicTree, PROJECT, OLDER.label)).length;
+
+			expect((await run(site)).writer.removed).toEqual([]);
+
+			writeConfig(site);
+			const dropped = await run(site);
+			expect(dropped.code).toBe(0);
+			expect(readdirSync(join(bundle, PROJECT))).toEqual([LABEL]);
+			expect(readdirSync(join(publicTree, PROJECT))).toEqual([LABEL]);
+			expect(dropped.writer.written).toEqual([]);
+			// Every file of the dropped version went, and at least its two label directories.
+			expect(dropped.writer.removed.length).toBeGreaterThan(olderFiles + 1);
+			expect(dropped.data['removed']).toBe(dropped.writer.removed.length);
+		} finally {
+			removeConsumer(site.consumer);
+		}
+	});
+
+	test('a dry run through a recording writer reports what it would remove and removes nothing', async () => {
+		const site = makeSite('glob-workspace');
+		try {
+			await run(site);
+			const stale = plant(join(trees(site).bundle, PROJECT, 'old', 'manifest.json'));
+
+			const dry = await run(site, { writer: recordingWriter() });
+
+			expect(dry.writer.removed).toEqual([stale, join(stale, '..')]);
+			expect(existsSync(stale)).toBe(true);
+		} finally {
+			removeConsumer(site.consumer);
+		}
+	});
+
+	test('a config that does not validate removes nothing, because nothing is known to be stale', async () => {
+		// The prune runs only once every earlier row has passed. A sibling config that stopped
+		// validating is a site whose version table nobody can read, and pruning against the
+		// configs that did validate would delete the other project's whole tree.
+		const site = makeSite('glob-workspace');
+		try {
+			await run(site);
+			const stale = plant(join(trees(site).bundle, PROJECT, 'old', 'manifest.json'));
+			writeFileSync(
+				join(site.directory, 'app', 'docs', 'another-app.docs.json'),
+				JSON.stringify({ site: 1, project: 'another-app' }),
+				'utf8',
+			);
 
 			const outcome = await run(site);
 
-			expect(readFileSync(path, 'utf8')).toBe(planted);
-			expect(outcome.writer.written).not.toContain(path);
-			expect(row(outcome, 'prefetch-gitignore').status).toBe('pass');
+			expect(row(outcome, 'prefetch-configs').status).toBe('fail');
+			expect(outcome.rows.map((entry) => entry.id)).toEqual(['prefetch-configs']);
+			expect(existsSync(stale)).toBe(true);
+			expect(outcome.writer.removed).toEqual([]);
+			expect(outcome.writer.written).toEqual([]);
+			expect(outcome.code).toBe(3);
 		} finally {
 			removeConsumer(site.consumer);
+		}
+	});
+
+	test('a cold cache with no bucket removes nothing, so a laptop without credentials keeps its tree', async () => {
+		const site = makeSite('glob-workspace');
+		const cache = join(root, 'prune-cold');
+		try {
+			await run(site);
+			const stale = plant(join(trees(site).bundle, PROJECT, 'old', 'manifest.json'));
+
+			const outcome = await run(site, { cache });
+
+			expect(row(outcome, 'prefetch-cache').status).toBe('not-run');
+			expect(existsSync(stale)).toBe(true);
+			expect(outcome.writer.removed).toEqual([]);
+		} finally {
+			removeConsumer(site.consumer);
+			rmSync(cache, { recursive: true, force: true });
+		}
+	});
+
+	test('a bundle whose records and objects disagree prunes nothing and writes nothing', async () => {
+		// The keep set is the plan, so a plan known to be wrong is not something to delete
+		// against. The manifest here drops one object from its stored list, which fill does
+		// not notice (every object it lists is intact) and the plan does.
+		const site = makeSite('glob-workspace');
+		const cache = join(root, 'prune-bad-plan');
+		try {
+			await run(site);
+			const stale = plant(join(trees(site).bundle, PROJECT, 'old', 'manifest.json'));
+			cpSync(bundleRoot, cache, { recursive: true });
+			const cachedManifest = join(cache, ...prefix.split('/'), MANIFEST_KEY);
+			const doctored = { ...manifest, objects: manifest.objects.slice(1) };
+			writeFileSync(cachedManifest, JSON.stringify(doctored), 'utf8');
+
+			const outcome = await run(site, { cache });
+
+			const extract = row(outcome, 'prefetch-extract');
+			expect(extract.status).toBe('fail');
+			expect(extract.findings.map((finding) => finding.rule)).toContain('bundle-missing-object');
+			expect(extract.note).toBe('Nothing was pruned or written.');
+			expect(existsSync(stale)).toBe(true);
+			expect(outcome.writer.removed).toEqual([]);
+			expect(outcome.writer.written).toEqual([]);
+		} finally {
+			removeConsumer(site.consumer);
+			rmSync(cache, { recursive: true, force: true });
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// The shape of the trees, before anything touches them
+// ---------------------------------------------------------------------------
+
+describe('a tree this command will not write into', () => {
+	/**
+	 * One planted shape per case, each at a level the shape check owns, with the entry the
+	 * refusal has to name.
+	 */
+	const CASES: readonly {
+		name: string;
+		plant: (site: Site, outside: string) => string;
+	}[] = [
+		{
+			name: 'the bundle tree itself is a symbolic link',
+			plant: (site, outside) => {
+				symlinkSync(outside, trees(site).bundle);
+				return 'app/docs/_bundles is a symbolic link';
+			},
+		},
+		{
+			name: 'the public tree itself is a symbolic link',
+			plant: (site, outside) => {
+				mkdirSync(join(site.directory, 'public'), { recursive: true });
+				symlinkSync(outside, trees(site).public);
+				return 'public/_docs is a symbolic link';
+			},
+		},
+		{
+			name: 'a project directory is a symbolic link',
+			plant: (site, outside) => {
+				mkdirSync(trees(site).bundle, { recursive: true });
+				symlinkSync(outside, join(trees(site).bundle, PROJECT));
+				return `app/docs/_bundles/${PROJECT} is a symbolic link`;
+			},
+		},
+		{
+			name: 'a label directory is a symbolic link',
+			plant: (site, outside) => {
+				mkdirSync(join(trees(site).public, PROJECT), { recursive: true });
+				symlinkSync(outside, join(trees(site).public, PROJECT, LABEL));
+				return `public/_docs/${PROJECT}/${LABEL} is a symbolic link`;
+			},
+		},
+		{
+			name: 'a file sits where a project directory goes',
+			plant: (site) => {
+				plant(join(trees(site).public, 'manual.pdf'));
+				return 'public/_docs/manual.pdf is not a directory';
+			},
+		},
+		{
+			name: 'a file sits where a label directory goes',
+			plant: (site) => {
+				plant(join(trees(site).bundle, PROJECT, 'notes.txt'));
+				return `app/docs/_bundles/${PROJECT}/notes.txt is not a directory`;
+			},
+		},
+		{
+			name: 'the public directory above the tree is a file',
+			plant: (site) => {
+				plant(join(site.directory, 'public'));
+				return 'public is not a directory';
+			},
+		},
+	];
+
+	for (const entry of CASES) {
+		test(`fails a named row and touches nothing when ${entry.name}`, async () => {
+			const site = makeSite('glob-workspace');
+			const outside = join(root, `outside-${entry.name.replace(/\W+/g, '-')}`);
+			const cache = join(root, `shape-cold-${entry.name.replace(/\W+/g, '-')}`);
+			try {
+				mkdirSync(outside, { recursive: true });
+				writeFileSync(join(outside, 'precious.txt'), 'not the site\n', 'utf8');
+				const named = entry.plant(site, outside);
+
+				// A cold cache with a bucket, so a run that got past the check would make a call.
+				const outcome = await run(site, { cache, serve: cachedBundle, bucket: BUCKET });
+
+				const shape = row(outcome, 'prefetch-trees');
+				expect(shape.status).toBe('fail');
+				expect(String(shape.note)).toContain(named);
+				expect(String(shape.note)).toContain('Nothing was downloaded, pruned or written.');
+				expect(outcome.rows.map((found) => found.id)).toEqual([
+					'prefetch-configs',
+					'prefetch-trees',
+				]);
+				expect(outcome.fake.calls).toEqual([]);
+				expect(outcome.writer.written).toEqual([]);
+				expect(outcome.writer.removed).toEqual([]);
+				expect(readdirSync(outside)).toEqual(['precious.txt']);
+				expect(existsSync(cache)).toBe(false);
+				expect(outcome.code).toBe(3);
+			} finally {
+				removeConsumer(site.consumer);
+				rmSync(outside, { recursive: true, force: true });
+				rmSync(cache, { recursive: true, force: true });
+			}
+		});
+	}
+
+	// The mode means nothing to root, so a run as root would pass these on a probe that cannot
+	// fail. Skipped there rather than asserted.
+	const asRoot = typeof process.getuid === 'function' && process.getuid() === 0;
+
+	const UNREADABLE: readonly { name: string; directory: string; mode: number; named: string }[] = [
+		{
+			name: 'an entry below a directory with no search permission',
+			directory: 'public',
+			mode: 0o600,
+			named: 'public/_docs could not be read (EACCES)',
+		},
+		{
+			name: 'a directory that cannot be listed',
+			directory: 'public/_docs',
+			mode: 0o311,
+			named: 'public/_docs could not be read (EACCES)',
+		},
+	];
+
+	for (const entry of UNREADABLE) {
+		test.skipIf(asRoot)(`${entry.name} is a named problem on the row, not a throw`, async () => {
+			// A throw reaches the CLI as a stack trace under a sentence calling it a bug in
+			// hexdocs. A mode on the site's own directory is not one.
+			const site = makeSite('glob-workspace');
+			const locked = join(site.directory, ...entry.directory.split('/'));
+			try {
+				await run(site);
+				chmodSync(locked, entry.mode);
+
+				const outcome = await run(site);
+
+				const shape = row(outcome, 'prefetch-trees');
+				expect(shape.status).toBe('fail');
+				expect(String(shape.note)).toContain(entry.named);
+				expect(outcome.writer.removed).toEqual([]);
+				expect(outcome.writer.written).toEqual([]);
+			} finally {
+				chmodSync(locked, 0o755);
+				removeConsumer(site.consumer);
+			}
+		});
+	}
+
+	test('a clean site passes and counts the directories it looked at', async () => {
+		const site = makeSite('glob-workspace');
+		try {
+			// `app` and `app/docs` exist before anything is extracted, and `public` does if the
+			// fixture consumer ships one. Neither tree does yet.
+			const before = existsSync(join(site.directory, 'public')) ? 3 : 2;
+			const first = await run(site);
+			expect([row(first, 'prefetch-trees').status, row(first, 'prefetch-trees').examined]).toEqual([
+				'pass',
+				before,
+			]);
+			const second = await run(site);
+			// app, app/docs, _bundles, its project and label; public, _docs, its project and label.
+			expect(row(second, 'prefetch-trees').examined).toBe(9);
+		} finally {
+			removeConsumer(site.consumer);
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// The version table and the project set, before anything is fetched
+// ---------------------------------------------------------------------------
+
+describe('a version table with no single answer', () => {
+	const second = {
+		label: '1.0.0',
+		commit: 'bec42b4a2f4d59371ae29e19d9e8b441165b186b',
+		released: '2026-01-12',
+	};
+
+	const CASES: readonly {
+		name: string;
+		edit: (config: Record<string, unknown>) => void;
+		says: string;
+	}[] = [
+		{
+			name: 'two defaults',
+			edit: (config) => {
+				const versions = config['versions'] as Record<string, unknown>[];
+				versions.push({ ...second, default: true });
+			},
+			says: 'marked default',
+		},
+		{
+			name: 'two labels that differ only in case',
+			edit: (config) => {
+				const versions = config['versions'] as Record<string, unknown>[];
+				versions.push({ ...second, label: '1.0.0-RC' });
+				versions.push({ ...second, commit: 'a'.repeat(40), label: '1.0.0-rc' });
+			},
+			says: 'differ only in case',
+		},
+	];
+
+	for (const entry of CASES) {
+		test(`${entry.name} fails the configs row before any call, prune or write`, async () => {
+			const site = makeSite('glob-workspace', { edit: entry.edit });
+			const cache = join(root, `table-${entry.name.replace(/\W+/g, '-')}`);
+			try {
+				const outcome = await run(site, { cache, serve: cachedBundle, bucket: BUCKET });
+
+				const configs = row(outcome, 'prefetch-configs');
+				expect(configs.status).toBe('fail');
+				expect(String(configs.note)).toContain(`${PROJECT}.docs.json`);
+				expect(String(configs.note)).toContain(entry.says);
+				expect(outcome.rows).toHaveLength(1);
+				expect(outcome.fake.calls).toEqual([]);
+				expect(existsSync(trees(site).bundle)).toBe(false);
+				expect(outcome.code).toBe(3);
+			} finally {
+				removeConsumer(site.consumer);
+				rmSync(cache, { recursive: true, force: true });
+			}
+		});
+	}
+
+	test('two configs declaring one project fail the configs row, naming both files', async () => {
+		const site = makeSite('glob-workspace');
+		try {
+			writeFileSync(
+				join(site.directory, 'app', 'docs', 'copy-of-fixture.docs.json'),
+				siteConfigText(),
+				'utf8',
+			);
+			const outcome = await run(site);
+
+			const configs = row(outcome, 'prefetch-configs');
+			expect(configs.status).toBe('fail');
+			expect(String(configs.note)).toContain(`${PROJECT}.docs.json and copy-of-fixture.docs.json`);
+			expect(String(configs.note)).toContain(`both declare the project "${PROJECT}"`);
+			// Counted as the two files read, not the one that passed.
+			expect(configs.examined).toBe(2);
+			expect(existsSync(trees(site).bundle)).toBe(false);
+		} finally {
+			removeConsumer(site.consumer);
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// The sentence a refusal carries
+// ---------------------------------------------------------------------------
+
+describe('a refusal from the bucket', () => {
+	test('a credentials refusal names AWS_PROFILE and --profile, and not aws configure as the fix', async () => {
+		const site = makeSite('glob-workspace');
+		const cache = join(root, 'credentials');
+		try {
+			const fake = new FakeS3(
+				null,
+				prefix,
+				'Unable to locate credentials. You can configure credentials by running "aws configure".',
+			);
+			const outcome = await run(site, { cache, bucket: BUCKET, fake });
+
+			const note = String(row(outcome, 'prefetch-cache').note);
+			expect(row(outcome, 'prefetch-cache').status).toBe('not-run');
+			expect(note).toContain('Unable to locate credentials');
+			expect(note).toContain('AWS_PROFILE');
+			expect(note).toContain('--profile');
+			expect(note).toContain('rather than running aws configure');
+			expect(fake.calls).toHaveLength(1);
+		} finally {
+			removeConsumer(site.consumer);
+			rmSync(cache, { recursive: true, force: true });
+		}
+	});
+
+	test('any other refusal is quoted without that sentence, which belongs to credentials alone', async () => {
+		const site = makeSite('glob-workspace');
+		const cache = join(root, 'not-credentials');
+		try {
+			const outcome = await run(site, { cache, bucket: BUCKET });
+			const note = String(row(outcome, 'prefetch-cache').note);
+			expect(note).toContain('the fake has no answer');
+			expect(note).not.toContain('AWS_PROFILE');
+		} finally {
+			removeConsumer(site.consumer);
+			rmSync(cache, { recursive: true, force: true });
+		}
+	});
+
+	test('a bucket that is not a bucket name is refused before any call', async () => {
+		// The AWS CLI reads a `file://` value as a file to expand and a leading hyphen as a
+		// flag, so the value is checked where it enters rather than handed over.
+		const site = makeSite('glob-workspace');
+		const cache = join(root, 'bad-bucket');
+		try {
+			for (const bucket of ['file:///etc/hosts', '--debug', 'Upper-Case']) {
+				const outcome = await run(site, { cache, bucket });
+				const cacheRow = row(outcome, 'prefetch-cache');
+				expect([bucket, cacheRow.status]).toEqual([bucket, 'not-run']);
+				expect(String(cacheRow.note)).toContain('not an S3 bucket name');
+				expect(outcome.fake.calls).toEqual([]);
+			}
+		} finally {
+			removeConsumer(site.consumer);
+			rmSync(cache, { recursive: true, force: true });
 		}
 	});
 });
