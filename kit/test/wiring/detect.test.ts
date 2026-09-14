@@ -26,6 +26,7 @@ import {
 	CONSUMER_SHAPES,
 	GLOB_WORKSPACE,
 	LITERAL_WORKSPACE,
+	MOUNT_OF,
 	materialiseConsumer,
 	materialiseConsumerWithConfig,
 	removeConsumer,
@@ -44,13 +45,10 @@ import {
 	workspaceEnrolment,
 	workspaceMatches,
 } from '../../src/wiring/detect.js';
-import {
-	editById,
-	prebuildFragment,
-	tsconfigPathEntries,
-	type Edit,
-} from '../../src/wiring/edits.js';
+import { editById, tsconfigPathEntries, type Edit } from '../../src/wiring/edits.js';
+import { runRecipe } from '../../src/exec/run.js';
 import { parseJsonc } from '../../src/wiring/needles.js';
+import { prebuildFragment } from '../../src/wiring/prebuild.js';
 import {
 	dirnamePosix,
 	joinPosix,
@@ -89,7 +87,7 @@ interface Expected {
 	readonly mount: string;
 	readonly mountFromSite: string;
 	readonly repoFromSite: string;
-	/** `null` until a `sites` block names this path. Matched, never assumed to be `front`. */
+	/** The key of the `sites.*.projects` entry whose path is this site. Matched, never assumed. */
 	readonly projectType: string | null;
 	readonly enrols: boolean;
 	readonly enrolledBy: string | null;
@@ -106,24 +104,63 @@ const EXPECTED: Record<ConsumerShape, Expected> = {
 		mount: 'common/docs',
 		mountFromSite: '../../common/docs',
 		repoFromSite: '../..',
-		projectType: null,
+		projectType: 'front',
 		enrols: true,
 		enrolledBy: 'common/*',
 		excludedBy: null,
-		packages: ['config', 'common/*', '!common/private-image-converter', 'apps/front'],
-		submodulePaths: ['hex-terraform', 'common/private-image-converter'],
+		packages: [
+			'config',
+			'common/*',
+			'!common/google-auth-secret-retriever',
+			'!common/private-image-converter',
+			'pro/database',
+			'pro/api',
+			'pro/front',
+			'games/database',
+			'games/api',
+			'games/front',
+			'citadel/database',
+			'citadel/api',
+			'citadel/front',
+			'apps/database',
+			'apps/api',
+			'apps/front',
+		],
+		submodulePaths: [
+			'hex-terraform',
+			'common/google-auth-secret-retriever',
+			'common/private-image-converter',
+		],
 		hasPrebuild: true,
 	},
 	'literal-workspace': {
-		site: 'web/front',
-		mount: 'web/docs',
+		site: 'kcalc-web/front',
+		mount: 'kcalc-web/docs',
 		mountFromSite: '../docs',
 		repoFromSite: '../..',
-		projectType: null,
+		projectType: 'front',
 		enrols: false,
 		enrolledBy: null,
 		excludedBy: null,
-		packages: ['config', 'web/database', 'web/api', 'web/front'],
+		packages: [
+			'config',
+			'kcalc-web/database',
+			'kcalc-web/push',
+			'kcalc-web/api',
+			'kcalc-web/front',
+			'kcalc-web/fxlab',
+			'orchestrator',
+			'mcp-server',
+			'data-pipeline',
+			'debug-viewer',
+			'debug-viewer/server',
+			'debug-viewer/web',
+			'gpu-conformance',
+			'recipe-core',
+			'recipe-scraper',
+			'kcalc-images',
+			'kcalc-audio',
+		],
 		submodulePaths: ['hex-terraform'],
 		hasPrebuild: false,
 	},
@@ -133,7 +170,9 @@ describe('the descriptor derived from each shape', () => {
 	test.each(CONSUMER_SHAPES)('%s', (shape) => {
 		const made = consumer(shape);
 		const expected = EXPECTED[shape];
-		const site = detectSite({ repoRoot: made.root, site: made.site, mount: expected.mount });
+		// No mount is passed. hex-web's fixture carries a `common/` directory and kcalc's does not,
+		// so the convention has to propose each repository's real mount on its own.
+		const site = detectSite({ repoRoot: made.root, site: made.site });
 
 		expect({
 			site: site.site,
@@ -151,7 +190,7 @@ describe('the descriptor derived from each shape', () => {
 		}).toEqual({
 			site: expected.site,
 			mount: expected.mount,
-			mountSource: 'flag',
+			mountSource: 'convention',
 			mountFromSite: expected.mountFromSite,
 			repoFromSite: expected.repoFromSite,
 			projectType: expected.projectType,
@@ -197,11 +236,7 @@ describe('the descriptor derived from each shape', () => {
 		// the other, and neither failure is visible in a diff of the file it did not write.
 		for (const shape of CONSUMER_SHAPES) {
 			const made = consumer(shape);
-			const site = detectSite({
-				repoRoot: made.root,
-				site: made.site,
-				mount: EXPECTED[shape].mount,
-			});
+			const site = detectSite({ repoRoot: made.root, site: made.site });
 			const packageFile = joinPosix(made.site, 'package.json');
 			const before = parseJsonc(readFileSync(join(made.root, packageFile), 'utf8')) as {
 				scripts: Record<string, string>;
@@ -209,7 +244,7 @@ describe('the descriptor derived from each shape', () => {
 			expect('prebuild' in before.scripts).toBe(EXPECTED[shape].hasPrebuild);
 
 			const edit = editById(site, 'prebuild-hook') as Edit;
-			const applied = edit.apply(site.files.read(packageFile), site) as string;
+			const applied = edit.apply(site.files.read(packageFile), site, { exec: runRecipe }) as string;
 			const after = parseJsonc(applied) as { scripts: Record<string, string> };
 			expect(after.scripts['prebuild']).toContain(prebuildFragment(site));
 			expect(after.scripts['prebuild']?.startsWith(prebuildFragment(site))).toBe(
@@ -248,27 +283,33 @@ describe('the fixture file tables', () => {
 	test('the two shapes differ in shape and not only in content', () => {
 		// A single fixture would let every check be written against one consumer and pass,
 		// which is how a guard ends up correct about the repository it was developed in and
-		// wrong about the other one. The paths are the same set; the contents are not.
-		const globPaths = GLOB_WORKSPACE.map((file) =>
-			file.path.replace('apps/front', '<site>'),
-		).sort();
+		// wrong about the other one.
+		const globPaths = GLOB_WORKSPACE.map((file) => file.path.replace('apps/front', '<site>'));
 		const literalPaths = LITERAL_WORKSPACE.map((file) =>
-			file.path.replace('web/front', '<site>'),
-		).sort();
-		expect(globPaths).toEqual(literalPaths);
+			file.path.replace('kcalc-web/front', '<site>'),
+		);
+		// The paths differ by exactly what the repositories differ by, and each is named.
+		// hex-web keeps a shared asset script under common/, which is also what makes the
+		// convention propose common/docs; kcalc has a site .gitignore hex-web does not, and a
+		// base eslint config whose globs are why the shim declares its globals.
+		expect(globPaths.filter((path) => !literalPaths.includes(path)).sort()).toEqual([
+			'common/copy-assets.sh',
+		]);
+		expect(literalPaths.filter((path) => !globPaths.includes(path)).sort()).toEqual([
+			'<site>/.gitignore',
+			'config/eslint.config.js',
+		]);
+		// And no file both carry is byte-identical, which is what makes a check written
+		// against one of them fail the other. Named rather than allowed by a count, so a
+		// fixture edited to make a check pass by copying the other shape's file fails here.
 		const shared = GLOB_WORKSPACE.filter((file) =>
 			LITERAL_WORKSPACE.some(
 				(other) =>
-					other.path.replace('web/front', '<site>') === file.path.replace('apps/front', '<site>') &&
-					other.contents === file.contents,
+					other.path.replace('kcalc-web/front', '<site>') ===
+						file.path.replace('apps/front', '<site>') && other.contents === file.contents,
 			),
 		);
-		// Exactly one file is byte-identical between the shapes, and it is the two-line
-		// ignore list, where there is nothing shape-specific to differ about. Everything
-		// else differs, which is what makes a check written against one of them fail the
-		// other. Named rather than allowed by a count, so a fixture edited to make a check
-		// pass by copying the other shape's file fails here.
-		expect(shared.map((file) => file.path)).toEqual(['apps/front/.gitignore']);
+		expect(shared.map((file) => file.path)).toEqual([]);
 	});
 });
 
@@ -307,28 +348,21 @@ describe('the mount, and how it was arrived at', () => {
 		expect(conventionalMount(memoryFiles({ 'common/ui/package.json': '{}' }), 'apps/front')).toBe(
 			'common/docs',
 		);
-		expect(conventionalMount(memoryFiles({}), 'web/front')).toBe('web/docs');
+		expect(conventionalMount(memoryFiles({}), 'kcalc-web/front')).toBe('kcalc-web/docs');
 		expect(conventionalMount(memoryFiles({}), 'front')).toBe('docs');
 	});
 
 	test.each(CONSUMER_SHAPES)(
-		'%s: with nothing else to go on, the mount is proposed beside the site',
+		'%s: with nothing else to go on, the convention proposes the real mount',
 		(shape) => {
-			// The measured answer, and it is `apps/docs` on the glob shape rather than the
-			// `common/docs` that repository really uses. That is a fixture limit worth naming:
-			// `GLOB_WORKSPACE` declares `common/private-image-converter` in `.gitmodules` and in
-			// its tsconfig paths but ships no file under `common/`, so the `files.exists('common')`
-			// branch of `conventionalMount` is unreachable from this tree and is covered by the
-			// `memoryFiles` case above instead. Every other test in this directory passes the
-			// mount explicitly, which is what `--mount` is for and what `mountSource: 'flag'`
-			// then reports.
+			// hex-web's fixture ships `common/copy-assets.sh`, as the repository does, so the
+			// `common/` branch of `conventionalMount` is reached from a real tree and proposes
+			// `common/docs`. Step 5's fixture had no `common/` directory, proposed `apps/docs`,
+			// and every test passed the mount by hand to cover for it.
 			const made = consumer(shape);
 			const site = detectSite({ repoRoot: made.root, site: made.site });
-			expect([site.mount, site.mountSource]).toEqual([
-				shape === 'glob-workspace' ? 'apps/docs' : 'web/docs',
-				'convention',
-			]);
-			expect(site.files.exists('common')).toBe(false);
+			expect([site.mount, site.mountSource]).toEqual([MOUNT_OF[shape], 'convention']);
+			expect(site.files.exists('common')).toBe(shape === 'glob-workspace');
 		},
 	);
 });
@@ -377,16 +411,16 @@ describe('the deploy project type', () => {
 	});
 
 	test.each(CONSUMER_SHAPES)(
-		'%s: the fixture declares no sites block, so the type is null',
+		'%s: the fixture sites block names the site, under a front key that recurs on hex-web',
 		(shape) => {
-			// Stated rather than worked around. The fixtures carry only a `hash` key, which is
-			// why every test in this directory that needs a project type adds a `sites` block and
-			// says so. A fixture that grew one silently would change what those tests prove.
+			// The real files carry a `sites` block, so no test patches one in. hex-web's repeats
+			// `front` under every site, which is the reason `soleBlockIn` exists: a whole-file
+			// search for the key finds several and must not edit the first.
 			const made = consumer(shape);
-			expect(
-				parseJsonc(readFileSync(join(made.root, 'deploy.config.json'), 'utf8')),
-			).not.toHaveProperty('sites');
-			expect(detectSite({ repoRoot: made.root, site: made.site }).projectType).toBeNull();
+			const text = readFileSync(join(made.root, 'deploy.config.json'), 'utf8');
+			expect(parseJsonc(text)).toHaveProperty('sites');
+			expect(detectSite({ repoRoot: made.root, site: made.site }).projectType).toBe('front');
+			expect((text.match(/"front"/g) ?? []).length > 1).toBe(shape === 'glob-workspace');
 		},
 	);
 });

@@ -16,7 +16,7 @@
  * consumer as a shim that renders nothing and exits on a number it did not find.
  */
 
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -24,6 +24,8 @@ import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 
 import {
 	CONSUMER_SHAPES,
+	MOUNT_OF,
+	SITE_OF,
 	materialiseConsumerWithConfig,
 	removeConsumer,
 	type ConsumerShape,
@@ -49,20 +51,9 @@ import { runRecipe } from '../../src/exec/run.js';
 import { fileWriter } from '../../src/io/write.js';
 import { exitCodeFor, invoke, type Ctx } from '../../src/registry/command.js';
 import { CONSUMER_CHECK_IDS, PROBES } from '../../src/wiring/checks.js';
-import { parseJsonc } from '../../src/wiring/needles.js';
 
 const SITE_CONFIG = join(CONSUMER_ROOT, 'fixture-app.docs.json');
 const KIT_VERSION = '@hex-pro/docs-kit@0.0.0-test';
-
-const MOUNT_OF: Record<ConsumerShape, string> = {
-	'glob-workspace': 'common/docs',
-	'literal-workspace': 'web/docs',
-};
-
-const SITE_OF: Record<ConsumerShape, string> = {
-	'glob-workspace': 'apps/front',
-	'literal-workspace': 'web/front',
-};
 
 interface Repo {
 	readonly shape: ConsumerShape;
@@ -93,7 +84,7 @@ async function reportFor(
 ): Promise<{ report: VerifyInstallReport; rows: readonly CheckRow[] }> {
 	const output = await invoke(
 		verifyInstall,
-		{ root: repo.root, site: repo.site, mount: repo.mount },
+		{ root: repo.root, site: repo.site },
 		{ ...context(repo), write: null },
 	);
 	return { report: output.data as unknown as VerifyInstallReport, rows: output.rows };
@@ -107,28 +98,15 @@ let copies = 0;
  * A consumer with `install`'s mechanical half applied and its by-hand half not.
  *
  * A deliberately mixed state rather than a fully wired one, and it is the state the report
- * is most often read in: three rows pass, one is skipped once the workspace file is
- * removed, and the rest fail with findings. A report where every row said the same thing
- * would not distinguish the per-state rules `rowsWithoutReason` applies.
- *
- * The `sites` block is not docs wiring. `projectTypeOf` matches the site path against
- * `sites.*.projects.*.path` and both fixtures carry only a `hash` key, so without it the
- * deploy row is a failure about a missing project rather than about the mount.
+ * is most often read in: some rows pass, one is skipped once the workspace file is removed,
+ * the route table is not run because the site has no dependencies installed, and the rest
+ * fail with findings. A report where every row said the same thing would not distinguish the
+ * per-state rules `rowsWithoutReason` applies.
  */
 async function prepare(shape: ConsumerShape, into: string): Promise<void> {
 	const consumer = materialiseConsumerWithConfig(shape, SITE_CONFIG);
 	const repo: Repo = { shape, root: consumer.root, site: consumer.site, mount: MOUNT_OF[shape] };
-	const deploy = parseJsonc(readFileSync(join(repo.root, 'deploy.config.json'), 'utf8')) as Record<
-		string,
-		unknown
-	>;
-	deploy['sites'] = { main: { projects: { front: { path: repo.site } } } };
-	write(repo, 'deploy.config.json', `${JSON.stringify(deploy, null, '\t')}\n`);
-	await invoke(
-		install,
-		{ root: repo.root, site: repo.site, mount: repo.mount, write: true },
-		context(repo),
-	);
+	await invoke(install, { root: repo.root, site: repo.site, write: true }, context(repo));
 	cpSync(repo.root, into, { recursive: true, verbatimSymlinks: true });
 	removeConsumer(consumer);
 }
@@ -180,7 +158,7 @@ describe('a report from a real repository', () => {
 		// The mixed state the fixture exists to produce, so the assertions above are not
 		// three statements about a report of nine identical rows.
 		const states = new Set(report.rows.map((row) => row.status));
-		expect([...states].sort()).toEqual(['fail', 'pass', 'skipped']);
+		expect([...states].sort()).toEqual(['fail', 'not-run', 'pass', 'skipped']);
 	});
 
 	test.each(CONSUMER_SHAPES)(
@@ -258,17 +236,17 @@ describe('a report from a real repository', () => {
 
 describe('a check that examined nothing has not passed', () => {
 	test('a probe with a satisfied needle and nothing to count comes back as a failure', async () => {
-		// The state that produces it: the sitemap file derives DOCS_SITEMAP correctly, so the
-		// needle is satisfied and there is no finding, and there is no site config, so there
-		// are no rows to count. Every ingredient of a green row is present except something
-		// to have looked at. `checkRow` is what turns it red, and the note it writes replaces
-		// the probe's own.
+		// The state that produces it: the sitemap file reads DOCS.sitemap() correctly, so every
+		// needle is satisfied and there is no finding, and there is no site config, so there are
+		// no sources to count. Every ingredient of a green row is present except something to
+		// have looked at. `checkRow` is what turns it red, and the note it writes replaces the
+		// probe's own.
 		const repo = copy('glob-workspace');
 		rmSync(join(repo.root, repo.site, 'app', 'docs'), { recursive: true, force: true });
 		write(
 			repo,
 			`${repo.site}/app/routes/sitemap[.]xml.tsx`,
-			"import { DOCS_SITEMAP } from '~/lib/docs';\n\nconst entries = [...DOCS_SITEMAP];\n\nexport function loader() {\n\treturn new Response(render(entries));\n}\n",
+			'import { DOCS } from "~/lib/docs.server";\n\nexport function loader() {\n\tconst urls = DOCS.sitemap().flatMap((entry) => entry.languages);\n\treturn new Response(urls.join("\\n"));\n}\n',
 		);
 		const { report } = await reportFor(repo);
 		const row = report.rows.find((candidate) => candidate.id === 'wiring-sitemap');
@@ -456,7 +434,7 @@ describe('the rows emitted have to match the probe table', () => {
 			const repo = copy('glob-workspace');
 			const output = await invoke(
 				command,
-				{ root: repo.root, site: repo.site, mount: repo.mount },
+				{ root: repo.root, site: repo.site },
 				{ ...context(repo), write: null },
 			);
 			const report = output.data as unknown as VerifyInstallReport;

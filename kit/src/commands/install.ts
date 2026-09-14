@@ -15,24 +15,29 @@
  * the same function object the matching `wiring-*` check calls, so a second run writes
  * nothing exactly when `hexdocs verify-install` passes, and there is no third state.
  *
- * Three rows the plan's install table had are deliberately absent, each refused against
- * the real source rather than dropped:
+ * What is deliberately not an edit at all, each decided against the real source:
  *
- *   `root.tsx`. Line 438 is `APPS.find((app) => path.startsWith(app.path))?.themeClass`,
- *   and the comment above it says apps match by prefix so their legal documents inherit
- *   the accent. A docs mount at `/hex-nfc/docs/...` starts with `/hex-nfc`, so it
- *   already gets `app-hex-nfc` with no edit at all. That file is also the one whose every
- *   commit is somebody hand-editing it, and its comment at line 220, "no child exports
- *   one", is a claim an install writing there could falsify.
+ *   The theme class in `root.tsx`. hex-web matches apps by prefix, `APPS.find((app) =>
+ *   path.startsWith(app.path))?.themeClass`, so a docs mount at `/hex-nfc/docs/...` already
+ *   gets `app-hex-nfc`. The one `root.tsx` change docs need is the SEO decision, and that is
+ *   printed rather than written because the file is hand-edited in every commit.
  *
  *   `i18n.server.ts` `PATH_SCOPES`. A path with no entry returns `[]` from
  *   `scopesForPath`, which is chrome only and not raw keys, and this package ships its
  *   own UI strings in all seven languages. The entry would change no output.
  *
- *   `preferredLanguageRedirect`. Docs pages are not opted out of the cookie redirect.
- *   Legal documents are, because the English text is the binding one and it is the URL in
- *   the App Store listing. A manual has no such property, and a reader with a language
- *   cookie should get their language.
+ *   The language-cookie redirect. Docs addresses are not added to `LOCALISED_PATHS`, and a
+ *   path absent from that list is already skipped by `preferredLanguageRedirect`. That
+ *   exemption is needed rather than incidental: the translation notice links to the English
+ *   address, and a redirect keyed on the cookie would send the reader straight back.
+ *
+ *   `hash.exclude_dirs` in `deploy.config.json`. The prefetched trees are hashed by name, so
+ *   leaving `_bundles` and `_docs` out of the exclusions costs one extra rebuild after a
+ *   relabel that already rebuilt the site. An edit, a predicate and a check for that is more
+ *   than the rebuild costs, and a site that cares adds the two names by hand.
+ *
+ *   Editor settings for the MCP server. Printed as a note, never written and never checked,
+ *   for the reason `settingsInstruction` gives.
  */
 
 import { resolve } from 'node:path';
@@ -43,11 +48,12 @@ import type { JsonValue } from '../compile/serialise.js';
 import { recordingWriter } from '../io/write.js';
 import { defineCommand } from '../registry/command.js';
 import type { Writer } from '../registry/command.js';
-import { editsFor } from '../wiring/edits.js';
+import { editsFor, type EditContext } from '../wiring/edits.js';
 import { detectSite } from '../wiring/detect.js';
 import { requireSitePath } from '../wiring/site.js';
+import { settingsInstruction } from '../wiring/templates.js';
 
-import { ROOT, SITE, rootOf } from './common.js';
+import { BUCKET, ROOT, SITE, bucketOf, rootOf } from './common.js';
 
 interface Outcome {
 	readonly id: string;
@@ -70,7 +76,7 @@ export const install = defineCommand({
 	writes: 'files',
 	summary: 'Wire a consuming website for a docs mount, or print what that would take.',
 	detail:
-		'Applies the mechanical edits (the workspace exclusion, the tsconfig path mapping, the deploy hash directories, the prebuild hook, the generated lib module and guard shim, the gitignore entries and the MCP server entry) and prints the ones that are left to a person: the submodule itself, the three spreads into hand-authored arrays, the settings file, and the compiler option that lives in a shared config. Without --write it changes nothing and prints the same plan.',
+		'Applies the mechanical edits (the workspace exclusion, the tsconfig path mappings, the deploy hash directories, the prebuild hook, the generated server module, route modules and guard shim, the gitignore entries and the MCP server entry) and prints the ones that are left to a person: the submodule itself, the site config, the insertions into routes.ts, root.tsx and the sitemap, and the compiler option that lives in a shared config. Without --write it changes nothing and prints the same plan. --bucket goes into a prebuild fragment install writes, and never into an existing one.',
 	params: {
 		root: ROOT,
 		site: SITE,
@@ -78,6 +84,7 @@ export const install = defineCommand({
 			help: 'where the docs package is mounted; detected from the submodule when absent',
 			type: 'string',
 		},
+		bucket: BUCKET,
 		write: {
 			help: 'apply the mechanical edits; without it nothing is written',
 			type: 'boolean',
@@ -93,6 +100,29 @@ export const install = defineCommand({
 			mount: input.mount,
 		});
 		const write = input.write === true;
+
+		// Validated where the value enters, which is here: it is about to be written into a
+		// prebuild string that runs on the deploy host. Only the flag is read. `bucketOf`
+		// falls back to HEXDOCS_BUCKET, and an install that wrote a developer's environment
+		// variable into a committed package.json would be publishing it by accident.
+		if (input.bucket !== undefined) {
+			const bucket = bucketOf(input.bucket);
+			if ('why' in bucket) {
+				return {
+					data: { site: site.site, mount: site.mount, wrote: false },
+					lines: [`--bucket was refused: ${bucket.why}`],
+					envelope: null,
+					rows: [
+						notRunRow(
+							'install-writes',
+							'edits',
+							`--bucket was refused, so nothing was planned or applied. ${bucket.why}`,
+						),
+					],
+				};
+			}
+		}
+		const editContext: EditContext = { exec: ctx.exec, bucket: input.bucket };
 
 		if (write && ctx.write === null) {
 			return {
@@ -117,10 +147,10 @@ export const install = defineCommand({
 		const outcomes: Outcome[] = [];
 		const instructions: string[] = [];
 
-		for (const edit of editsFor(site)) {
+		for (const edit of editsFor(site, input.bucket)) {
 			const base = { id: edit.id, check: edit.check, file: edit.file };
 			const text = site.files.read(edit.file);
-			if (edit.present(text, site)) {
+			if (edit.present(text, site, editContext)) {
 				outcomes.push({ ...base, state: 'unchanged', why: null });
 				continue;
 			}
@@ -130,7 +160,7 @@ export const install = defineCommand({
 				continue;
 			}
 
-			const next = edit.apply(text, site);
+			const next = edit.apply(text, site, editContext);
 			if (next === null) {
 				outcomes.push({ ...base, state: 'refused', why: edit.instruction });
 				instructions.push(edit.instruction);
@@ -142,7 +172,7 @@ export const install = defineCommand({
 			// and `verify-install` would then report the same row as failing, which is the
 			// one disagreement between the two commands this design exists to make
 			// impossible.
-			if (!edit.present(next, site)) {
+			if (!edit.present(next, site, editContext)) {
 				outcomes.push({
 					...base,
 					state: 'refused',
@@ -216,6 +246,10 @@ export const install = defineCommand({
 			lines.push('', 'Left to a person:', '');
 			for (const instruction of instructions) lines.push(instruction, '');
 		}
+		// A note and not an edit. Whether one developer's editor enables the MCP server has
+		// nothing to do with whether the site builds, and `verify-install` is the build gate.
+		const note = settingsInstruction(site);
+		lines.push('', note);
 
 		return {
 			data: {
@@ -231,6 +265,7 @@ export const install = defineCommand({
 					instruction: outcome.why,
 				})),
 				written: [...writer.written],
+				notes: [note],
 			} as unknown as JsonValue,
 			lines,
 			envelope: null,

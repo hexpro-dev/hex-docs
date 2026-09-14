@@ -27,6 +27,7 @@ import { dirname, join } from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
+import { LITERAL_WORKSPACE } from '../../../fixtures/consumers.js';
 import { CHECK_IDS, LINT_RULE_IDS } from '../../../src/contracts/lint.js';
 import { CHECK_STATES } from '../../../src/contracts/diagnostics.js';
 import { detectSite, memoryFiles } from '../../src/wiring/detect.js';
@@ -94,6 +95,43 @@ describe('the template names nothing it would have to be kept up to date with', 
 		expect(TEMPLATE).toContain('report.exitCode');
 	});
 
+	test('it declares the node globals it uses, because a zero-warning eslint gives an .mjs none', () => {
+		// kcalc's front package lints `scripts/` with `--max-warnings 0`, and its base config
+		// declares node globals for ts, tsx, js and jsx only. Read from the fixture's copy of
+		// that config, so the reason this directive exists is asserted rather than remembered:
+		// the day the glob grows `mjs`, this test says the directive is no longer needed.
+		const base = LITERAL_WORKSPACE.find((file) => file.path === 'config/eslint.config.js');
+		const globbed = /files:\s*\["\*\*\/\*\.\{([a-z,]+)\}"\]/.exec(base?.contents ?? '')?.[1] ?? '';
+		expect(globbed.split(',').sort()).toEqual(['js', 'jsx', 'ts', 'tsx']);
+
+		// Measured with kcalc's own eslint over this template: seventeen no-undef errors
+		// without the line and none with it. What is asserted here is the shape that makes
+		// that true: the line sits directly under the shebang and names exactly the globals
+		// the file reaches for.
+		const lines = TEMPLATE.split('\n');
+		expect(lines.slice(0, 2)).toEqual(['#!/usr/bin/env node', '/* global console, process */']);
+		const NODE_GLOBALS = [
+			'console',
+			'process',
+			'Buffer',
+			'__dirname',
+			'__filename',
+			'require',
+			'module',
+			'global',
+			'setTimeout',
+			'setInterval',
+			'URL',
+		];
+		const code = lines
+			.slice(2)
+			.join('\n')
+			.replace(/\/\*[\s\S]*?\*\//g, '')
+			.replace(/\/\/.*$/gm, '');
+		const used = NODE_GLOBALS.filter((name) => new RegExp(`(?<![\\w.$])${name}\\b`).test(code));
+		expect(used.sort()).toEqual(['console', 'process']);
+	});
+
 	test('it is pure ASCII', () => {
 		// It ships into somebody else's repository and is read by that repository's own
 		// tooling. An escape or a curly quote arriving through a template is the kind of thing
@@ -157,7 +195,7 @@ interface Run {
  * its own file, so a flat directory would prove the exit mapping and nothing about the
  * paths. `launcher === null` deletes the launcher entirely, which is the spawn-failure arm.
  */
-function runShim(body: string | null, exitCode: number): Run {
+function runShim(body: string | null, exitCode: number, mode = 0o755): Run {
 	runs += 1;
 	const root = join(scratch, `run-${runs}`);
 	const shim = join(root, SITE, 'scripts', 'check-docs.mjs');
@@ -174,7 +212,7 @@ function runShim(body: string | null, exitCode: number): Run {
 			`#!/bin/sh\ncat <<'HEXDOCS_JSON'\n${body}\nHEXDOCS_JSON\nexit ${exitCode}\n`,
 			'utf8',
 		);
-		chmodSync(launcher, 0o755);
+		chmodSync(launcher, mode);
 	}
 
 	const result = spawnSync(process.execPath, [shim], { encoding: 'utf8', cwd: root });
@@ -257,12 +295,22 @@ describe('the exit mapping', () => {
 		expect(run.stdout).toContain('a-row-id-no-contract-knows');
 	});
 
-	test('a launcher that cannot be spawned exits 1, distinctly, and says nothing was cleared', () => {
+	test('a launcher that is not there exits 1, distinctly, and names the submodule command', () => {
+		// One cause in practice, a clone that never initialised the submodule, and the spawn
+		// error for it names a path and ENOENT rather than the command that fixes it.
 		const run = runShim(null, 0);
 		expect(run.status).toBe(1);
 		expect(run.status).not.toBe(3);
 		expect(run.stderr).toContain('could not run');
+		expect(run.stderr).toContain(`git submodule update --init ${MOUNT}`);
 		expect(run.stderr).toContain('nothing was checked, so nothing was cleared');
+	});
+
+	test('a launcher that is there and cannot be spawned exits 1 without blaming the submodule', () => {
+		const run = runShim(report(), 0, 0o644);
+		expect(run.status).toBe(1);
+		expect(run.stderr).toContain('could not run');
+		expect(run.stderr).not.toContain('git submodule update');
 	});
 
 	test('output that does not parse exits 1 and prints what it got', () => {

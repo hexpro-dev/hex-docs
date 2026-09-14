@@ -211,6 +211,7 @@
 				"root"
 			],
 			"flags": [
+				"bucket",
 				"mount",
 				"site",
 				"write"

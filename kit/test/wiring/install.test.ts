@@ -18,11 +18,10 @@
  * because a needle that breaks silently and a needle that breaks with a paste-able line are
  * different products.
  *
- * The fixture is the **unwired** consumer, which is the state `install` starts from. One
- * thing is added that is not docs wiring and is stated so it is not mistaken for it:
- * `deploy.config.json` gains a `sites` block, because `projectTypeOf` matches the site path
- * against `sites.*.projects.*.path` and both fixtures carry only a `hash` key, so without
- * it the deploy edit refuses for a reason that has nothing to do with the mount.
+ * The fixture is the **unwired** consumer, which is the state `install` starts from, as the
+ * real bytes of both repositories. Nothing is patched in: the deploy configs carry their
+ * own `sites` blocks, hex-web's routes carry their own tuple annotation, and no mount is
+ * passed, because detection proposes the real one for each.
  */
 
 import {
@@ -41,32 +40,36 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import {
 	CONSUMER_SHAPES,
+	MOUNT_OF,
+	SITE_OF,
 	materialiseConsumer,
 	removeConsumer,
 	type ConsumerShape,
 } from '../../../fixtures/consumers.js';
 import type { CheckId } from '../../../src/contracts/lint.js';
+import { bucketOf } from '../../src/commands/common.js';
 import { install } from '../../src/commands/install.js';
 import { runRecipe } from '../../src/exec/run.js';
 import { fileWriter } from '../../src/io/write.js';
 import { invoke } from '../../src/registry/command.js';
 import { runConsumerChecks } from '../../src/wiring/checks.js';
 import { detectSite } from '../../src/wiring/detect.js';
-import { PRESENT, editById, editsFor, type Edit } from '../../src/wiring/edits.js';
+import {
+	PRESENT,
+	editById,
+	editsFor,
+	type Edit,
+	type EditContext,
+} from '../../src/wiring/edits.js';
+import { MACHINE_ROUTES_SPREAD, ROOT_DECISION } from '../../src/wiring/instructions.js';
 import { parseJsonc } from '../../src/wiring/needles.js';
+import { prebuildFragment } from '../../src/wiring/prebuild.js';
 import type { SiteDescriptor } from '../../src/wiring/site.js';
 
 const KIT_VERSION = '@hex-pro/docs-kit@0.0.0-test';
 
-const MOUNT_OF: Record<ConsumerShape, string> = {
-	'glob-workspace': 'common/docs',
-	'literal-workspace': 'web/docs',
-};
-
-const SITE_OF: Record<ConsumerShape, string> = {
-	'glob-workspace': 'apps/front',
-	'literal-workspace': 'web/front',
-};
+/** The exec every predicate gets here. No fixture has a React Router, so the table is unread. */
+const CTX: EditContext = { exec: runRecipe };
 
 interface Repo {
 	readonly shape: ConsumerShape;
@@ -83,14 +86,8 @@ function write(repo: Repo, path: string, text: string): void {
 	writeFileSync(target, text, 'utf8');
 }
 
-function editJson(repo: Repo, path: string, edit: (value: Record<string, unknown>) => void): void {
-	const value = parseJsonc(read(repo, path)) as Record<string, unknown>;
-	edit(value);
-	write(repo, path, `${JSON.stringify(value, null, '\t')}\n`);
-}
-
 function descriptorFor(repo: Repo): SiteDescriptor {
-	return detectSite({ repoRoot: repo.root, site: repo.site, mount: repo.mount });
+	return detectSite({ repoRoot: repo.root, site: repo.site });
 }
 
 interface InstallResult {
@@ -102,18 +99,21 @@ interface InstallResult {
 		instruction: string | null;
 	}[];
 	readonly written: string[];
+	readonly notes: string[];
 }
 
 async function runInstall(
 	repo: Repo,
 	write: boolean,
+	extra: { bucket?: string } = {},
 ): Promise<{
 	result: InstallResult;
 	rows: readonly { id: string; status: string; note: string | null }[];
+	lines: readonly string[];
 }> {
 	const output = await invoke(
 		install,
-		{ root: repo.root, site: repo.site, mount: repo.mount, write },
+		{ root: repo.root, site: repo.site, write, ...extra },
 		{
 			cwd: repo.root,
 			kitVersion: KIT_VERSION,
@@ -123,7 +123,11 @@ async function runInstall(
 			log: () => {},
 		},
 	);
-	return { result: output.data as unknown as InstallResult, rows: output.rows };
+	return {
+		result: output.data as unknown as InstallResult,
+		rows: output.rows,
+		lines: output.lines,
+	};
 }
 
 /** Every file under a tree, as bytes, keyed by its path relative to the root. */
@@ -154,15 +158,6 @@ beforeAll(() => {
 	scratch = mkdtempSync(join(tmpdir(), 'hexdocs-install-'));
 	for (const shape of CONSUMER_SHAPES) {
 		const consumer = materialiseConsumer(shape);
-		const repo: Repo = {
-			shape,
-			root: consumer.root,
-			site: consumer.site,
-			mount: MOUNT_OF[shape],
-		};
-		editJson(repo, 'deploy.config.json', (value) => {
-			value['sites'] = { main: { projects: { front: { path: repo.site } } } };
-		});
 		const template = join(scratch, `template-${shape}`);
 		cpSync(consumer.root, template, { recursive: true, verbatimSymlinks: true });
 		TEMPLATES.set(shape, template);
@@ -190,9 +185,9 @@ function copy(shape: ConsumerShape): Repo {
  *
  * Recorded rather than asserted uniformly, because "apply is idempotent" is a property the
  * contract does not claim: `Edit.apply` says "Never called when `present` is already true",
- * and `install`'s loop honours that. Two appliers do append a second time, and writing
- * `same-bytes` for all fifteen would be asserting a guarantee that does not exist while
- * hiding which two rely on the caller. The guarantee that does exist is the whole-table one
+ * and `install`'s loop honours that. One applier does append a second time, and writing
+ * `same-bytes` for every edit would be asserting a guarantee that does not exist while hiding
+ * which one relies on the caller. The guarantee that does exist is the whole-table one
  * further down: install twice writes nothing the second time.
  */
 type Reapply = 'same-bytes' | 'refuses' | 'appends-again';
@@ -239,14 +234,22 @@ const CLAIMS: readonly Claim[] = [
 		why: 'Without the mapping tsc and Vite disagree about the same specifier and the failure arrives as a resolution error inside a submodule during a deploy.',
 	},
 	{
+		id: 'tsconfig-react-types',
+		present: 'tsconfigReactTypes',
+		check: 'wiring-tsconfig-path',
+		byHand: false,
+		reapply: 'same-bytes',
+		why: 'tsc resolves a bare react from the submodule by walking up past a directory with no node_modules/react, which is ten resolution errors in the consumer typecheck.',
+	},
+	{
 		id: 'tsconfig-resolve-json',
 		present: 'tsconfigResolveJson',
 		check: 'wiring-tsconfig-path',
 		byHand: true,
 		reapply: 'refuses',
 		satisfiedOn: {
-			'glob-workspace':
-				'this fixture sets the option in the site tsconfig rather than in a shared one',
+			'glob-workspace': 'hex-web sets it in the shared config its site tsconfig extends',
+			'literal-workspace': 'kcalc sets it in the shared config its site tsconfig extends',
 		},
 		why: 'On both real consumers the option is set in a shared config other packages extend, and an install scoped to one site has no business editing it.',
 	},
@@ -263,8 +266,8 @@ const CLAIMS: readonly Claim[] = [
 		present: 'prebuildHook',
 		check: 'wiring-prebuild-hook',
 		byHand: false,
-		reapply: 'appends-again',
-		why: 'There is no CI on either consumer, so prebuild is the one thing that always runs.',
+		reapply: 'refuses',
+		why: 'There is no CI on either consumer, so prebuild is the one thing that always runs. A string that already names the guard is refused rather than appended after, because a broken segment left first still stops the build.',
 	},
 	{
 		id: 'check-docs-shim',
@@ -288,15 +291,31 @@ const CLAIMS: readonly Claim[] = [
 		check: 'wiring-localised-paths',
 		byHand: true,
 		reapply: 'refuses',
-		why: 'It needs a project id, a mount path and a label in seven languages that nothing here knows.',
+		why: 'It needs a project id, a mount path and a labelled commit that nothing here knows.',
 	},
 	{
-		id: 'docs-lib',
-		present: 'docsLib',
-		check: 'wiring-localised-paths',
+		id: 'docs-server',
+		present: 'docsServer',
+		check: 'wiring-routes',
 		byHand: false,
 		reapply: 'refuses',
-		why: 'Created, never rewritten. A file that exists and does not derive is a file somebody wrote, and this module own header invites that.',
+		why: 'Created, never rewritten. A file that exists and fails its predicate is a file somebody wrote, and the template header invites that.',
+	},
+	{
+		id: 'route-page-module',
+		present: 'pageRouteModule',
+		check: 'wiring-routes',
+		byHand: false,
+		reapply: 'refuses',
+		why: 'The same predicate for install and the check, so a stub that exists and reads nothing is refused by both rather than unchanged to one and red in the other.',
+	},
+	{
+		id: 'route-machine-module',
+		present: 'machineRouteModule',
+		check: 'wiring-routes',
+		byHand: false,
+		reapply: 'refuses',
+		why: 'A default export turns a resource route into a document route, and the predicate that refuses one is the one install writes with.',
 	},
 	{
 		id: 'routes',
@@ -304,15 +323,15 @@ const CLAIMS: readonly Claim[] = [
 		check: 'wiring-routes',
 		byHand: true,
 		reapply: 'refuses',
-		why: 'A spread into a hand-authored array whose surrounding prose is the consuming repository actual documentation.',
+		why: 'Insertions into a hand-authored route table whose surrounding prose is the consuming repository actual documentation, and whose result only the site own loader can read.',
 	},
 	{
-		id: 'localised-paths',
-		present: 'localisedPaths',
+		id: 'root-seo',
+		present: 'rootSeo',
 		check: 'wiring-localised-paths',
 		byHand: true,
 		reapply: 'refuses',
-		why: 'One consumer has an array to spread into and the other has a readonly alias with nowhere to splice.',
+		why: 'The one place a docs page canonical, alternates and robots tag can be decided, in a file hand-edited in every commit.',
 	},
 	{
 		id: 'sitemap',
@@ -320,7 +339,7 @@ const CLAIMS: readonly Claim[] = [
 		check: 'wiring-sitemap',
 		byHand: true,
 		reapply: 'refuses',
-		why: 'One consumer has an entries array and the other maps a page registry directly.',
+		why: 'One consumer has an entries array and the other maps a page registry with a lastmod lookup a docs spread would break.',
 	},
 	{
 		id: 'mcp-json',
@@ -329,14 +348,6 @@ const CLAIMS: readonly Claim[] = [
 		byHand: false,
 		reapply: 'refuses',
 		why: 'A hexdocs entry present with a different command is somebody own wiring, and a second key of the same name is a file that parses to whichever came last.',
-	},
-	{
-		id: 'mcp-settings',
-		present: 'mcpSettings',
-		check: 'wiring-mcp',
-		byHand: true,
-		reapply: 'refuses',
-		why: 'Whether a local settings file merges with the project one or replaces it could not be established, and guessing wrong disables every other MCP server in the repository.',
 	},
 ];
 
@@ -374,6 +385,16 @@ describe('the edit table and the claim table cover each other', () => {
 		expect([...claimed].sort()).toEqual([...keys].sort());
 		expect(new Set(claimed).size).toBe(claimed.length);
 	});
+
+	test('the settings edit and the localised-paths edit are gone, not moved', () => {
+		// Deleted in step 8 and named here so neither comes back as a quiet addition. The
+		// first was a build gate on one developer's editor; the second put docs addresses in
+		// a list whose other reader is the language-cookie redirect.
+		const ids = editsFor(descriptorFor(copy('glob-workspace'))).map((edit) => edit.id);
+		expect(ids).not.toContain('mcp-settings');
+		expect(ids).not.toContain('localised-paths');
+		expect(ids).not.toContain('docs-lib');
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -403,12 +424,12 @@ describe('the writer and the checker share one predicate', () => {
 	);
 
 	test('two descriptors produce edits carrying the same function objects', () => {
-		// `editsFor` builds a table per descriptor because half the instructions are shaped
-		// to the consumer file in hand. The predicates must not be rebuilt with it: a
-		// closure per descriptor would pass the assertion above and still be a fresh
-		// function on every call, which is the same defect one level out.
+		// `editsFor` builds a table per descriptor because several instructions are shaped to
+		// the consumer file in hand. The predicates must not be rebuilt with it: a closure per
+		// descriptor would pass the assertion above and still be a fresh function on every
+		// call, which is the same defect one level out.
 		const first = editsFor(descriptorFor(copy('glob-workspace')));
-		const second = editsFor(descriptorFor(copy('literal-workspace')));
+		const second = editsFor(descriptorFor(copy('literal-workspace')), 'a-bucket');
 		expect(first.map((edit) => edit.id)).toEqual(second.map((edit) => edit.id));
 		for (let index = 0; index < first.length; index += 1) {
 			const a = first[index] as Edit;
@@ -422,20 +443,18 @@ describe('the writer and the checker share one predicate', () => {
 	test('the checks read the same table the edits carry', () => {
 		// The other end of the seam. `checks.ts` calls `PRESENT.<name>` directly rather than
 		// reaching through `editsFor`, so the identity above only closes the loop if the two
-		// modules are looking at one object. A copied `PRESENT` in `checks.ts` would give a
-		// consumer whose row passes while `install` reports work to do; this asserts the
-		// observable half of that, which is that the two answers agree on a tree where one
-		// edit is applied and the rest are not.
+		// modules are looking at one object. This asserts the observable half of that: the two
+		// answers agree on a tree where one edit is applied and the rest are not.
 		const repo = copy('glob-workspace');
-		const before = detectSite({ repoRoot: repo.root, site: repo.site, mount: repo.mount });
+		const before = descriptorFor(repo);
 		const gitignore = editById(before, 'gitignore') as Edit;
-		const applied = gitignore.apply(before.files.read(gitignore.file), before);
+		const applied = gitignore.apply(before.files.read(gitignore.file), before, CTX);
 		expect(applied).not.toBeNull();
 		write(repo, gitignore.file, applied as string);
 
 		const after = descriptorFor(repo);
 		expect(
-			(editById(after, 'gitignore') as Edit).present(after.files.read(gitignore.file), after),
+			(editById(after, 'gitignore') as Edit).present(after.files.read(gitignore.file), after, CTX),
 		).toBe(true);
 		const row = runConsumerChecks(after, { exec: runRecipe, kitVersion: KIT_VERSION }).find(
 			(candidate) => candidate.id === 'wiring-prebuild-hook',
@@ -465,14 +484,14 @@ describe('every edit answers present, apply and present again as its claim says'
 
 		const satisfied = claim.satisfiedOn?.[shape];
 		expect(
-			edit.present(text, site),
+			edit.present(text, site, CTX),
 			satisfied === undefined
 				? `"${claim.id}" is already satisfied on an unwired ${shape}, which no claim declares`
 				: `"${claim.id}" is declared already satisfied on ${shape} because ${satisfied}`,
 		).toBe(satisfied !== undefined);
 		if (satisfied !== undefined) return;
 
-		const next = edit.apply(text, site);
+		const next = edit.apply(text, site, CTX);
 		if (claim.byHand) {
 			// A by-hand edit refuses unconditionally. It is printed, not written, and the
 			// instruction is what a person acts on, so it has to say something.
@@ -489,11 +508,11 @@ describe('every edit answers present, apply and present again as its claim says'
 		// disagreement between install and verify-install the design exists to make
 		// impossible, and `install` re-runs the predicate for exactly this reason.
 		expect(
-			edit.present(next as string, site),
+			edit.present(next as string, site, CTX),
 			`"${claim.id}" produced text it does not accept`,
 		).toBe(true);
 
-		const again = edit.apply(next as string, site);
+		const again = edit.apply(next as string, site, CTX);
 		const observed: Reapply =
 			again === null ? 'refuses' : again === next ? 'same-bytes' : 'appends-again';
 		expect(observed, `"${claim.id}" changed what it does when handed its own output`).toBe(
@@ -579,7 +598,7 @@ describe('an anchor that is missing or not unique', () => {
 		async (shape) => {
 			const repo = copy(shape);
 
-			// Missing: no tsconfig at all, so the applier is handed `null`.
+			// Missing: no tsconfig at all, so both appliers into it are handed `null`.
 			rmSync(join(repo.root, repo.site, 'tsconfig.json'));
 			// Not unique: two `mcpServers` keys, so `soleBlock` cannot say which one an insert
 			// belongs in. Inserting into whichever came first is how an edit lands in a block the
@@ -588,18 +607,19 @@ describe('an anchor that is missing or not unique', () => {
 			write(repo, '.mcp.json', mcpBefore);
 
 			const site = descriptorFor(repo);
-			expect((editById(site, 'tsconfig-paths') as Edit).apply(null, site)).toBeNull();
-			expect((editById(site, 'mcp-json') as Edit).apply(mcpBefore, site)).toBeNull();
+			expect((editById(site, 'tsconfig-paths') as Edit).apply(null, site, CTX)).toBeNull();
+			expect((editById(site, 'mcp-json') as Edit).apply(mcpBefore, site, CTX)).toBeNull();
 
 			const { result, rows } = await runInstall(repo, true);
 			const state = (id: string): string =>
 				result.edits.find((edit) => edit.id === id)?.state ?? 'absent';
-			expect([state('tsconfig-paths'), state('mcp-json')]).toEqual(['refused', 'refused']);
+			const refusedIds = ['tsconfig-paths', 'tsconfig-react-types', 'mcp-json'];
+			expect(refusedIds.map(state)).toEqual(['refused', 'refused', 'refused']);
 
 			// A refusal is printed with the instruction a person then follows, so it must not be
 			// null: a boolean tells somebody the edit did not happen and only the text tells them
 			// what to do instead.
-			for (const id of ['tsconfig-paths', 'mcp-json']) {
+			for (const id of refusedIds) {
 				expect(
 					(result.edits.find((edit) => edit.id === id)?.instruction ?? '').length,
 				).toBeGreaterThan(80);
@@ -612,12 +632,10 @@ describe('an anchor that is missing or not unique', () => {
 
 			// And every other mechanical edit still happened. A refusal that aborted the run
 			// would leave a consumer half wired with no row saying which half.
-			const others = CLAIMS.filter(
-				(claim) => !claim.byHand && claim.id !== 'tsconfig-paths' && claim.id !== 'mcp-json',
-			).filter((claim) => claim.satisfiedOn?.[shape] === undefined);
-			expect(others.map((claim) => `${claim.id}:${state(claim.id)}`)).toEqual(
-				others.map((claim) => `${claim.id}:written`),
-			);
+			const others = CLAIMS.filter((claim) => !claim.byHand && !refusedIds.includes(claim.id))
+				.filter((claim) => claim.satisfiedOn?.[shape] === undefined)
+				.map((claim) => claim.id);
+			expect(others.map((id) => `${id}:${state(id)}`)).toEqual(others.map((id) => `${id}:written`));
 
 			// The row is a failure, not a note. A command that reported success here would be
 			// reporting it over an install that is not finished.
@@ -632,16 +650,14 @@ describe('an anchor that is missing or not unique', () => {
 		// The third refusal, and the only one where the anchor was found and the edit still
 		// must not land. `install` re-runs the predicate over the applier's output for exactly
 		// this: an edit that inserted the right text in the wrong place would report success
-		// and `verify-install` would then report the same row as failing, which is the one
-		// disagreement between the two commands this design exists to make impossible.
+		// and `verify-install` would then report the same row as failing.
 		//
-		// The state that produces it is a real one rather than a contrived one, and it is a
-		// defect in `insertIntoBlock` that this guard is currently the only thing catching.
-		// `lastNonBlankBefore` walks the **original** text, so when the last thing inside the
-		// block is a line comment it puts the separating comma inside that comment, where JSON
-		// cannot see it, and the file stops parsing. hex-web's `apps/front/tsconfig.json`
-		// carries comments inside its `paths` object, so this is one moved comment away from
-		// being the ordinary case.
+		// The state that produces it is a real one, and it is a defect in `insertIntoBlock`
+		// that this guard is currently the only thing catching. `lastNonBlankBefore` walks the
+		// **original** text, so when the last thing inside the block is a line comment it puts
+		// the separating comma inside that comment, where JSON cannot see it, and the file
+		// stops parsing. hex-web's tsconfig carries comments inside its `paths` object, so this
+		// is one moved comment away from being the ordinary case.
 		const repo = copy('glob-workspace');
 		write(
 			repo,
@@ -655,11 +671,11 @@ describe('an anchor that is missing or not unique', () => {
 		const edit = editById(site, 'tsconfig-paths') as Edit;
 		const before = read(repo, edit.file);
 
-		const produced = edit.apply(before, site);
+		const produced = edit.apply(before, site, CTX);
 		expect(produced, 'the applier found its anchor and produced text').not.toBeNull();
 		expect(produced).toContain('node_modules.,');
 		expect(
-			edit.present(produced as string, site),
+			edit.present(produced as string, site, CTX),
 			'the applier produced a file its own predicate accepts, so this proves nothing',
 		).toBe(false);
 	});
@@ -692,13 +708,80 @@ describe('an anchor that is missing or not unique', () => {
 });
 
 // ---------------------------------------------------------------------------
+// The prebuild string, which is refused rather than appended after
+// ---------------------------------------------------------------------------
+
+describe('a prebuild that already names the guard', () => {
+	test.each(CONSUMER_SHAPES)(
+		'%s: the step 5 fragment is refused, named, and the file is left byte for byte',
+		async (shape) => {
+			const repo = copy(shape);
+			const packageFile = `${repo.site}/package.json`;
+			const site = descriptorFor(repo);
+			// The fragment step 5 installed, which the CLI refuses because root is positional.
+			const broken = `${site.mountFromSite}/kit/bin/hexdocs prefetch --root ${site.repoFromSite} --site ${repo.site} && node scripts/check-docs.mjs`;
+			const value = parseJsonc(read(repo, packageFile)) as { scripts: Record<string, string> };
+			value.scripts['prebuild'] =
+				value.scripts['prebuild'] === undefined
+					? broken
+					: `${value.scripts['prebuild']} && ${broken}`;
+			write(repo, packageFile, `${JSON.stringify(value, null, '\t')}\n`);
+			const before = read(repo, packageFile);
+
+			// The applier refuses on its own, rather than appending and leaving `install`'s
+			// re-run of the predicate to catch a chain whose first segment still exits 2.
+			const seeded = descriptorFor(repo);
+			expect((editById(seeded, 'prebuild-hook') as Edit).apply(before, seeded, CTX)).toBeNull();
+
+			const { result } = await runInstall(repo, true);
+			const outcome = result.edits.find((edit) => edit.id === 'prebuild-hook');
+			expect(outcome?.state).toBe('refused');
+			expect(outcome?.instruction ?? '').not.toContain('its own predicate does not accept');
+			expect(read(repo, packageFile)).toBe(before);
+			// The instruction names the segment to replace and what is wrong with it, rather than
+			// only printing the fragment a person would then append after the broken one.
+			expect(outcome?.instruction ?? '').toContain(`replace \`${broken.split(' && ')[0]}\``);
+			expect(outcome?.instruction ?? '').toContain("Unknown option '--root'");
+		},
+	);
+
+	test('with --bucket, the fragment carries the bucket and the predicate accepts it', async () => {
+		const repo = copy('literal-workspace');
+		const { result } = await runInstall(repo, true, { bucket: 'docs-bucket-example' });
+		expect(result.edits.find((edit) => edit.id === 'prebuild-hook')?.state).toBe('written');
+		const scripts = (
+			parseJsonc(read(repo, `${repo.site}/package.json`)) as {
+				scripts: Record<string, string>;
+			}
+		).scripts;
+		const site = descriptorFor(repo);
+		expect(scripts['prebuild']).toBe(prebuildFragment(site, 'docs-bucket-example'));
+		expect(PRESENT.prebuildHook(read(repo, `${repo.site}/package.json`), site)).toBe(true);
+	});
+
+	test('--bucket is refused exactly when prefetch would refuse it', async () => {
+		// The value is validated where it enters, and the validator is prefetch's own, so this
+		// asserts agreement rather than a list of bucket names: whatever `bucketOf` refuses,
+		// install refuses and writes nothing.
+		for (const bucket of ['docs-bucket-example', 'file://bucket', '-bucket', 'Bucket_Name']) {
+			const repo = copy('literal-workspace');
+			const before = snapshot(repo.root);
+			const { rows } = await runInstall(repo, true, { bucket });
+			const refused = 'why' in bucketOf(bucket);
+			expect([bucket, rows[0]?.status === 'not-run']).toEqual([bucket, refused]);
+			if (refused) expect(snapshot(repo.root)).toEqual(before);
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
 // The hand-edit half
 // ---------------------------------------------------------------------------
 
 interface Perturbation {
 	readonly name: string;
 	readonly edit: string;
-	/** The file it rewrites, relative to the site when it starts with `<site>/`. */
+	/** The file it rewrites, relative to the repository root. */
 	readonly file: (repo: Repo) => string;
 	readonly shapes?: readonly ConsumerShape[];
 	/** True when the needle is expected to survive. False is a declared limit, not a bug. */
@@ -745,12 +828,50 @@ const PERTURBATIONS: readonly Perturbation[] = [
 		perturb: (text) => `// Why these entries exist.\n${text}`,
 	},
 	{
+		name: 'the react mapping is respelled as its index file',
+		edit: 'tsconfig-react-types',
+		file: (repo) => `${repo.site}/tsconfig.json`,
+		survives: true,
+		why: 'Two spellings of one resolution are one wiring, and a predicate comparing target strings would refuse a correct consumer forever.',
+		perturb: (text) =>
+			text.replace(
+				'"react": ["./node_modules/@types/react"]',
+				'"react": ["node_modules/@types/react/index.d.ts"]',
+			),
+	},
+	{
 		name: 'the site package.json is reformatted with two spaces',
 		edit: 'prebuild-hook',
 		file: (repo) => `${repo.site}/package.json`,
 		survives: true,
-		why: 'The needle is inside the script string rather than in the file layout.',
+		why: 'The predicate reads the script string rather than the file layout.',
 		perturb: (text) => `${JSON.stringify(parseJsonc(text), null, 2)}\n`,
+	},
+	{
+		name: 'the prefetch flag is written with an equals sign',
+		edit: 'prebuild-hook',
+		file: (repo) => `${repo.site}/package.json`,
+		survives: true,
+		why: 'The CLI accepts `--site=apps/front`, and the step 5 substring test refused it, which is a false failure on a chain that works.',
+		perturb: (text, repo) => text.replace(`--site ${repo.site}`, `--site=${repo.site}`),
+	},
+	{
+		name: 'the prefetch flags are reordered around the positional root',
+		edit: 'prebuild-hook',
+		file: (repo) => `${repo.site}/package.json`,
+		survives: true,
+		why: 'The binder takes a flag before the positional as readily as after it, so a person tidying the string has not broken anything.',
+		perturb: (text, repo) =>
+			text.replace(`prefetch ../.. --site ${repo.site}`, `prefetch --site ${repo.site} ../..`),
+	},
+	{
+		name: 'a bucket is added to the prefetch by hand',
+		edit: 'prebuild-hook',
+		file: (repo) => `${repo.site}/package.json`,
+		survives: true,
+		why: 'The bucket reaches prefetch through this private string, which is the route decided for it, so adding one is wiring rather than drift.',
+		perturb: (text, repo) =>
+			text.replace(`--site ${repo.site}`, `--site ${repo.site} --bucket docs-bucket-example`),
 	},
 	{
 		name: 'the mcp servers are reordered',
@@ -773,12 +894,26 @@ const PERTURBATIONS: readonly Perturbation[] = [
 		perturb: (text) => `${text.split('\n').reverse().join('\n').trim()}\n`.replaceAll('\n', '\r\n'),
 	},
 	{
-		name: 'app/lib/docs.ts is reflowed onto fewer lines',
-		edit: 'docs-lib',
-		file: (repo) => `${repo.site}/app/lib/docs.ts`,
+		name: 'the server module is reflowed onto fewer lines',
+		edit: 'docs-server',
+		file: (repo) => `${repo.site}/app/lib/docs.server.ts`,
 		survives: true,
-		why: 'The module header says it is safe to edit, so the predicate asks whether it still derives rather than whether it matches byte for byte.',
+		why: 'The module header says it is safe to edit, so the predicate asks what the rest of the wiring depends on rather than whether it matches byte for byte.',
 		perturb: (text) => text.replace(/\n\t/g, ' ').replace(/\n\n/g, '\n'),
+	},
+	{
+		name: 'the server module annotates its exports',
+		edit: 'docs-server',
+		file: (repo) => `${repo.site}/app/lib/docs.server.ts`,
+		survives: true,
+		why: 'A type annotation on an export is an ordinary edit, and a needle that wanted `export const DOCS =` exactly would refuse it.',
+		perturb: (text) =>
+			text
+				.replace(
+					'export const DOCS_ROUTES =',
+					'export const DOCS_ROUTES: ReturnType<typeof docsRouteRows> =',
+				)
+				.replace('export const DOCS =', 'export const DOCS: ReturnType<typeof docsServer> ='),
 	},
 	{
 		name: 'the check-docs shim is reindented with spaces',
@@ -789,7 +924,7 @@ const PERTURBATIONS: readonly Perturbation[] = [
 		perturb: (text) => text.replaceAll('\t', '  '),
 	},
 
-	// The three that do not survive. Each is a real thing a consumer does, and each is
+	// The ones that do not survive. Each is a real thing a consumer does, and each is
 	// declared here with the remedy the failing check hands the reader.
 	{
 		name: 'the workspace exclusion is written with single quotes',
@@ -797,16 +932,20 @@ const PERTURBATIONS: readonly Perturbation[] = [
 		file: () => 'pnpm-workspace.yaml',
 		shapes: ['glob-workspace'],
 		survives: false,
-		why: 'pnpm accepts either quoting and `apps/front/scripts/check-tools.mjs` matches the double-quoted literal as a raw substring, so the consumer own guard would fail on it too. `pnpm format` in that repository rewrites double quotes to single ones in YAML, which is why the fixture comment calls the quotes the whole point.',
+		why: 'pnpm accepts either quoting and `apps/front/scripts/check-tools.mjs` matches the double-quoted literal as a raw substring, so the consumer own guard would fail on it too.',
 		perturb: (text, repo) => text.replace(`"!${repo.mount}"`, `'!${repo.mount}'`),
 	},
 	{
-		name: 'the DOCS_SITES identifier in app/lib/docs.ts is renamed',
-		edit: 'docs-lib',
-		file: (repo) => `${repo.site}/app/lib/docs.ts`,
+		name: 'the page module destructures DOCS',
+		edit: 'route-page-module',
+		file: (repo) => `${repo.site}/app/routes/docs.tsx`,
 		survives: false,
-		why: 'This is the limit `VerifyInstallReport.notCheckedHere` states in the report itself: renaming the local variable in a derivation breaks the check without breaking the code. Neither consumer route table can be evaluated from node without executing a Vite module, so a text match is the honest ceiling.',
-		perturb: (text) => text.replaceAll('DOCS_SITES', 'SITES'),
+		why: 'The limit `VerifyInstallReport.notCheckedHere` states in the report itself: rearranging the expression around a call breaks the text match without breaking the code.',
+		perturb: (text) =>
+			text.replace(
+				'return DOCS.page(new URL(request.url));',
+				'const { page } = DOCS;\n\treturn page(new URL(request.url));',
+			),
 	},
 	{
 		name: 'the check-docs shim is reformatted with single quotes',
@@ -833,15 +972,19 @@ describe('a needle survives what a consumer does to the file afterwards', () => 
 		const site = descriptorFor(repo);
 		const edit = editById(site, perturbation.edit) as Edit;
 		expect(
-			edit.present(site.files.read(path), site),
+			edit.present(site.files.read(path), site, CTX),
 			`${perturbation.edit} is not satisfied before the perturbation, so this proves nothing`,
 		).toBe(true);
 
-		write(repo, path, perturbation.perturb(read(repo, path), repo));
-		const after = descriptorFor(repo);
-		const held = (editById(after, perturbation.edit) as Edit).present(
-			after.files.read(path),
-			after,
+		const before = read(repo, path);
+		const after = perturbation.perturb(before, repo);
+		expect(after, `${perturbation.name} changed nothing, so this proves nothing`).not.toBe(before);
+		write(repo, path, after);
+		const perturbed = descriptorFor(repo);
+		const held = (editById(perturbed, perturbation.edit) as Edit).present(
+			perturbed.files.read(path),
+			perturbed,
+			CTX,
 		);
 		expect(held, perturbation.why).toBe(perturbation.survives);
 
@@ -849,7 +992,7 @@ describe('a needle survives what a consumer does to the file afterwards', () => 
 
 		// Where the needle does break, the failure has to be actionable. The check row is
 		// what a person sees, and a finding with no remediation is a red line with no cause.
-		const row = runConsumerChecks(after, { exec: runRecipe, kitVersion: KIT_VERSION }).find(
+		const row = runConsumerChecks(perturbed, { exec: runRecipe, kitVersion: KIT_VERSION }).find(
 			(candidate) => candidate.id === claimOf(perturbation.edit).check,
 		);
 		expect(row?.status).toBe('fail');
@@ -874,19 +1017,43 @@ describe('a needle survives what a consumer does to the file afterwards', () => 
 			'pnpm-workspace.yaml',
 			read(repo, 'pnpm-workspace.yaml').replace(
 				'  - apps/front',
-				`  - "!${repo.mount}"\n  - apps/front`,
+				`  - '!${repo.mount}'\n  - apps/front`,
 			),
-		);
-		write(
-			repo,
-			'pnpm-workspace.yaml',
-			read(repo, 'pnpm-workspace.yaml').replace(`"!${repo.mount}"`, `'!${repo.mount}'`),
 		);
 		const site = descriptorFor(repo);
 		const row = runConsumerChecks(site, { exec: runRecipe, kitVersion: KIT_VERSION }).find(
 			(candidate) => candidate.id === 'wiring-workspace-exclusion',
 		);
 		expect(row?.findings.map((finding) => finding.suggestion)).toEqual([`  - "!${repo.mount}"`]);
+	});
+
+	test('a react mapping already present by another spelling leaves the docs entries to be written', async () => {
+		// A consumer that had mapped `react` before this install used to get no `@hex-pro/docs`
+		// entries at all, because the one paths applier refused the whole edit when any key it
+		// wanted was already there. The react mapping is its own edit now.
+		const repo = copy('glob-workspace');
+		write(
+			repo,
+			`${repo.site}/tsconfig.json`,
+			read(repo, `${repo.site}/tsconfig.json`).replace(
+				'"~/*": ["./app/*"],',
+				'"~/*": ["./app/*"],\n\t\t\t"react": ["node_modules/@types/react"],',
+			),
+		);
+		const { result } = await runInstall(repo, true);
+		const state = (id: string) => result.edits.find((edit) => edit.id === id)?.state;
+		expect([state('tsconfig-paths'), state('tsconfig-react-types')]).toEqual([
+			'written',
+			'written',
+		]);
+		const table = (
+			parseJsonc(read(repo, `${repo.site}/tsconfig.json`)) as {
+				compilerOptions: { paths: Record<string, string[]> };
+			}
+		).compilerOptions.paths;
+		expect(table['react']).toEqual(['node_modules/@types/react']);
+		expect(table['react/*']).toEqual(['./node_modules/@types/react/*']);
+		expect(table['@hex-pro/docs']).toEqual(['../../common/docs/src/index.ts']);
 	});
 });
 
@@ -901,9 +1068,8 @@ describe('the split between what an edit can assert and what a check can', () =>
 		// true, and this is the case: a `packages:` list written flush against the left
 		// margin is valid YAML that pnpm reads, the parser here declines to read it, and the
 		// predicate then answers "not enrolled, so nothing to do" while the row refuses to
-		// report success over a list it could not see. The check is right and the predicate
-		// is not wrong; what is wrong is reading the header as a guarantee. Pinned here so
-		// the sentence cannot quietly become true or quietly become worse.
+		// report success over a list it could not see. Pinned here so the sentence cannot
+		// quietly become true or quietly become worse.
 		const repo = copy('glob-workspace');
 		write(
 			repo,
@@ -918,6 +1084,7 @@ describe('the split between what an edit can assert and what a check can', () =>
 			(editById(site, 'workspace-exclusion') as Edit).present(
 				site.files.read('pnpm-workspace.yaml'),
 				site,
+				CTX,
 			),
 		).toBe(true);
 		const row = runConsumerChecks(site, { exec: runRecipe, kitVersion: KIT_VERSION }).find(
@@ -932,61 +1099,61 @@ describe('the split between what an edit can assert and what a check can', () =>
 // The instructions that are shaped to the consumer in hand
 // ---------------------------------------------------------------------------
 
-describe('three instructions are shaped to the file they are about', () => {
-	const marker = (id: string, repo: Repo): string =>
+describe('the printed instructions are shaped to the file they are about', () => {
+	const instruction = (id: string, repo: Repo): string =>
 		(editById(descriptorFor(repo), id) as Edit).instruction;
 
-	test('routes: a tuple array gets the spread and a page registry gets the declaration', () => {
-		// Both directions, because a branch that always took one arm would satisfy either
-		// half alone. Neither fixture ships the tuple shape, so the tuple arm is reached by
-		// giving the fixture the annotation hex-web actually carries.
-		const registry = copy('literal-workspace');
-		expect(marker('routes', registry)).toContain('maps a page registry rather than a tuple array');
-		expect(marker('routes', registry)).not.toContain('[path, file] tuple array here');
-
-		const tuple = copy('glob-workspace');
-		write(
-			tuple,
-			`${tuple.site}/app/routes.ts`,
-			read(tuple, `${tuple.site}/app/routes.ts`).replace(
-				'const PAGES = [',
-				'const PAGES: [path: string, file: string][] = [',
-			),
-		);
-		expect(marker('routes', tuple)).toContain('[path, file] tuple array here');
-		expect(marker('routes', tuple)).not.toContain('maps a page registry rather than a tuple array');
+	test('routes: the tuple array gets the page spread and the registry gets the helper', () => {
+		// Both from the real bytes, with nothing patched in: hex-web's PAGES carries the tuple
+		// annotation and kcalc's pages() maps a registry from another module.
+		const tuple = instruction('routes', copy('glob-workspace'));
+		const registry = instruction('routes', copy('literal-workspace'));
+		expect(tuple).toContain('As the last entries of `PAGES`');
+		expect(tuple).not.toContain('function docsPages');
+		expect(registry).toContain('function docsPages');
+		expect(registry).not.toContain('As the last entries of `PAGES`');
+		for (const text of [tuple, registry]) {
+			// Insertions only. A printed whole `export default` deleted kcalc's robots, sitemap
+			// and admin routes when copied literally.
+			expect(text).not.toContain('export default [');
+			expect(text).toContain('{ id: row.id }');
+			expect(text).toContain(MACHINE_ROUTES_SPREAD.split('\n')[0] as string);
+			expect(text).toContain('import { DOCS_ROUTES } from "./lib/docs.server";');
+		}
 	});
 
-	test('localised paths: an array gets a spread and a readonly alias gets a concatenation', () => {
-		expect(marker('localised-paths', copy('glob-workspace'))).toContain(
-			'inside the LOCALISED_PATHS array',
-		);
-		expect(marker('localised-paths', copy('literal-workspace'))).toContain(
-			'is an alias of one registry',
-		);
-		expect(marker('localised-paths', copy('glob-workspace'))).not.toContain(
-			'is an alias of one registry',
-		);
-		expect(marker('localised-paths', copy('literal-workspace'))).not.toContain(
-			'inside the LOCALISED_PATHS array',
-		);
+	test('sitemap: the escaping site gets escaped URLs and the other does not', () => {
+		const plain = instruction('sitemap', copy('glob-workspace'));
+		const escaped = instruction('sitemap', copy('literal-workspace'));
+		expect(escaped).toContain('escapeXml(localeUrl(lang, entry.path))');
+		expect(plain).not.toContain('escapeXml(');
+		for (const text of [plain, escaped]) {
+			expect(text).toContain('DOCS.sitemap().flatMap');
+			expect(text).toContain('entry.languages.includes(DEFAULT_LANGUAGE)');
+		}
 	});
 
-	test('sitemap: an entries array gets a spread and a mapped registry gets a concatenation', () => {
-		expect(marker('sitemap', copy('glob-workspace'))).toContain('inside the entries array');
-		expect(marker('sitemap', copy('literal-workspace'))).toContain(
-			'has no entries array to spread into',
-		);
-		expect(marker('sitemap', copy('glob-workspace'))).not.toContain(
-			'has no entries array to spread into',
-		);
-		expect(marker('sitemap', copy('literal-workspace'))).not.toContain('inside the entries array');
+	test('root: the decision reads the docs match and filters the alternates', () => {
+		const text = instruction('root-seo', copy('glob-workspace'));
+		for (const line of ROOT_DECISION.split('\n')) expect(text).toContain(line);
+		expect(text).toContain('import { docsSeoFromMatches } from "@hex-pro/docs";');
+		expect(text).toContain('PREFIXED_LANGUAGES.filter(named).map(');
 	});
 });
 
 // ---------------------------------------------------------------------------
-// The context that cannot write
+// The note, and the context that cannot write
 // ---------------------------------------------------------------------------
+
+test('the editor settings are printed as a note and never become an edit', async () => {
+	const repo = copy('glob-workspace');
+	const { result, lines } = await runInstall(repo, false);
+	expect(result.notes).toHaveLength(1);
+	expect(result.notes[0]).toContain('"enabledMcpjsonServers": ["hexdocs"]');
+	expect(result.notes[0]).toContain(`${repo.mount}/.claude/skills`);
+	expect(lines.join('\n')).toContain(result.notes[0] as string);
+	expect(result.edits.some((edit) => edit.file.includes('.claude'))).toBe(false);
+});
 
 test('install with --write in a context that has no writer reports not-run and writes nothing', async () => {
 	// The runtime half of the guarantee whose other halves are the `Command` union and the
@@ -996,7 +1163,7 @@ test('install with --write in a context that has no writer reports not-run and w
 	const before = snapshot(repo.root);
 	const output = await invoke(
 		install,
-		{ root: repo.root, site: repo.site, mount: repo.mount, write: true },
+		{ root: repo.root, site: repo.site, write: true },
 		{
 			cwd: repo.root,
 			kitVersion: KIT_VERSION,

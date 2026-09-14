@@ -9,11 +9,15 @@
  * breaks the code without breaking the check. `VerifyInstallReport.notCheckedHere`
  * carries that sentence to the reader rather than leaving it here.
  *
- * The alternative was considered and refused. Neither consumer's route table can be read
- * from node without executing a Vite module: `routes.ts` imports
- * `@react-router/dev/routes` and `app/lib/docs.ts` uses `import.meta.glob`. Loading a
- * TypeScript compiler into `kit/` to get an AST would be a dependency the whole package
- * is built to avoid, and it would still not evaluate the module.
+ * Where a text match was the wrong tool it is no longer used. The route table is read by
+ * running the consuming site's own `react-router routes --json` (`route-table.ts`), because
+ * `routes.ts` imports `@react-router/dev/routes` and a server module that uses
+ * `import.meta.glob`, so nothing short of that site's own config loader evaluates it, and a
+ * token test passed over a table that loader refused. What is still read as text here is
+ * the handful of files whose shape a structural question answers: a route module's exports,
+ * the server module's imports, and the one call each in `root.tsx` and the sitemap. Loading
+ * a TypeScript compiler into `kit/` to get an AST of those would be a dependency the whole
+ * package is built to avoid, and it would still not evaluate them.
  *
  * `stripComments` is ported from `check-tools.mjs:139-179` rather than rewritten, so the
  * two guards cannot form different opinions about what a comment is. Its limit is stated
@@ -109,14 +113,43 @@ export function derives(source: string, needle: string): boolean {
 }
 
 /**
- * Where a needle sits in the structural form, or `-1`.
+ * Every module specifier a file imports for its value, in source order.
  *
- * Only ever compared against another index from the same source. The number itself means
- * nothing: whitespace collapsing moves it, which is the whole point of comparing two of
- * them rather than either one against a literal.
+ * A whole-statement `import type` or `export type` is left out, because it is erased before
+ * anything resolves it. Anything else counts, including `import { type A } from "x"`: under
+ * `verbatimModuleSyntax` that statement survives as `import {} from "x"` and the specifier is
+ * still resolved at runtime. Dynamic `import()` is not read, and neither consumer's route
+ * config uses one.
  */
-export function structuralIndex(source: string, needle: string): number {
-	return structural(source).indexOf(structural(needle));
+export function valueImportSpecifiers(source: string): string[] {
+	const text = stripComments(source);
+	const found: { at: number; specifier: string }[] = [];
+	const statements = [
+		/\bimport\s+(type\s+)?(?:[\w*${}\s,]+?\s+from\s+)?["']([^"']+)["']/g,
+		/\bexport\s+(type\s+)?(?:\*(?:\s+as\s+[\w$]+)?|\{[^}]*\})\s*from\s+["']([^"']+)["']/g,
+	];
+	for (const pattern of statements) {
+		for (const match of text.matchAll(pattern)) {
+			if (match[1] !== undefined || match.index === undefined) continue;
+			found.push({ at: match.index, specifier: match[2] ?? '' });
+		}
+	}
+	return found.sort((a, b) => a.at - b.at).map((entry) => entry.specifier);
+}
+
+/** Whether a module exports `headers`, declared or through an export list. */
+export function exportsHeaders(source: string): boolean {
+	const text = stripComments(source);
+	return (
+		/export\s+(?:const|let|var|async\s+function|function)\s+headers\b/.test(text) ||
+		/export\s*\{[^}]*\bheaders\b[^}]*\}/.test(text)
+	);
+}
+
+/** Whether a module has a default export, declared or through an export list. */
+export function exportsDefault(source: string): boolean {
+	const text = stripComments(source);
+	return /\bexport\s+default\b/.test(text) || /export\s*\{[^}]*\bas\s+default\b[^}]*\}/.test(text);
 }
 
 /** `JSON.parse` over the comment-stripped text, or `null`. Never throws. */
