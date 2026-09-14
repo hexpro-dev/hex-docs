@@ -160,13 +160,22 @@ export const BUCKET_NAME_PATTERN = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
  * the bucket through here. The value is quoted in the refusal because a string that fails
  * this grammar cannot be a working bucket name, and the usual cause is visible only in the
  * quote: an unexpanded `$HEXDOCS_BUCKET` in a prebuild string.
+ *
+ * `flagDeclared: false` is for a command whose parameter table has no `bucket`, which is
+ * `label`. The refusal then names only the environment variable. Naming `--bucket` there
+ * sent an operator who was already blocked to a flag the CLI answers with "Unknown option".
  */
-export function bucketOf(flag: string | undefined): { bucket: string } | { why: string } {
+export function bucketOf(
+	flag: string | undefined,
+	options: { readonly flagDeclared?: boolean } = {},
+): { bucket: string } | { why: string } {
 	const fromFlag = flag !== undefined;
 	const bucket = flag ?? process.env['HEXDOCS_BUCKET'];
 	if (bucket === undefined || bucket === '') {
+		const how =
+			options.flagDeclared === false ? 'Set HEXDOCS_BUCKET' : 'Pass --bucket or set HEXDOCS_BUCKET';
 		return {
-			why: 'No bucket. Pass --bucket or set HEXDOCS_BUCKET. There is no default: hex-docs is a public repository, and a default here would be a command that appears to work while writing into a bucket somebody else owns.',
+			why: `No bucket. ${how}. There is no default: hex-docs is a public repository, and a default here would be a command that appears to work while writing into a bucket somebody else owns.`,
 		};
 	}
 	if (!BUCKET_NAME_PATTERN.test(bucket)) {

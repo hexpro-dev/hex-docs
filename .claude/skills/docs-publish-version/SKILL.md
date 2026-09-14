@@ -80,8 +80,9 @@ It writes nothing and returns the JSON patch. Three rows:
   is safe as a URL segment, a date, and no collision with an existing label or an
   already-labelled commit.
 - A bundle exists for that sha. Checked against the local prefetch cache, and against the
-  bucket as well when credentials are present. Without credentials that arm is skipped
-  with the reason and the local arm still decides.
+  bucket as well when credentials are present and `HEXDOCS_BUCKET` names it. `label` has
+  no bucket flag, so the environment variable is the only way to name the bucket here.
+  Without either, that arm is skipped with the reason and the local arm still decides.
 - Ancestry: the commit is on the default branch. This is answered against the remote,
   because from the web repository the app repository is a sibling directory and the sha is
   not in this history at all. When neither route is available the row is skipped naming
@@ -107,9 +108,12 @@ reach them at all.
 Before it extracts anything it removes whatever under those two trees no configured
 version writes, so a relabelled or removed version leaves nothing behind for the build to
 pick up. It prunes only when the configs, the trees and the cache have all passed, so a
-machine without credentials keeps the tree it already has. A symbolic link, or a file
-where a project or label directory belongs, stops the run with nothing touched: move it
-out of the tree.
+machine without credentials keeps the tree it already has. A symbolic link anywhere down
+to a label directory, or a pipe, socket or device at the project or label level, stops the
+run with nothing touched: move it out of the tree. A stray regular file at those levels, a
+Finder `.DS_Store` included, is removed with the other stale files. If a directory inside
+the trees cannot be written, the extract row fails naming the path part way through; fix
+its mode and run `prefetch` again, which needs no download once the cache row has passed.
 
 A cold cache needs the bucket and credentials for the account that owns the store. If the
 row says the CLI could not find credentials, set `AWS_PROFILE` (or pass `--profile`) to

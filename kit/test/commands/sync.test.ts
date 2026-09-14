@@ -40,7 +40,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { afterAll, beforeAll, describe, expect, test } from 'vitest';
+import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 
 import { CONSUMER_ROOT, materialiseCorpus } from '../../../fixtures/index.js';
 import { MANIFEST_KEY, bundlePrefix } from '../../../src/contracts/manifest.js';
@@ -56,6 +56,29 @@ import { docsSiteConfigSchema, versionTableProblems } from '../../src/contracts/
 import { NO_EXEC } from '../../src/exec/run.js';
 import { fileWriter } from '../../src/io/write.js';
 import { exitCodeFor, invoke, type CommandOutput, type Ctx } from '../../src/registry/command.js';
+
+/**
+ * A switch on the JSON editor sync uses, off unless a test turns it on.
+ *
+ * It exists for one test, the post-edit proof, which guards against the editor landing a
+ * value somewhere it was not meant to go. Nothing in the real editor is known to do that on
+ * any input, which is the point of a proof, and it also means no input can make the proof
+ * fire. With the switch on, `setMember` writes every `digest` under a misspelt key instead.
+ */
+const surgery = vi.hoisted(() => ({ misplace: false, misplaced: 0 }));
+
+vi.mock('../../src/io/jsonc.js', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('../../src/io/jsonc.js')>();
+	return {
+		...actual,
+		setMember: (...args: Parameters<typeof actual.setMember>) => {
+			const [text, span, key, value, options] = args;
+			if (!surgery.misplace || key !== 'digest') return actual.setMember(...args);
+			surgery.misplaced += 1;
+			return actual.setMember(text, span, 'digset', value, options);
+		},
+	};
+});
 
 const PROJECT = 'fixture-app';
 const SITE = 'apps/front';
@@ -452,12 +475,17 @@ let doctored = 0;
  * `sync` reports as a re-pin and which none of these tests is about.
  */
 function cacheWithRedirects(redirects: Record<string, string>): string {
+	return doctoredCache((value) => ({ ...value, redirects }));
+}
+
+/** The same, for any change to the default version's manifest. */
+function doctoredCache(edit: (manifest: BundleManifest) => BundleManifest): string {
 	doctored += 1;
-	const cache = join(scratch, `cache-redirects-${doctored}`);
+	const cache = join(scratch, `cache-doctored-${doctored}`);
 	cpSync(fullCache, cache, { recursive: true });
 	const path = join(cache, bundlePrefix(PROJECT, VERSIONS[0].commit), MANIFEST_KEY);
-	const value = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
-	writeFileSync(path, JSON.stringify({ ...value, redirects }), 'utf8');
+	const value = JSON.parse(readFileSync(path, 'utf8')) as BundleManifest;
+	writeFileSync(path, JSON.stringify(edit(value)), 'utf8');
 	return cache;
 }
 
@@ -507,6 +535,71 @@ describe('redirects', () => {
 		const again = await runSync(root, fullCache);
 		expect(again.data.written).toBe(false);
 		expect(again.text).toBe(packed);
+	});
+
+	test('redirects written in another order say the same thing, and are left in that order', async () => {
+		// Order-blind on purpose, and a behaviour somebody reaches by hand rather than a
+		// defensive guard: reordering the member in an editor is ordinary, and a sync that
+		// rewrote it back to the manifest's order would be the spurious diff this command
+		// exists not to produce. Settled first, so the second run has nothing else to write.
+		const cache = cacheWithRedirects({ 'first-tag': 'guide/first-tag', 'old-home': 'index' });
+		const root = siteRepo();
+		const settled = await runSync(root, cache);
+		expect(settled.exit).toBe(0);
+		const path = configPathOf(root);
+		const reordered = settled.text.replace(
+			'"first-tag": "guide/first-tag",\n\t\t"old-home": "index"',
+			'"old-home": "index",\n\t\t"first-tag": "guide/first-tag"',
+		);
+		expect(reordered).not.toBe(settled.text);
+		writeFileSync(path, reordered, 'utf8');
+
+		const again = await runSync(root, cache);
+
+		expect(again.exit).toBe(0);
+		expect(again.data.written).toBe(false);
+		expect(again.text).toBe(reordered);
+	});
+
+	test('an empty redirects member beside a bundle with none is taken out, not refused as a bug', async () => {
+		// The schema accepts `{}` and the value gate read it as equal to absent, so no edit was
+		// made, while the object the edit is proved against had no member at all. Every run
+		// then refused with "a bug in hexdocs" and never wrote the digests or the pages.
+		const root = siteRepo((config) => {
+			config.redirects = {};
+		});
+		const cache = cacheWithRedirects({});
+
+		const first = await runSync(root, cache);
+		expect(first.data.why).toBeUndefined();
+		expect(first.exit).toBe(0);
+		expect('redirects' in (JSON.parse(first.text) as object)).toBe(false);
+
+		const second = await runSync(root, cache);
+		expect(second.data.written).toBe(false);
+		expect(second.text).toBe(first.text);
+	});
+
+	test('an empty hidden member beside a bundle that hides nothing is taken out, not refused as a bug', async () => {
+		const root = siteRepo((config) => {
+			config.hidden = [];
+		});
+		const cache = doctoredCache((value) => ({
+			...value,
+			nav: value.nav.map((node) => {
+				const { hidden: _hidden, ...shown } = node;
+				return shown;
+			}),
+		}));
+
+		const first = await runSync(root, cache);
+		expect(first.data.why).toBeUndefined();
+		expect(first.exit).toBe(0);
+		expect('hidden' in (JSON.parse(first.text) as object)).toBe(false);
+
+		const second = await runSync(root, cache);
+		expect(second.data.written).toBe(false);
+		expect(second.text).toBe(first.text);
 	});
 
 	test('a bundle with no redirects takes the member out, and a second run changes nothing', async () => {
@@ -687,6 +780,53 @@ describe('a config sync cannot read', () => {
 		expect(data.why).toContain('marked default');
 		expect(readFileSync(configPathOf(root))).toEqual(before);
 		expect(exit).toBe(3);
+	});
+
+	test('a version entry whose commit is written twice is refused, and the file keeps its bytes', async () => {
+		// Strict JSON has one way for the file text and the parsed config to disagree about a
+		// version's commit, and it is a key written twice: `JSON.parse` keeps the last one and
+		// another reader may keep the first. A digest written into that entry is pinned to
+		// whichever sha the reader picks, and the proof below compares through `JSON.parse`
+		// too, so it cannot see this.
+		const root = siteRepo();
+		const path = configPathOf(root);
+		const text = readFileSync(path, 'utf8').replace(
+			`"commit": "${VERSIONS[1].commit}"`,
+			`"commit": "${'a'.repeat(40)}",\n\t\t\t"commit": "${VERSIONS[1].commit}"`,
+		);
+		writeFileSync(path, text, 'utf8');
+
+		const { data, exit, output } = await runSync(root, fullCache);
+
+		expect(data.written).toBe(false);
+		expect(data.why).toContain('the entry labelled 1.0.0');
+		expect(data.why).toContain('written twice');
+		expect(output.rows.map((row) => row.status)).toEqual(['not-run', 'not-run']);
+		expect(readFileSync(path, 'utf8')).toBe(text);
+		expect(exit).toBe(3);
+	});
+
+	test('an edit that lands somewhere other than intended is refused before it is written', async () => {
+		// The surgery is span arithmetic, so what it produced is compared with what it was
+		// meant to produce. No input to the real editor is known to make it land wrong, so the
+		// editor is made to: every digest goes under a misspelt key, which is valid JSON and
+		// the wrong config.
+		const root = siteRepo();
+		const before = readFileSync(configPathOf(root));
+		surgery.misplace = true;
+		let outcome: Awaited<ReturnType<typeof runSync>>;
+		try {
+			outcome = await runSync(root, fullCache);
+		} finally {
+			surgery.misplace = false;
+		}
+
+		expect(surgery.misplaced).toBeGreaterThan(0);
+		expect(outcome.data.written).toBe(false);
+		expect(outcome.data.why).toContain('did not produce the intended config');
+		expect(outcome.output.rows.map((row) => row.status)).toEqual(['not-run', 'not-run']);
+		expect(readFileSync(configPathOf(root))).toEqual(before);
+		expect(outcome.exit).toBe(3);
 	});
 
 	test('a context with no writer refuses rather than reporting a clean run', async () => {
