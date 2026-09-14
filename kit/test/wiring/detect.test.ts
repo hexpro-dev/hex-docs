@@ -290,14 +290,15 @@ describe('the fixture file tables', () => {
 		);
 		// The paths differ by exactly what the repositories differ by, and each is named.
 		// hex-web keeps a shared asset script under common/, which is also what makes the
-		// convention propose common/docs; kcalc has a site .gitignore hex-web does not, and a
-		// base eslint config whose globs are why the shim declares its globals.
+		// convention propose common/docs; kcalc has a site .gitignore hex-web does not. Both
+		// carry a base eslint config, and the two disagree about `.mjs`, which is why the shim
+		// imports the globals it uses rather than declaring them: the step 8 fixture carried
+		// only kcalc's, and the directive that satisfied it failed hex-web's.
 		expect(globPaths.filter((path) => !literalPaths.includes(path)).sort()).toEqual([
 			'common/copy-assets.sh',
 		]);
 		expect(literalPaths.filter((path) => !globPaths.includes(path)).sort()).toEqual([
 			'<site>/.gitignore',
-			'config/eslint.config.js',
 		]);
 		// And no file both carry is byte-identical, which is what makes a check written
 		// against one of them fail the other. Named rather than allowed by a count, so a

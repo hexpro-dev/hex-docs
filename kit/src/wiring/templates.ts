@@ -6,9 +6,12 @@
  * style rather than this one's: tabs, double quotes, and relative imports with no
  * extension, which is the opposite of this package's own rule and is what both
  * consumers' app code actually does. A `.ts` extension there is TS5097 under their
- * configuration. kcalc's front package runs `eslint app scripts --max-warnings 0`, so a
- * file that satisfied hex-web (which has no lint at all) and not kcalc would break the
- * build it was installed to protect.
+ * configuration. Both consumers carry an eslint config whose scope is the site directory
+ * `install` writes into, and the two disagree about `.mjs`. kcalc's front package also runs
+ * `eslint app scripts --max-warnings 0` as a script; hex-web has no lint script, which is a
+ * different fact from having no lint: the shim that failed its config was the one file with
+ * errors in a scripts directory that otherwise lints clean. Measure a template change with
+ * both consumers' eslint, not one.
  *
  * Every one of them is written when absent and never rewritten afterwards. A file that
  * exists and does not satisfy its predicate is a file somebody wrote, so `install` refuses
@@ -211,12 +214,17 @@ export const GITIGNORE_ENTRIES = [`app/docs/${BUNDLE_TREE}/`, `public/${PUBLIC_T
  * `check-locales.mjs` says about itself, so a check that only runs when somebody types
  * it is not a guard.
  *
- * The `global console, process` block comment on the line after the shebang is not for a
- * reader. kcalc's base eslint configuration declares node globals for `.ts`, `.tsx`,
- * `.js` and `.jsx` only, so an `.mjs` script gets `no-undef` with no globals at all.
- * Measured with kcalc's own eslint over this file: seventeen `'console' is not defined`
- * and `'process' is not defined` errors without the line, exit 0 with it, and every script
- * already in that directory opens the same way.
+ * `console` and `process` are imported from `node:console` and `node:process` rather than
+ * used as globals, because the two consumers' eslint configs want opposite things of a
+ * global. kcalc's base config declares node globals for `.ts`, `.tsx`, `.js` and `.jsx`
+ * only, so an `.mjs` script gets none and every use is `no-undef`: seventeen errors, measured
+ * with kcalc's own eslint. hex-web's base config globs `.mjs` in with node globals, so the
+ * `global console, process` directive comment that silenced kcalc was a redeclaration there:
+ * two `no-redeclare` errors, measured with hex-web's own eslint, where the six scripts
+ * already in that directory carry no such line and lint clean. An import is a module binding
+ * rather than a global, so neither rule reads it, and both consumers' configs exit 0 over
+ * this file. Each default export is the same object as the global, so nothing about what the
+ * script does changes.
  *
  * The exit codes translate one convention into another and the choice is deliberate.
  * hex-web's own guards use 1 for "problems found" and 2 for "could not read what it was
@@ -235,7 +243,6 @@ export const GITIGNORE_ENTRIES = [`app/docs/${BUNDLE_TREE}/`, `public/${PUBLIC_T
 export function checkDocsShim(site: SiteDescriptor): string {
 	const launcher = `${site.mountFromSite}/kit/bin/hexdocs`;
 	return `#!/usr/bin/env node
-/* global console, process */
 /**
  * The docs wiring guard. Written by \`hexdocs install\`.
  *
@@ -257,8 +264,10 @@ export function checkDocsShim(site: SiteDescriptor): string {
  */
 
 import { execFileSync } from "node:child_process";
+import console from "node:console";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));

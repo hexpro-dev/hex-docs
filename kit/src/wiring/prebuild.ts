@@ -16,8 +16,10 @@
  *
  * What is not attempted is parsing shell. The script is split on the five control operators
  * outside quotes, and anything only a shell can read (an open quote, a command substitution,
- * a quote or a `$` inside the segment itself) is refused rather than guessed at. A refusal
- * here names what it could not read; a guess is how the substring test passed.
+ * a comment, a quote or a `$` inside the segment itself) is refused rather than guessed at. A
+ * command missing from either side of an operator is reported, because the shell refuses that
+ * string before running any of it. A refusal here names what it could not read; a guess is
+ * how the substring test passed.
  */
 
 import { z } from 'zod';
@@ -61,6 +63,13 @@ export interface Segment {
  * see, and a prefetch segment hidden inside one would be read as a top-level command that
  * runs. A `&` after `>` or `<`, or before `>`, is a redirection such as `2>&1` rather than a
  * background operator. A newline separates like `;`.
+ *
+ * An unquoted `#` that starts a word is refused too, because the shell reads the rest of the
+ * line as a comment. `copy-assets.sh # temporarily && <prefetch> && node check-docs.mjs` split
+ * here as three commands, the chain read as wired, and `sh -c` ran the first and exited 0
+ * with neither the prefetch nor the guard run, which is `install` appending to such a string
+ * and the check passing a build that no longer has a guard. A `#` inside a word, as in
+ * `a#b`, is not a comment and is kept.
  */
 export function splitScript(script: string): Segment[] | null {
 	const raw: { text: string; before: Separator | null }[] = [];
@@ -88,6 +97,7 @@ export function splitScript(script: string): Segment[] | null {
 			if (c === '"') quote = null;
 			continue;
 		}
+		if (c === '#' && (i === 0 || /[\s;&|]/.test(script[i - 1] as string))) return null;
 		if (c === '"' || c === "'") {
 			quote = c;
 			current += c;
@@ -309,16 +319,40 @@ export function readPrebuild(
 		const value = scripts[name];
 		if (typeof value !== 'string') return;
 		present += 1;
+		// Only worth a problem when the string names the guard at all. An unrelated script
+		// the shell cannot run is not this check's business, and fails loudly on its own.
+		const namesGuard = /hexdocs|check-docs\.mjs/.test(value);
 		const segments = splitScript(value);
 		if (segments === null) {
-			// Only worth a problem when the string names the guard at all. An unrelated script
-			// with a command substitution in it is not this check's business.
-			if (/hexdocs|check-docs\.mjs/.test(value)) {
+			if (namesGuard) {
 				problems.push(
-					`\`${name}\` holds an open quote or a command substitution, so this check cannot split it the way the shell will.`,
+					`\`${name}\` holds an open quote, a command substitution or a comment, so this check cannot split it the way the shell will.`,
 				);
 			}
 			return;
+		}
+		// An operator with no command on one side is a syntax error, and the shell refuses the
+		// whole string before running any of it. `install` used to append ` && <fragment>` to an
+		// empty prebuild, and the empty first segment matched no pattern below, so this row
+		// passed a prebuild that exits 2 in every build. An operator after the empty segment is
+		// enough for every operator but `;`. One before it counts only at the end of the string
+		// and never when it is `&`, which is a valid trailing background operator. The reason
+		// for both limits is that the split turns a newline into `;`: `a &&` then a newline then
+		// `b` is a valid chain whose empty segment sits between `&&` and that newline.
+		// `prebuild.test.ts` asks `sh -n` about every shape it names on either side of this.
+		const dangling = segments.find(
+			(segment) =>
+				segment.tokens.length === 0 &&
+				((segment.after !== null && segment.after !== ';') ||
+					(segment.after === null &&
+						segment.before !== null &&
+						segment.before !== ';' &&
+						segment.before !== '&')),
+		);
+		if (namesGuard && dangling !== undefined) {
+			problems.push(
+				`\`${name}\` has no command on one side of \`${dangling.after !== null && dangling.after !== ';' ? dangling.after : dangling.before}\`, which the shell refuses as a syntax error before anything in it runs.`,
+			);
 		}
 		segments.forEach((segment, index) => {
 			const located: Located = {

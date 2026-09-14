@@ -429,13 +429,20 @@ export const PRESENT = {
 
 	machineRouteModule: routeMachineModule,
 
-	/** The site's own loader accepts its route config, and every docs row is where it belongs. */
+	/**
+	 * The site's own loader accepts its route config, and every docs row is where it belongs.
+	 *
+	 * False when there are no docs rows to look for, which is every first install: `install`
+	 * runs before `hexdocs scaffold site` writes a config, and a valid config always yields
+	 * machine rows. Over zero rows `routeTableProblems` has nothing to report, so this used to
+	 * answer true, `install` called the routes edit unchanged, never printed the insertions,
+	 * and its by-hand row listed the remaining edits as the whole of what was left.
+	 */
 	routes(_text: string | null, site: SiteDescriptor, ctx: EditContext): boolean {
+		const rows = docsRouteRows(validConfigs(site));
+		if (rows.length === 0) return false;
 		const table = readRouteTable(site, ctx.exec);
-		return (
-			table.kind === 'loaded' &&
-			routeTableProblems(table.routes, docsRouteRows(validConfigs(site))).length === 0
-		);
+		return table.kind === 'loaded' && routeTableProblems(table.routes, rows).length === 0;
 	},
 
 	rootSeo(text: string | null): boolean {
@@ -618,7 +625,8 @@ const APPLY = {
 			// operand of something else, `a & && fragment` being a syntax error and `a || `
 			// being a masked prefetch.
 			if (/(&|\||;)\s*$/.test(existing)) return null;
-			let cursor = block.open + key.index + key[0].length;
+			const start = block.open + key.index + key[0].length;
+			let cursor = start;
 			while (cursor < text.length) {
 				if (text[cursor] === '\\') {
 					cursor += 2;
@@ -628,6 +636,10 @@ const APPLY = {
 				cursor += 1;
 			}
 			if (cursor >= text.length) return null;
+			// An empty or blank prebuild is replaced rather than appended to. Appending gave
+			// ` && <fragment>`, which the shell refuses as a syntax error, so every build
+			// stopped in prebuild on a file `install` reported as written.
+			if (existing.trim() === '') return `${text.slice(0, start)}${fragment}${text.slice(cursor)}`;
 			return `${text.slice(0, cursor)} && ${fragment}${text.slice(cursor)}`;
 		}
 		if (existing !== undefined) return null;

@@ -50,7 +50,7 @@ import { defineCommand } from '../registry/command.js';
 import type { Writer } from '../registry/command.js';
 import { editsFor, type EditContext } from '../wiring/edits.js';
 import { detectSite } from '../wiring/detect.js';
-import { requireSitePath } from '../wiring/site.js';
+import { joinPosix, requireSitePath } from '../wiring/site.js';
 import { settingsInstruction } from '../wiring/templates.js';
 
 import { BUCKET, ROOT, SITE, bucketOf, rootOf } from './common.js';
@@ -122,6 +122,33 @@ export const install = defineCommand({
 				};
 			}
 		}
+		// Refused before anything is planned when `<root>/<site>` does not look like a site at
+		// all, so a dry run says so too. Every generated module's applier accepts a missing file,
+		// which is how a create works, so a wrong root is not refused edit by edit: run from
+		// inside the site with `--site apps/front`, install wrote five files into a nested
+		// `apps/front/apps/front/` tree and a `.mcp.json` into the real site directory, under
+		// repository-relative paths that looked right. `verify-install-scope` answers the same
+		// mistake on the read side. Both missing is the test rather than either, because a
+		// directory holding one of them is a site, and what else it lacks is what the edits
+		// below are there to report.
+		if (
+			site.files.read(joinPosix(site.site, 'package.json')) === null &&
+			!site.files.exists(joinPosix(site.site, 'app'))
+		) {
+			return {
+				data: { site: site.site, mount: site.mount, wrote: false },
+				lines: [`${site.site} is not a site under ${repoRoot}, so nothing was planned or applied.`],
+				envelope: null,
+				rows: [
+					notRunRow(
+						'install-scope',
+						'edits',
+						`${joinPosix(site.site, 'package.json')} and ${joinPosix(site.site, 'app')} are both missing under ${repoRoot}, so nothing was planned or applied. --site is relative to the repository root: run this from the root, or pass the root as the first argument.`,
+					),
+				],
+			};
+		}
+
 		const editContext: EditContext = { exec: ctx.exec, bucket: input.bucket };
 
 		if (write && ctx.write === null) {
