@@ -155,8 +155,8 @@ interface CommandBase<P extends Params> {
  *
  * Two things read it, and both are why it is a declaration rather than something inferred.
  * The MCP server runs, through `Ctx.exec`, nothing a tool did not list here, so a tool that
- * starts reaching a new recipe fails loudly in its first transcript rather than quietly
- * widening what the server does. And `openWorldHint` is derived from it, so the annotation
+ * starts reaching a new recipe shows it in its first transcript, as a refused call or as a
+ * row that did not run naming the refusal, rather than quietly widening what the server does. And `openWorldHint` is derived from it, so the annotation
  * a client may approve a call on says what the tool can reach rather than what somebody
  * once believed. The git reads in `compile/git.ts` never pass the server's gate, which is
  * why they are listed anyway: the annotation has to count them.

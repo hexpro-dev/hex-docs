@@ -123,9 +123,10 @@ export function parseRouteTable(result: RunResult, site: SiteDescriptor): RouteT
  * Keyed on the descriptor object rather than a path, so a second `detectSite` reads again:
  * this is a memo within one run and never a cache of a consumer's source.
  *
- * An exec that throws is `unread`, not a crash. The MCP server's exec refuses any recipe it
- * does not list, and a refusal there is "this context cannot read the route table", which is
- * a row that did not run rather than a tool call that failed.
+ * An exec that throws is `unread`, not a crash. The MCP server's exec refuses any recipe the
+ * calling tool does not declare, and a refusal there is "this context cannot read the route
+ * table", which is a row that did not run, naming the refusal, rather than a tool call that
+ * failed.
  */
 const TABLES = new WeakMap<SiteDescriptor, WeakMap<Exec, RouteTable>>();
 
