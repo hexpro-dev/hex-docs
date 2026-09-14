@@ -3,8 +3,9 @@
  *
  * Every row here calls the matching entry in `PRESENT` from `edits.ts` and then adds the
  * assertions no edit can make: whether a `paths` target resolves to a real file, whether
- * a declared submodule is actually committed, whether a route module exports `headers`.
- * That split is what makes `install` re-running a no-op exactly when this passes.
+ * a declared submodule is actually committed, and what exactly is wrong with a file whose
+ * predicate said no. That split is what makes `install` re-running a no-op exactly when
+ * this passes.
  *
  * Every finding is built with `raw()` and turned into a `Finding` by `runLint`. Nothing
  * here assembles a `Finding` object: `toFinding` is module private in `run.ts` on
@@ -16,13 +17,16 @@
  * with no `pnpm-workspace.yaml` and one with no `deploy.config.json` are `skipped` with
  * a reason, because there is nothing there to be wrong; a file that exists and cannot be
  * parsed is `failedRow`, because refusing to report success on a file this check cannot
- * see is the house idiom (`check-tools.mjs:317-324`); and a row that examined nothing is
- * a failure whatever else is true of it, which `checkRow` coerces rather than trusting.
+ * see is the house idiom (`check-tools.mjs:317-324`); a route table nothing could read is
+ * `not-run`, because the check should have run and could not; and a row that examined
+ * nothing is a failure whatever else is true of it, which `checkRow` coerces rather than
+ * trusting.
  */
 
 import {
 	checkRow,
 	failedRow,
+	notRunRow,
 	skippedRow,
 	type CheckRow,
 	type Finding,
@@ -31,11 +35,7 @@ import {
 import type { CheckId } from '../../../src/contracts/lint.js';
 import { DEFAULT_BUDGETS, DOCS_CONFIG_VERSION } from '../../../src/contracts/project.js';
 import type { DocsProjectConfig } from '../../../src/contracts/project.js';
-import {
-	docsLocalisedPathsFor,
-	docsRouteRows,
-	docsSitemapRows,
-} from '../../../src/site/address.js';
+import { docsRouteRows } from '../../../src/site/address.js';
 import { CHECK_DEFINITIONS } from '../compile/lint/registry.js';
 import { runLint } from '../compile/lint/run.js';
 import { raw, type RawFinding } from '../compile/types.js';
@@ -44,15 +44,23 @@ import type { Exec } from '../exec/run.js';
 import { parseGitmodules, parseWorkspacePackages } from './detect.js';
 import {
 	PRESENT,
+	REACT_TYPES_ENTRIES,
+	docsServerProblems,
 	editById,
-	prebuildFragment,
 	resolveJsonModuleOf,
-	settingsSatisfied,
+	rootSeoProblems,
+	routeModuleProblems,
+	sitemapProblems,
 	tsconfigPathEntries,
+	type EditContext,
 } from './edits.js';
-import { parseJsonc, stripComments, structural } from './needles.js';
+import { stripComments, parseJsonc } from './needles.js';
+import { prebuildFragment, readPrebuild } from './prebuild.js';
+import { readRouteTable, routeTableProblems } from './route-table.js';
 import {
-	DOCS_ROUTE_MODULES,
+	DOCS_ROUTE_KINDS,
+	DOCS_ROUTE_MODULE,
+	DOCS_SERVER_MODULE,
 	joinPosix,
 	resolveFrom,
 	validConfigs,
@@ -145,6 +153,10 @@ function row(
 
 function unitOf(id: ConsumerCheckId): string {
 	return CHECK_DEFINITIONS[id].unit;
+}
+
+function editContext(ctx: ProbeContext): EditContext {
+	return { exec: ctx.exec };
 }
 
 /**
@@ -320,28 +332,40 @@ const tsconfigPath: WiringProbe = {
 				}),
 			);
 		}
+		if (!PRESENT.tsconfigReactTypes(text, site)) {
+			findings.push(
+				raw(id, at(file), null, `${file} does not map \`react\` to this site's own types.`, {
+					remediation: remediationFor(site, 'tsconfig-react-types'),
+				}),
+			);
+		}
 
-		// A key that is present and points at a file that is not there is the failure the
+		// A key that is present and points at something that is not there is the failure the
 		// two existing submodules already have a comment about: nothing in the consuming
-		// repository builds a `dist/`, so a mapping that dangles resolves to nothing and
-		// the error names a path rather than a missing install.
-		for (const [key, target] of tsconfigPathEntries(site)) {
+		// repository builds a `dist/`, so a mapping that dangles resolves to nothing and the
+		// error names a path rather than a missing install. A wildcard target is checked as
+		// the directory it expands under, because a literal `*` is never a file on disk.
+		const targets = [
+			...tsconfigPathEntries(site).map(([key, target]) => ({ key, target, inMount: true })),
+			...REACT_TYPES_ENTRIES.map(([key, target]) => ({ key, target, inMount: false })),
+		];
+		for (const { key, target, inMount } of targets) {
 			examined += 1;
-			const resolved = resolveFrom(site.site, target);
-			if (!site.files.exists(resolved)) {
-				findings.push(
-					raw(
-						id,
-						at(file),
-						null,
-						`\`${key}\` would resolve to \`${resolved}\`, which does not exist.`,
-						{
-							remediation:
-								'Either the submodule is not checked out, or the mount path is wrong. `git submodule update --init --recursive` is the usual answer.',
-						},
-					),
-				);
-			}
+			const resolved = resolveFrom(site.site, target.replace(/\/\*$/, ''));
+			if (site.files.exists(resolved)) continue;
+			findings.push(
+				raw(
+					id,
+					at(file),
+					null,
+					`\`${key}\` would resolve to \`${resolved}\`, which does not exist.`,
+					{
+						remediation: inMount
+							? 'Either the submodule is not checked out, or the mount path is wrong. `git submodule update --init --recursive` is the usual answer.'
+							: "This site's dependencies are not installed, or it has no `@types/react`. Install them in the site directory before building.",
+					},
+				),
+			);
 		}
 
 		examined += 1;
@@ -480,18 +504,22 @@ const prebuildHook: WiringProbe = {
 		const table = scriptsValue as Record<string, unknown>;
 
 		const findings: RawFinding[] = [];
-		let examined = 0;
-		for (const name of ['prebuild', 'build']) {
-			if (typeof table[name] === 'string') examined += 1;
-		}
+		const reading = readPrebuild(table, site);
+		let examined = reading.scripts;
 
+		// One finding per problem rather than one for the row, because the problems are
+		// different remedies: a refused flag, a masking `||` and a guard out of order are three
+		// edits to one string, and a single message naming the first would hide the other two
+		// until the next build.
 		if (!PRESENT.prebuildHook(text, site)) {
-			findings.push(
-				raw(id, at(file), null, `Nothing in ${site.site}'s build chain runs the docs guard.`, {
-					remediation: remediationFor(site, 'prebuild-hook'),
-					suggestion: prebuildFragment(site),
-				}),
-			);
+			for (const problem of reading.problems) {
+				findings.push(
+					raw(id, at(file), null, problem, {
+						remediation: remediationFor(site, 'prebuild-hook'),
+						suggestion: prebuildFragment(site),
+					}),
+				);
+			}
 		}
 
 		// The guard must not have been added to a script other packages share. All four
@@ -567,181 +595,128 @@ const prebuildHook: WiringProbe = {
 			examined,
 			findings,
 			ctx,
-			'The deploy runs `npm run build` rather than `pnpm build` in a front package with no lockfile of its own. Both runners fire the pre-hook, so the guarantee holds either way.',
+			'The prefetch segment is bound through the same argument parser and schema the CLI uses. The deploy runs `npm run build` rather than `pnpm build`, and both runners fire the pre-hook.',
 		);
 	},
 };
-
-/** The first of several spellings to appear, or `-1`. Indices are only ever compared. */
-function firstIndexOfAny(shape: string, needles: readonly string[]): number {
-	let best = -1;
-	for (const needle of needles) {
-		const at = shape.indexOf(needle);
-		if (at !== -1 && (best === -1 || at < best)) best = at;
-	}
-	return best;
-}
-
-/** The last path segment, which is where a route-ranking tie is decided. */
-function leafOf(path: string): string {
-	const parts = path.split('/');
-	return parts[parts.length - 1] ?? '';
-}
 
 const routes: WiringProbe = {
 	id: 'wiring-routes',
 	run(site, ctx) {
 		const id = 'wiring-routes';
-		const file = joinPosix(site.site, 'app/routes.ts');
-		const text = site.files.read(file);
-		if (text === null) {
+		const findings: RawFinding[] = [];
+		let examined = 0;
+
+		// No route config at all is not a site this row can say anything useful about, and
+		// the files below would each add a finding about a mount that has nowhere to go.
+		const routesFile = joinPosix(site.site, 'app/routes.ts');
+		if (!site.files.exists(routesFile)) {
 			return failedRow(
 				id,
 				0,
 				unitOf(id),
-				`${file} does not exist, so this site has no route table to check.`,
+				`${routesFile} does not exist, so this site has no route table to check.`,
 			);
 		}
 
-		const findings: RawFinding[] = [];
-		let examined = 0;
-		const shape = structural(text);
-
+		// The server module first, because every other file in this row imports it and the
+		// route table cannot load without it.
+		const serverFile = joinPosix(site.site, DOCS_SERVER_MODULE);
+		const serverText = site.files.read(serverFile);
 		examined += 1;
-		if (!PRESENT.routes(text)) {
-			findings.push(
-				raw(id, at(file), null, `${file} does not reference DOCS_ROUTES.`, {
-					remediation: remediationFor(site, 'routes'),
-				}),
-			);
-		}
-
-		// Where the machine endpoints are declared, bracketed between the bare mount and
-		// the `:lang` mount. A leaf route with no default export is dispatched to
-		// `queryRoute`, which runs that route's own loader and no parent's, so one mounted
-		// under `:lang` never runs the language validation and answers a nonsense language
-		// with a 200.
-		//
-		// Both quote styles are looked for. Both consumers write double quotes today and
-		// `structural` does not normalise quoting, so a repository whose formatter used
-		// single quotes would otherwise be told it has no `:lang` mount, which is a loud
-		// and wrong message rather than a missed check.
-		examined += 1;
-		const langAt = firstIndexOfAny(shape, ['route(":lang"', "route(':lang'"]);
-		if (langAt === -1) {
-			findings.push(
-				raw(
-					id,
-					at(file),
-					null,
-					`${file} has no \`route(":lang", ...)\` mount, so this site does not have the seven-language URL scheme this package installs into.`,
-					{
-						remediation:
-							'Install docs into a site that already mounts its pages twice, once bare and once under a validated `:lang` segment. Creating that scheme is a change to the site, not to its docs.',
-					},
-				),
-			);
-		} else {
-			// The lower bound is the bare mount when it can be found, and `-1` otherwise,
-			// which degrades the assertion to "somewhere before the `:lang` mount". That
-			// weaker form is still worth having: it is the page spread that sits above it
-			// in both consumers, so a machine spread declared inside the `:lang` children
-			// still fails.
-			const bareAt = firstIndexOfAny(shape, ['...pages("en/")', "...pages('en/')"]);
-			const docsBetween = [...shape.matchAll(/DOCS_ROUTES/g)].some(
-				(match) => match.index !== undefined && match.index > bareAt && match.index < langAt,
-			);
-			if (!docsBetween) {
+		if (!PRESENT.docsServer(serverText)) {
+			if (serverText === null) {
 				findings.push(
-					raw(
-						id,
-						at(file),
-						null,
-						'No DOCS_ROUTES spread is declared between the bare mount and the `:lang` mount.',
-						{
-							remediation: remediationFor(site, 'routes'),
-						},
-					),
+					raw(id, at(serverFile), null, `${serverFile} does not exist.`, {
+						remediation: 'Run `hexdocs install --write`, which writes it.',
+					}),
 				);
+			} else {
+				for (const problem of docsServerProblems(serverText)) {
+					findings.push(
+						raw(id, at(serverFile), null, `${serverFile} ${problem}`, {
+							remediation: remediationFor(site, 'docs-server'),
+						}),
+					);
+				}
 			}
 		}
 
-		// The ordering the tie depends on, asserted over the rows themselves. It is
-		// decided in `docsRouteRows` once for every consumer, and the consumer's only job
-		// is to spread them in the order they arrive, which no text match can prove.
-		const rows = docsRouteRows(validConfigs(site));
-		examined += rows.length;
-		const firstWildcard = rows.findIndex((route) => leafOf(route.path).includes('*'));
-		const lastStaticSuffix = rows.reduce((last, route, index) => {
-			const leaf = leafOf(route.path);
-			return leaf.includes('.') && !leaf.includes('*') && !leaf.includes(':') ? index : last;
-		}, -1);
-		if (firstWildcard !== -1 && lastStaticSuffix > firstWildcard) {
-			findings.push(
-				raw(
-					id,
-					at(file),
-					null,
-					'A wildcard route pattern is emitted before a static-suffix one, so the wildcard wins the tie and swallows it.',
-					{
-						remediation:
-							"This is a defect in `docsRouteRows`, not in the consumer. A dynamic pattern that fails React Router's parameter test scores as a static segment and ties with a real static one, and ties break on declaration order.",
-					},
-				),
-			);
-		}
-
-		// No docs route module may export `headers`. React Router copies only Set-Cookie
-		// from a parent, so a child `headers` export ships docs pages with no
-		// Content-Security-Policy and no nonce on hex-web, where the page then renders and
-		// never hydrates, and drops Vary: Cookie and the whole cache policy on kcalc. The
-		// only thing standing here today is a prose comment in `root.tsx`.
-		const modules =
-			rows.length === 0 ? [...DOCS_ROUTE_MODULES] : [...new Set(rows.map((route) => route.file))];
-		for (const module of modules) {
-			const modulePath = joinPosix(site.site, 'app', module);
-			const source = site.files.read(modulePath);
-			if (source === null) {
+		// The two route modules, by the predicate `install` writes them with. A `headers`
+		// export here replaces the root's headers for every docs page, because React Router
+		// copies only Set-Cookie from a parent.
+		for (const kind of DOCS_ROUTE_KINDS) {
+			const moduleFile = joinPosix(site.site, 'app', DOCS_ROUTE_MODULE[kind]);
+			const text = site.files.read(moduleFile);
+			const present = kind === 'page' ? PRESENT.pageRouteModule : PRESENT.machineRouteModule;
+			examined += 1;
+			if (present(text)) continue;
+			const edit = kind === 'page' ? 'route-page-module' : 'route-machine-module';
+			if (text === null) {
 				findings.push(
 					raw(
 						id,
-						at(modulePath),
+						at(moduleFile),
 						null,
-						`A docs mount needs ${modulePath}, and it does not exist.`,
+						`A docs mount needs ${moduleFile}, and it does not exist.`,
 						{
-							remediation:
-								'Create it. It renders the docs shell through `docsRoute` from `@hex-pro/docs/render`, and without it the route table fails to build.',
+							remediation: 'Run `hexdocs install --write`, which writes it.',
 						},
 					),
 				);
 				continue;
 			}
-			examined += 1;
-			const stripped = stripComments(source);
-			const declared = /export\s+(?:const|let|var|async\s+function|function)\s+headers\b/.test(
-				stripped,
-			);
-			const named = /export\s*\{[^}]*\bheaders\b[^}]*\}/.test(stripped);
-			if (declared || named) {
+			for (const problem of routeModuleProblems(kind, text)) {
 				findings.push(
-					raw(id, at(modulePath), null, `${modulePath} exports \`headers\`.`, {
-						remediation:
-							"Delete the export. React Router uses the deepest `headers` export among the matched routes and copies only Set-Cookie from a parent, so this replaces the root's headers for every docs page.",
+					raw(id, at(moduleFile), null, `${moduleFile} ${problem}`, {
+						remediation: remediationFor(site, edit),
 					}),
 				);
 			}
 		}
 
-		return row(
-			id,
-			examined,
-			findings,
-			ctx,
-			'These are text matches on source, in the manner of check-tools.mjs: renaming a local variable in the spread breaks the check without breaking the code.',
-		);
+		// The table itself, as the site's own React Router evaluates it.
+		const table = readRouteTable(site, ctx.exec);
+		const rows = docsRouteRows(validConfigs(site));
+		let note: string | null = null;
+		if (table.kind === 'refused') {
+			findings.push(
+				raw(
+					id,
+					at(routesFile),
+					null,
+					`React Router refused this site's route config: ${table.message}`,
+					{ remediation: remediationFor(site, 'routes') },
+				),
+			);
+		} else if (table.kind === 'unread') {
+			if (findings.length === 0) return notRunRow(id, unitOf(id), table.why);
+			note = table.why;
+		} else {
+			examined += rows.length;
+			if (!PRESENT.routes(null, site, editContext(ctx))) {
+				for (const problem of routeTableProblems(table.routes, rows)) {
+					findings.push(
+						raw(id, at(routesFile), null, problem, { remediation: remediationFor(site, 'routes') }),
+					);
+				}
+			}
+		}
+
+		return row(id, examined, findings, ctx, note);
 	},
 };
 
+/**
+ * The site configs and the one host edit that decides whether a docs page is indexed.
+ *
+ * The id still says localised paths, and the row no longer reads that list. Docs addresses
+ * do not join `LOCALISED_PATHS` at all: its second reader is the language-cookie redirect,
+ * and a docs page left out of it is already exempt from the redirect, which is the exemption
+ * the translation notice needs. What decides the canonical, the alternates and the robots
+ * tag for a docs page is now `root.tsx` reading the docs match through
+ * `docsSeoFromMatches`, so that call is what this row asserts.
+ */
 const localisedPaths: WiringProbe = {
 	id: 'wiring-localised-paths',
 	run(site, ctx) {
@@ -764,61 +739,30 @@ const localisedPaths: WiringProbe = {
 			);
 		}
 
-		const configs = validConfigs(site);
-		const docsPaths = docsLocalisedPathsFor(configs);
-
-		const libFile = joinPosix(site.site, 'app/lib/docs.ts');
-		const libText = site.files.read(libFile);
-		if (!PRESENT.docsLib(libText)) {
-			findings.push(
-				raw(
-					id,
-					at(libFile),
-					null,
-					libText === null
-						? `${libFile} does not exist, so nothing derives DOCS_PATHS, DOCS_ROUTES or DOCS_SITEMAP.`
-						: `${libFile} does not derive its three exports from the package.`,
-					{
-						remediation:
-							libText === null
-								? 'Run `hexdocs install --write`, which creates it.'
-								: remediationFor(site, 'docs-lib'),
-					},
-				),
-			);
+		const rootFile = joinPosix(site.site, 'app/root.tsx');
+		const rootText = site.files.read(rootFile);
+		if (!PRESENT.rootSeo(rootText)) {
+			const problems =
+				rootText === null
+					? ['does not exist, so nothing decides whether a docs page is indexed.']
+					: rootSeoProblems(rootText);
+			for (const problem of problems) {
+				findings.push(
+					raw(id, at(rootFile), null, `${rootFile} ${problem}`, {
+						remediation: remediationFor(site, 'root-seo'),
+					}),
+				);
+			}
 		}
 
-		const pathsFile = joinPosix(site.site, 'app/lib/paths.ts');
-		const pathsText = site.files.read(pathsFile);
-		if (pathsText === null) {
-			findings.push(
-				raw(
-					id,
-					at(pathsFile),
-					null,
-					`${pathsFile} does not exist, so this site has no localised-path list.`,
-					{
-						remediation:
-							'root.tsx gates the canonical link and the eight hreflang alternates on that list. A site without one is not a site this package can install into.',
-					},
-				),
-			);
-		} else if (!PRESENT.localisedPaths(pathsText)) {
-			findings.push(
-				raw(id, at(pathsFile), null, 'LOCALISED_PATHS does not include the docs addresses.', {
-					remediation: remediationFor(site, 'localised-paths'),
-				}),
-			);
-		}
-
-		// Zero is a failure and it is the right one: it means `hexdocs sync` has not
-		// written the pages array, so there are no addresses for the consumer to localise
-		// and the canonical would be self-referential on every docs URL.
+		// Zero is a failure and it is the right one: it means `hexdocs sync` has not written
+		// the pages array, so there is no docs address for root to decide anything about.
+		const pages = validConfigs(site).reduce((total, config) => total + config.pages.length, 0);
 		const note =
-			docsPaths.length === 0
-				? 'No docs addresses at all. Either no site config was found, or `hexdocs sync` has not written its pages array.'
+			pages === 0
+				? 'No docs pages at all. Either no site config was found, or `hexdocs sync` has not written its pages array.'
 				: null;
-		return row(id, docsPaths.length, findings, ctx, note);
+		return row(id, pages, findings, ctx, note);
 	},
 };
 
@@ -838,45 +782,48 @@ const sitemap: WiringProbe = {
 		}
 
 		const configs = validConfigs(site);
-		const rows = docsSitemapRows(configs);
 		const findings: RawFinding[] = [];
 
 		if (!PRESENT.sitemap(text)) {
-			findings.push(
-				raw(id, at(file), null, `${file} does not derive its docs entries from DOCS_SITEMAP.`, {
-					remediation: remediationFor(site, 'sitemap'),
-				}),
-			);
+			for (const problem of sitemapProblems(text)) {
+				findings.push(
+					raw(id, at(file), null, `${file} ${problem}`, {
+						remediation: remediationFor(site, 'sitemap'),
+					}),
+				);
+			}
 		}
 
-		// A hand-listed docs address in this file is the failure DOCS_SITEMAP exists to
-		// prevent: a hand-written list cannot know which pages are hidden, so it
-		// advertises a page that is deliberately out of the sidebar, out of prev and next
-		// and out of the sitemap.
+		// A hand-listed docs address in this file is the failure `DOCS.sitemap()` exists to
+		// prevent: a hand-written list cannot know which pages are hidden or which
+		// translations are fallbacks, so it advertises both.
 		const stripped = stripComments(text);
 		for (const config of configs) {
 			if (stripped.includes(config.basePath)) {
 				findings.push(
 					raw(id, at(file), null, `${file} names \`${config.basePath}\` directly.`, {
 						remediation:
-							'Remove the hand-written docs entries and spread DOCS_SITEMAP instead. It already excludes the hidden pages.',
+							'Remove the hand-written docs entries and list them from DOCS.sitemap() instead. It already leaves hidden pages and fallback translations out.',
 					}),
 				);
 			}
 		}
 
-		return row(
-			id,
-			rows.length + configs.length,
-			findings,
-			ctx,
-			rows.length === 0
-				? 'No docs pages are sitemapped: either none are published, or every one is hidden.'
-				: null,
-		);
+		return row(id, configs.length, findings, ctx);
 	},
 };
 
+/**
+ * The committed `.mcp.json` entry, and nothing about any one developer's editor.
+ *
+ * There used to be two more arms here, reading `.claude/settings.json` and
+ * `.claude/settings.local.json` for an enabled server and a skills directory grant. They
+ * were deleted rather than moved, and the reason is where this row runs: `verify-install` is
+ * the build gate, so those arms failed the prebuild of every clone whose developer had not
+ * enabled a server, which on kcalc is every clone but one. `doctor` has no checks of its own
+ * by contract, so there was nowhere else to put them. `install` prints the settings advice
+ * as a note instead.
+ */
 const mcp: WiringProbe = {
 	id: 'wiring-mcp',
 	run(site, ctx) {
@@ -892,79 +839,49 @@ const mcp: WiringProbe = {
 					remediation: remediationFor(site, 'mcp-json'),
 				}),
 			);
+			return row(id, examined, findings, ctx);
+		}
+
+		const parsed = parseJsonc(text);
+		const servers =
+			parsed !== null && typeof parsed === 'object'
+				? (parsed as { mcpServers?: unknown }).mcpServers
+				: null;
+		if (servers === null || typeof servers !== 'object') {
+			findings.push(
+				raw(id, at(file), null, '.mcp.json has no mcpServers object.', {
+					remediation: remediationFor(site, 'mcp-json'),
+				}),
+			);
+			return row(id, examined, findings, ctx);
+		}
+
+		examined += Object.keys(servers as Record<string, unknown>).length;
+		if (!PRESENT.mcpJson(text, site)) {
+			findings.push(
+				raw(id, at(file), null, '.mcp.json declares no hexdocs server.', {
+					remediation: remediationFor(site, 'mcp-json'),
+				}),
+			);
 		} else {
-			const parsed = parseJsonc(text);
-			const servers =
-				parsed !== null && typeof parsed === 'object'
-					? (parsed as { mcpServers?: unknown }).mcpServers
-					: null;
-			if (servers === null || typeof servers !== 'object') {
+			const command = mcpServerEntry(site).command.replace(/^\.\//, '');
+			if (!site.files.exists(command)) {
 				findings.push(
-					raw(id, at(file), null, '.mcp.json has no mcpServers object.', {
-						remediation: remediationFor(site, 'mcp-json'),
-					}),
+					raw(
+						id,
+						at(file),
+						null,
+						`The hexdocs server's command is \`${command}\`, which does not exist.`,
+						{
+							remediation:
+								'The launcher lives inside the submodule. Either the submodule is not checked out, or the mount path in .mcp.json is wrong.',
+						},
+					),
 				);
-			} else {
-				examined += Object.keys(servers as Record<string, unknown>).length;
-				if (!PRESENT.mcpJson(text, site)) {
-					findings.push(
-						raw(id, at(file), null, '.mcp.json declares no hexdocs server.', {
-							remediation: remediationFor(site, 'mcp-json'),
-						}),
-					);
-				} else {
-					const command = mcpServerEntry(site).command.replace(/^\.\//, '');
-					if (!site.files.exists(command)) {
-						findings.push(
-							raw(
-								id,
-								at(file),
-								null,
-								`The hexdocs server's command is \`${command}\`, which does not exist.`,
-								{
-									remediation:
-										'The launcher lives inside the submodule. Either the submodule is not checked out, or the mount path in .mcp.json is wrong.',
-								},
-							),
-						);
-					}
-				}
 			}
 		}
 
-		const settings = settingsSatisfied(site);
-		examined += settings.inspected.length;
-
-		if (settings.enabledBy === null) {
-			findings.push(
-				raw(id, at('.claude/settings.json'), null, 'No settings file enables the hexdocs server.', {
-					remediation: remediationFor(site, 'mcp-settings'),
-				}),
-			);
-		}
-		if (settings.directoryIn === null) {
-			findings.push(
-				raw(
-					id,
-					at('.claude/settings.json'),
-					null,
-					`No settings file grants \`${site.mount}/.claude/skills\` in permissions.additionalDirectories.`,
-					{ remediation: remediationFor(site, 'mcp-settings') },
-				),
-			);
-		}
-
-		const noteParts: string[] = [];
-		if (settings.inspected.length === 0) noteParts.push('no settings file exists here');
-		if (settings.enabledBy !== null) noteParts.push(`enabled by ${settings.enabledBy}`);
-		if (settings.enabledBy === '.claude/settings.local.json') {
-			noteParts.push(
-				'a local settings file is commonly ignored by a global git ignore rather than by the repository, so an enable that lives only there reaches no clone',
-			);
-		}
-		noteParts.push('this install prints the settings edit and never writes it');
-
-		return row(id, examined, findings, ctx, noteParts.join('; '));
+		return row(id, examined, findings, ctx);
 	},
 };
 

@@ -35,7 +35,16 @@ export const HOLE = Symbol('hole');
 export type Slot = string | typeof HOLE;
 
 export interface Recipe {
-	readonly bin: 'git' | 'aws' | 'gh';
+	/**
+	 * A binary on `PATH`, or the one binary this table names by path.
+	 *
+	 * `./node_modules/.bin/react-router` is relative on purpose and resolved against the
+	 * cwd the caller passes, which for that recipe is the consuming site's own directory. It
+	 * is that site's installed React Router, the version its build uses, and not whatever a
+	 * machine happens to have on `PATH`: a route table evaluated by a different release is
+	 * an answer about a different router.
+	 */
+	readonly bin: 'git' | 'aws' | 'gh' | './node_modules/.bin/react-router';
 	readonly argv: readonly Slot[];
 	/** One sentence: what this reads, and why running it is safe. */
 	readonly why: string;
@@ -88,6 +97,21 @@ export const READ_RECIPES = {
 		bin: 'gh',
 		argv: ['api', HOLE],
 		why: 'Ancestry against a remote, from a repository that does not contain the commit.',
+	},
+	'react-router.routes': {
+		bin: './node_modules/.bin/react-router',
+		// No hole, so the caller controls nothing but the cwd, and the cwd is the site.
+		//
+		// This one is a read in a different sense from the others and the difference is worth
+		// stating where somebody would look. It does not read a file: it runs the consuming
+		// site's own route config through React Router's config loader, which executes
+		// `app/routes.ts` and every module that file imports. That is the whole point, because
+		// a text match over `routes.ts` passed a table that could not load at all (an import
+		// the plugin-less loader cannot resolve, and duplicate route ids). It is also the same
+		// code the site's own `react-router build` executes, so it runs nothing the site's
+		// build does not. It writes nothing: the command prints the table and exits.
+		argv: ['routes', '--json'],
+		why: "The consuming site's route table as its own React Router evaluates it, which executes that site's route config and writes nothing.",
 	},
 	'aws.head-object': {
 		bin: 'aws',

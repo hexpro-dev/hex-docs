@@ -19,6 +19,7 @@ import { parseJsonc } from './needles.js';
 import {
 	dirnamePosix,
 	joinPosix,
+	normaliseSitePath,
 	relativePosix,
 	type MountSource,
 	type RepoFiles,
@@ -291,7 +292,7 @@ export interface DetectOptions {
 
 export function detectSite(options: DetectOptions): SiteDescriptor {
 	const files = options.files ?? diskFiles(options.repoRoot);
-	const site = options.site.replace(/^\.?\/+/, '').replace(/\/+$/, '');
+	const site = normaliseSitePath(options.site);
 
 	let mount = options.mount;
 	let mountSource: MountSource = 'flag';

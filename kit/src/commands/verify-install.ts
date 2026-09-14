@@ -46,11 +46,13 @@ import { ROOT, SITE, rootOf } from './common.js';
  * reassuring direction.
  */
 export const NOT_CHECKED_HERE: readonly string[] = [
-	'Whether the rendered sitemap and hreflang set actually come out right. Curl the sitemap and count the <loc> entries: this checks that the entries are derived, not that seven languages times every path is what came out.',
+	"Whether the rendered sitemap and hreflang set actually come out right. Curl a docs page and count its hreflang attributes, and curl the sitemap: the route table is read through this site's own React Router, but root.tsx and the sitemap are read as text, which proves the calls are there and not that the tags they produce are.",
 	'Whether a docs page carries a Content-Security-Policy in a real response. `pnpm csp:check` does that against a running server. The routes check refuses a `headers` export in a docs route module, which is the cause; this is the symptom, and only one of them is observable from a file.',
-	"Whether the derivation call sites use the registry correctly. These are text matches on source, in the manner of check-tools.mjs: renaming the local variable in a spread breaks the check without breaking the code, and rearranging the map around DOCS_ROUTES breaks the code without breaking the check. Neither consumer's route table can be evaluated from node without executing a Vite module.",
+	'Whether the text matches survive a rewrite. root.tsx, the sitemap, the server module and the route modules are matched on source, in the manner of check-tools.mjs: renaming a variable around a call can break the check without breaking the code, and rearranging the expression around it can break the code without breaking the check.',
+	"Whether this site's own guards accept what prefetch writes. A guard that scans public/ for asset formats, or scans app/ and public/ for forbidden words, reads the prefetched trees as well as the site's own files.",
 	'Whether the accent reads well against the page, as against merely passing a contrast ratio. Nothing here opens a browser.',
 	'Whether the offline build works. `hexdocs prefetch` does no network on a warm cache, and nothing here proves the cache is warm on the machine that will deploy.',
+	"Whether an editor in this repository enables the docs MCP server. That is one developer's setting and not part of whether the site builds; `hexdocs install` prints the settings to add.",
 ];
 
 function nextActionFor(rows: readonly CheckRow[], site: string): NextAction {
@@ -78,7 +80,7 @@ export const verifyInstall = defineCommand({
 	writes: 'nothing',
 	summary: 'Check that a consuming website is wired for a docs mount.',
 	detail:
-		'Reads the submodule declaration, the pnpm workspace, the tsconfig path mapping, the deploy hash directories, the build chain, the route table, the localised path list, the sitemap and the MCP wiring, and reports each as a row with a count of what it examined. It is the same implementation the generated scripts/check-docs.mjs shim runs from prebuild, so the answer cannot differ between a person, an agent and the build. Run it after hexdocs install and after applying the edits install prints.',
+		"Reads the submodule declaration, the pnpm workspace, the tsconfig path mappings, the deploy hash directories, the build chain, the route table as this site's own React Router evaluates it, the site configs with root.tsx's indexing decision, the sitemap and the committed MCP entry, and reports each as a row with a count of what it examined. It is the same implementation the generated scripts/check-docs.mjs shim runs from prebuild, so the answer cannot differ between a person, an agent and the build. Run it after hexdocs install and after applying the edits install prints.",
 	params: {
 		root: ROOT,
 		site: SITE,

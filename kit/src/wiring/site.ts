@@ -116,18 +116,30 @@ export function validConfigs(site: SiteDescriptor): DocsSiteConfig[] {
 }
 
 /**
- * The three route modules a docs mount needs, relative to the site's `app/` directory.
+ * The two route modules a docs mount needs, keyed by the row kind each one serves,
+ * relative to the site's `app/` directory.
  *
- * Constants of this package rather than facts about a consumer, which is what makes the
- * needles portable: `install` writes `app/lib/docs.ts`, this package chose the
- * identifiers in it, and `docsRouteRows` in the runtime half chose these file names. A
- * per-consumer needle table would have been a second thing to maintain per install.
+ * Two and not three. Every machine address, `llms.txt`, `llms-full.txt` and every raw
+ * `<slug>.md`, is answered by one loader returning `DOCS.resource(url)`, and the server
+ * dispatches on the address rather than the route table doing it through a second module.
+ * `docsRouteRows` in the runtime half names these same files on every row it emits, and
+ * the `wiring-routes` probe compares the consumer's real table against those rows, so a
+ * file name spelled differently here fails that row rather than drifting quietly.
+ *
+ * Keyed by kind so `install`'s template, the predicate and the probe cannot pair a page
+ * template with the machine file name.
  */
-export const DOCS_ROUTE_MODULES = [
-	'routes/docs.tsx',
-	'routes/docs.machine.tsx',
-	'routes/docs.raw.tsx',
-] as const;
+export const DOCS_ROUTE_MODULE = {
+	page: 'routes/docs.tsx',
+	machine: 'routes/docs.machine.tsx',
+} as const;
+
+export type DocsRouteKind = keyof typeof DOCS_ROUTE_MODULE;
+
+export const DOCS_ROUTE_KINDS = ['page', 'machine'] as const satisfies readonly DocsRouteKind[];
+
+/** `app/lib/docs.server.ts`, relative to the site. The one module that reads bundles. */
+export const DOCS_SERVER_MODULE = 'app/lib/docs.server.ts';
 
 /** The remote the submodule is added from. One spelling, used by the edit and the check. */
 export const DOCS_REMOTE = 'git@github.com:hexpro-dev/hex-docs.git';
@@ -169,6 +181,39 @@ export function relativePosix(from: string, to: string): string {
 	const down = toParts.slice(shared);
 	const parts = [...up, ...down];
 	return parts.length === 0 ? '.' : parts.join('/');
+}
+
+/**
+ * `--site` as the descriptor holds it: no leading `./` or `/`, no trailing slash.
+ *
+ * One spelling, because two readers compare against it: `detectSite` normalises the flag it
+ * was given, and the prebuild predicate compares the `--site` a prefetch segment names. A
+ * second normaliser would accept `apps/front/` in one place and refuse it in the other.
+ */
+export function normaliseSitePath(value: string): string {
+	return value.replace(/^\.?\/+/, '').replace(/\/+$/, '');
+}
+
+/**
+ * Like `resolveFrom`, and `null` for a reference that is absolute or climbs above the root.
+ *
+ * `resolveFrom` pops an empty stack silently, which is right for a tsconfig target and wrong
+ * for a guard: `apps/front` plus `../../..` would read as the repository root, and a prebuild
+ * naming a directory outside the repository would pass the check that its root is correct.
+ */
+export function resolveInside(dir: string, reference: string): string | null {
+	if (reference.startsWith('/')) return null;
+	const stack: string[] = dir.split('/').filter((part) => part !== '' && part !== '.');
+	for (const part of reference.split('/')) {
+		if (part === '' || part === '.') continue;
+		if (part === '..') {
+			if (stack.length === 0) return null;
+			stack.pop();
+			continue;
+		}
+		stack.push(part);
+	}
+	return stack.join('/');
 }
 
 /** Resolves a relative reference against a repository-relative directory. */

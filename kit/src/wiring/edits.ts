@@ -20,34 +20,64 @@
  * and `root.tsx`'s CSP doc comment alone is fifty-five lines. So "hand-edited" is not
  * knowable, and "I cannot find exactly one place to put this" is.
  *
- * `present` reads the file's text and the descriptor's path arithmetic and nothing else.
- * Assertions that need the filesystem or a process, such as whether a `paths` target
- * resolves to a real file or whether a declared submodule is actually committed, live in
- * `checks.ts`. Without that split, applying an edit could leave `present` false through
- * no fault of the applier, and `install` would report a refusal on a write that worked.
+ * `present` reads the file's text and the descriptor's path arithmetic, with one exception
+ * that is the point of the step that introduced it. `PRESENT.routes` reads the consumer's
+ * route table through its own `react-router routes --json`, because the table `routes.ts`
+ * produces is not in its text: step 5's token test passed over a table the site's own loader
+ * refused. Assertions about the filesystem, such as whether a `paths` target resolves to a
+ * real file or whether a declared submodule is actually committed, live in `checks.ts`.
+ * Without that split, applying an edit could leave `present` false through no fault of the
+ * applier, and `install` would report a refusal on a write that worked.
  */
 
 import type { CheckId } from '../../../src/contracts/lint.js';
+import { docsRouteRows } from '../../../src/site/address.js';
+import type { Exec } from '../exec/run.js';
 
 import { parseGitmodules, parseWorkspacePackages, workspaceMatches } from './detect.js';
+import { rootInstruction, routesInstruction, sitemapInstruction } from './instructions.js';
 import {
 	derives,
 	detectIndent,
 	entryIndent,
+	exportsDefault,
+	exportsHeaders,
 	insertIntoBlock,
 	parseJsonc,
 	soleBlock,
 	soleBlockIn,
 	stripComments,
+	valueImportSpecifiers,
 } from './needles.js';
-import { DOCS_REMOTE, dirnamePosix, joinPosix, resolveFrom, type SiteDescriptor } from './site.js';
+import { ALWAYS_RUN, prebuildFragment, readPrebuild, splitScript } from './prebuild.js';
+import { readRouteTable, routeTableProblems } from './route-table.js';
+import {
+	DOCS_REMOTE,
+	DOCS_ROUTE_MODULE,
+	DOCS_SERVER_MODULE,
+	dirnamePosix,
+	joinPosix,
+	resolveFrom,
+	validConfigs,
+	type DocsRouteKind,
+	type SiteDescriptor,
+} from './site.js';
 import {
 	GITIGNORE_ENTRIES,
 	checkDocsShim,
-	docsLibModule,
+	docsMachineRouteModule,
+	docsPageRouteModule,
+	docsServerModule,
 	mcpServerEntry,
-	settingsInstruction,
 } from './templates.js';
+
+/** What a predicate or an applier may use beyond the text and the descriptor. */
+export interface EditContext {
+	/** The recipe runner. One predicate uses it: the route table's. */
+	readonly exec: Exec;
+	/** `install --bucket`. Written into a prebuild fragment `install` creates, and nowhere else. */
+	readonly bucket?: string | undefined;
+}
 
 export interface Edit {
 	/** Stable, kebab case. It is what `install`'s output names and what a test looks up. */
@@ -56,20 +86,20 @@ export interface Edit {
 	readonly check: CheckId;
 	/** Repository-relative. A directory for the one edit whose subject is not a file. */
 	readonly file: string;
-	present(text: string | null, site: SiteDescriptor): boolean;
+	present(text: string | null, site: SiteDescriptor, ctx: EditContext): boolean;
 	/** `null` refuses. Never called when `present` is already true. */
-	apply(text: string | null, site: SiteDescriptor): string | null;
+	apply(text: string | null, site: SiteDescriptor, ctx: EditContext): string | null;
 	/** Printed when `apply` refuses, and always for a `byHand` edit. */
 	readonly instruction: string;
 	/**
-	 * Printed, never written. Seven of the fifteen edits, each for its own reason.
+	 * Printed, never written. Six of the seventeen edits, each for its own reason.
 	 *
-	 * Three are spreads into hand-authored arrays whose surrounding prose is the
-	 * consuming repository's actual documentation. One is a git operation that has to
-	 * create a gitlink as well as a stanza. One is a settings file whose merge semantics
-	 * could not be established. One is a compiler option that lives in a shared
-	 * configuration this install does not own. One is the site config, which needs a
-	 * project id, a mount path and a label in seven languages that nothing here knows.
+	 * Three are insertions into hand-authored files whose surrounding prose is the consuming
+	 * repository's actual documentation: the route table, `root.tsx` and the sitemap. One is
+	 * a git operation that has to create a gitlink as well as a stanza. One is a compiler
+	 * option that lives in a shared configuration this install does not own. One is the
+	 * site config, which needs a project id, a mount path and a labelled commit that nothing
+	 * here knows.
 	 */
 	readonly byHand?: true;
 }
@@ -87,13 +117,24 @@ export function tsconfigPathEntries(site: SiteDescriptor): [string, string][] {
 	];
 }
 
-/** The `prebuild` fragment. One spelling, so the predicate and the applier agree. */
-export function prebuildFragment(site: SiteDescriptor): string {
-	return (
-		`${site.mountFromSite}/kit/bin/hexdocs prefetch --root ${site.repoFromSite} ` +
-		`--site ${site.site} && node scripts/check-docs.mjs`
-	);
-}
+/**
+ * `react` and `react/*`, mapped to the site's own `@types/react`.
+ *
+ * `tsc` resolves a bare import from a file under the submodule by walking up from that file,
+ * and neither consumer has a `node_modules/react` above its mount: hex-web's is under
+ * `apps/front`, and kcalc's root has none. Measured, ten TS2307 and TS2875 errors from
+ * `src/render` without the mapping and none with it. The target is the types package and
+ * never `node_modules/react`, which Vite follows too and which then bundles a second React
+ * into the server build.
+ *
+ * Its own edit rather than two more rows of `tsconfig-paths`, because that applier refuses
+ * the whole edit when any missing key is already present, so a consumer that had mapped
+ * `react` by another spelling got no `@hex-pro/docs` entries at all.
+ */
+export const REACT_TYPES_ENTRIES: readonly (readonly [string, string])[] = [
+	['react', './node_modules/@types/react'],
+	['react/*', './node_modules/@types/react/*'],
+];
 
 function paths(text: string | null): Record<string, unknown> | null {
 	if (text === null) return null;
@@ -111,6 +152,19 @@ function firstTarget(table: Record<string, unknown>, key: string): string | null
 	if (!Array.isArray(value)) return null;
 	const first = value[0];
 	return typeof first === 'string' ? first : null;
+}
+
+/**
+ * The directory a `paths` target names, so two spellings of one directory compare equal.
+ *
+ * `./node_modules/@types/react`, `node_modules/@types/react` and
+ * `node_modules/@types/react/index.d.ts` are one resolution, and a consumer that wrote any of
+ * them has wired it. Resolved from the site directory, which is where both consumers' own
+ * `baseUrl` of `.` puts it; a `baseUrl` elsewhere would move every target together and is not
+ * a shape either consumer has.
+ */
+function targetDirectory(site: SiteDescriptor, target: string): string {
+	return resolveFrom(site.site, target.replace(/\/index\.d\.ts$/, ''));
 }
 
 /**
@@ -153,16 +207,107 @@ function scripts(text: string | null): Record<string, unknown> | null {
 }
 
 /**
- * Which scripts always run, and why only these two.
+ * What the server module is missing, as sentences that follow its file name.
  *
- * npm and pnpm both fire `prebuild` before `build`, measured on npm 11 and pnpm 10, and
- * `hex-terraform/deploy/src/build.ts` runs one of the two on the deploy host before the
- * Docker build. `build` itself is the other always-run script and is kcalc's own idiom,
- * which inlines its pre-step as `node scripts/build-lastmod.mjs && react-router build`.
- * Anything else is a script somebody has to remember to type, which on a repository with
- * no CI is not a guard.
+ * The relative-import arm is the defect this module exists to close, and it is not a style
+ * rule. `routes.ts` imports this file and React Router evaluates `routes.ts` with no Vite
+ * plugins, so an alias that works everywhere else in the site does not resolve here.
+ * Measured on both consumers as "Cannot find package '@hex-pro/docs'", which the step-5
+ * predicate passed because it only asked for three calls.
  */
-const ALWAYS_RUN = ['prebuild', 'build'] as const;
+export function docsServerProblems(text: string): string[] {
+	const problems: string[] = [];
+	for (const needle of ['docsServer(', 'docsRouteRows(']) {
+		if (!derives(text, needle)) problems.push(`does not call \`${needle}\`.`);
+	}
+	const stripped = stripComments(text);
+	for (const name of ['DOCS_ROUTES', 'DOCS']) {
+		if (!new RegExp(`export\\s+const\\s+${name}\\b`).test(stripped)) {
+			problems.push(`does not export \`${name}\`.`);
+		}
+	}
+	for (const specifier of valueImportSpecifiers(text)) {
+		if (specifier.startsWith('.')) continue;
+		problems.push(
+			`imports \`${specifier}\` for its value, which React Router's route config loader cannot resolve: it runs with no Vite plugins, so only a relative path reaches the package.`,
+		);
+	}
+	return problems;
+}
+
+/**
+ * What a docs route module is missing, as sentences that follow its file name.
+ *
+ * The same predicate for `install`, which writes the template only when the file is absent,
+ * and for the check, which reads whatever is there. A stub that exists and reads nothing is
+ * therefore refused by both rather than being unchanged to one and red in the other.
+ */
+export function routeModuleProblems(kind: DocsRouteKind, text: string): string[] {
+	const problems: string[] = [];
+	if (kind === 'page') {
+		if (!derives(text, 'DOCS.page(')) problems.push('does not call `DOCS.page(`.');
+		const stripped = stripComments(text);
+		if (!/export\s+const\s+handle\b/.test(stripped) || !/\bDOCS_HANDLE\b/.test(stripped)) {
+			problems.push(
+				'does not export `DOCS_HANDLE` as its `handle`, so root.tsx cannot tell a docs page from any other address and ships every one noindex.',
+			);
+		}
+		if (!exportsDefault(text)) {
+			problems.push('has no default export, so every docs page is served as a resource route.');
+		}
+	} else {
+		if (!derives(text, 'DOCS.resource(')) problems.push('does not call `DOCS.resource(`.');
+		if (exportsDefault(text)) {
+			problems.push(
+				'has a default export, so every machine address renders the site shell around plain text.',
+			);
+		}
+	}
+	if (exportsHeaders(text)) problems.push('exports `headers`.');
+	return problems;
+}
+
+/** What `root.tsx` is missing, as sentences that follow its file name. */
+export function rootSeoProblems(text: string): string[] {
+	const problems: string[] = [];
+	if (!derives(text, 'docsSeoFromMatches(')) {
+		problems.push('does not call `docsSeoFromMatches(`, so every docs page ships noindex.');
+		return problems;
+	}
+	const stripped = stripComments(text);
+	if (!/\.indexable\b/.test(stripped)) {
+		problems.push('does not read the docs answer `indexable`, so a fallback page is not noindex.');
+	}
+	if (!/\.languages\b/.test(stripped)) {
+		problems.push(
+			"does not read the docs answer `languages`, so a docs page's alternates still name every language.",
+		);
+	}
+	return problems;
+}
+
+/** What the sitemap is missing, as sentences that follow its file name. */
+export function sitemapProblems(text: string): string[] {
+	const problems: string[] = [];
+	const stripped = stripComments(text);
+	if (!derives(text, 'DOCS.sitemap()')) problems.push('does not call `DOCS.sitemap()`.');
+	const imported = [...stripped.matchAll(/import\s*\{([^}]*)\}\s*from\s*["']([^"']+)["']/g)].some(
+		(match) => /\bDOCS\b/.test(match[1] ?? '') && /(^|\/)lib\/docs\.server$/.test(match[2] ?? ''),
+	);
+	if (!imported) problems.push('does not import `DOCS` from `lib/docs.server`.');
+	if (!/\.languages\b/.test(stripped)) {
+		problems.push(
+			"never reads an entry's `languages`, so every docs page is listed in every language, fallback translations included.",
+		);
+	}
+	return problems;
+}
+
+const routePageModule = (text: string | null): boolean =>
+	text !== null && routeModuleProblems('page', text).length === 0;
+
+const routeMachineModule = (text: string | null): boolean =>
+	text !== null && routeModuleProblems('machine', text).length === 0;
 
 export const PRESENT = {
 	submodule(text: string | null, site: SiteDescriptor): boolean {
@@ -204,6 +349,15 @@ export const PRESENT = {
 		return tsconfigPathEntries(site).every(([key, target]) => firstTarget(table, key) === target);
 	},
 
+	tsconfigReactTypes(text: string | null, site: SiteDescriptor): boolean {
+		const table = paths(text);
+		if (table === null) return false;
+		return REACT_TYPES_ENTRIES.every(([key, target]) => {
+			const actual = firstTarget(table, key);
+			return actual !== null && targetDirectory(site, actual) === targetDirectory(site, target);
+		});
+	},
+
 	tsconfigResolveJson(_text: string | null, site: SiteDescriptor): boolean {
 		return resolveJsonModuleOf(site, joinPosix(site.site, 'tsconfig.json')) === true;
 	},
@@ -224,18 +378,10 @@ export const PRESENT = {
 		return Array.isArray(list) && list.includes(site.mount);
 	},
 
+	/** The build chain runs a prefetch the CLI accepts, then the guard. `readPrebuild` says how. */
 	prebuildHook(text: string | null, site: SiteDescriptor): boolean {
 		const table = scripts(text);
-		if (table === null) return false;
-		return ALWAYS_RUN.some((name) => {
-			const value = table[name];
-			return (
-				typeof value === 'string' &&
-				value.includes('hexdocs prefetch') &&
-				value.includes(`--site ${site.site}`) &&
-				value.includes('check-docs.mjs')
-			);
-		});
+		return table !== null && readPrebuild(table, site).problems.length === 0;
 	},
 
 	/**
@@ -257,26 +403,47 @@ export const PRESENT = {
 		return text.includes('"verify-install"') && text.includes(JSON.stringify(site.site));
 	},
 
-	/**
-	 * `app/lib/docs.ts` derives its three exports, however it has been reformatted.
-	 *
-	 * Not byte equality, unlike the shim, and the difference is deliberate: the header
-	 * says "safe to edit" because a consumer with two documented projects and a reason to
-	 * order them differently has somewhere to do it. So the predicate asks whether the
-	 * module still derives from the three functions, which is what every needle in
-	 * `checks.ts` then depends on.
-	 */
-	docsLib(text: string | null): boolean {
+	gitignore(text: string | null): boolean {
 		if (text === null) return false;
-		return (
-			derives(text, 'docsLocalisedPathsFor(DOCS_SITES)') &&
-			derives(text, 'docsRouteRows(DOCS_SITES)') &&
-			derives(text, 'docsSitemapRows(DOCS_SITES)')
-		);
+		const lines = text.split('\n').map((line) => line.trim());
+		return GITIGNORE_ENTRIES.every((entry) => lines.includes(entry));
 	},
 
 	siteConfig(_text: string | null, site: SiteDescriptor): boolean {
 		return site.projects.length > 0;
+	},
+
+	/**
+	 * `app/lib/docs.server.ts` builds the server and the rows, and imports the package by a
+	 * path the route config loader can resolve.
+	 *
+	 * Not byte equality: the header says "safe to edit", because a consumer with two
+	 * documented projects and a reason to order them differently has somewhere to do it. So
+	 * the predicate asks what the rest of the wiring depends on and nothing else.
+	 */
+	docsServer(text: string | null): boolean {
+		return text !== null && docsServerProblems(text).length === 0;
+	},
+
+	pageRouteModule: routePageModule,
+
+	machineRouteModule: routeMachineModule,
+
+	/** The site's own loader accepts its route config, and every docs row is where it belongs. */
+	routes(_text: string | null, site: SiteDescriptor, ctx: EditContext): boolean {
+		const table = readRouteTable(site, ctx.exec);
+		return (
+			table.kind === 'loaded' &&
+			routeTableProblems(table.routes, docsRouteRows(validConfigs(site))).length === 0
+		);
+	},
+
+	rootSeo(text: string | null): boolean {
+		return text !== null && rootSeoProblems(text).length === 0;
+	},
+
+	sitemap(text: string | null): boolean {
+		return text !== null && sitemapProblems(text).length === 0;
 	},
 
 	mcpJson(text: string | null, site: SiteDescriptor): boolean {
@@ -289,82 +456,7 @@ export const PRESENT = {
 		if (entry === null || typeof entry !== 'object') return false;
 		return (entry as { command?: unknown }).command === mcpServerEntry(site).command;
 	},
-
-	mcpSettings(_text: string | null, site: SiteDescriptor): boolean {
-		return settingsSatisfied(site).ok;
-	},
-
-	gitignore(text: string | null): boolean {
-		if (text === null) return false;
-		const lines = text.split('\n').map((line) => line.trim());
-		return GITIGNORE_ENTRIES.every((entry) => lines.includes(entry));
-	},
-
-	routes(text: string | null): boolean {
-		if (text === null) return false;
-		return derives(text, 'DOCS_ROUTES');
-	},
-
-	localisedPaths(text: string | null): boolean {
-		if (text === null) return false;
-		return derives(text, 'DOCS_PATHS');
-	},
-
-	sitemap(text: string | null): boolean {
-		if (text === null) return false;
-		return derives(text, 'DOCS_SITEMAP');
-	},
 } as const;
-
-/**
- * Whether some settings file enables the server and grants the skills directory.
- *
- * Two ways to be enabled, and both are real. hex-web lists its three servers by name in
- * `enabledMcpjsonServers`; kcalc sets `enableAllProjectMcpServers: true` and lists one.
- * A check that only understood the first would fail a correctly wired kcalc forever,
- * which is the same shape of mistake as demanding a workspace exclusion there.
- *
- * Both files are read because neither is authoritative. `.claude/settings.json` does not
- * exist in hex-web at all, and its `.claude/settings.local.json` is ignored by the user's
- * global git ignore rather than by the repository, so it reaches no clone. The row says
- * which file carried the answer for exactly that reason.
- */
-export function settingsSatisfied(site: SiteDescriptor): {
-	ok: boolean;
-	enabledBy: string | null;
-	directoryIn: string | null;
-	inspected: string[];
-} {
-	const candidates = ['.claude/settings.json', '.claude/settings.local.json'];
-	const skills = `${site.mount}/.claude/skills`;
-	let enabledBy: string | null = null;
-	let directoryIn: string | null = null;
-	const inspected: string[] = [];
-
-	for (const file of candidates) {
-		const text = site.files.read(file);
-		if (text === null) continue;
-		inspected.push(file);
-		const parsed = parseJsonc(text);
-		if (parsed === null || typeof parsed !== 'object') continue;
-		const settings = parsed as Record<string, unknown>;
-		const named = settings['enabledMcpjsonServers'];
-		const all = settings['enableAllProjectMcpServers'];
-		if (all === true || (Array.isArray(named) && named.includes('hexdocs'))) {
-			enabledBy ??= file;
-		}
-		const permissions = settings['permissions'];
-		if (permissions !== null && typeof permissions === 'object') {
-			const directories = (permissions as { additionalDirectories?: unknown })
-				.additionalDirectories;
-			if (Array.isArray(directories) && directories.some((entry) => entry === skills)) {
-				directoryIn ??= file;
-			}
-		}
-	}
-
-	return { ok: enabledBy !== null && directoryIn !== null, enabledBy, directoryIn, inspected };
-}
 
 // ---------------------------------------------------------------------------
 // The appliers
@@ -388,6 +480,55 @@ function packagesBlock(lines: readonly string[]): { from: number; to: number } |
 		break;
 	}
 	return { from, to };
+}
+
+/**
+ * Inserts the `paths` entries a table does not have yet.
+ *
+ * A key that is present with a target the predicate does not accept is left alone and the
+ * edit refuses. It means somebody pointed the specifier somewhere on purpose, and a silent
+ * retarget is the one edit whose failure shows up as a wrong module being compiled rather
+ * than as a build error.
+ */
+function insertPathEntries(
+	text: string | null,
+	wanted: readonly (readonly [string, string])[],
+	satisfied: (table: Record<string, unknown>, key: string, target: string) => boolean,
+): string | null {
+	if (text === null) return null;
+	const block = soleBlock(text, 'paths');
+	if (block === null || block.kind !== 'object') return null;
+	const table = paths(text);
+	if (table === null) return null;
+	const missing = wanted.filter(([key, target]) => !satisfied(table, key, target));
+	if (missing.length === 0) return text;
+	if (missing.some(([key]) => key in table)) return null;
+	return insertIntoBlock(
+		text,
+		block,
+		missing.map(([key, target]) => `${JSON.stringify(key)}: [${JSON.stringify(target)}]`),
+	);
+}
+
+/**
+ * Whether an always-run script already names the launcher or the guard, or cannot be read.
+ *
+ * Refused rather than appended after, which is the step-5 upgrade path this exists for. A
+ * prebuild carrying `hexdocs prefetch --root ../..` fails the predicate, and appending the
+ * correct fragment behind it leaves the broken one first in the chain, where it still exits 2
+ * and stops the build before the correct one runs. The instruction names the segment to
+ * replace instead.
+ */
+function namesTheGuard(table: Record<string, unknown>): boolean {
+	return ALWAYS_RUN.some((name) => {
+		const value = table[name];
+		if (typeof value !== 'string') return false;
+		const segments = splitScript(value);
+		if (segments === null) return true;
+		return segments.some((segment) =>
+			segment.tokens.some((token) => /(^|\/)(hexdocs|check-docs\.mjs)$/.test(token)),
+		);
+	});
 }
 
 const APPLY = {
@@ -422,25 +563,18 @@ const APPLY = {
 	},
 
 	tsconfigPaths(text: string | null, site: SiteDescriptor): string | null {
-		if (text === null) return null;
-		const block = soleBlock(text, 'paths');
-		if (block === null || block.kind !== 'object') return null;
-		const table = paths(text);
-		if (table === null) return null;
-		const missing = tsconfigPathEntries(site).filter(
-			([key, target]) => firstTarget(table, key) !== target,
-		);
-		if (missing.length === 0) return text;
-		// A key that is present with the wrong target is left alone and reported rather
-		// than rewritten. It means somebody pointed the specifier somewhere on purpose,
-		// and a silent retarget is the one edit whose failure shows up as a wrong module
-		// being compiled rather than as a build error.
-		if (missing.some(([key]) => key in table)) return null;
-		return insertIntoBlock(
+		return insertPathEntries(
 			text,
-			block,
-			missing.map(([key, target]) => `${JSON.stringify(key)}: [${JSON.stringify(target)}]`),
+			tsconfigPathEntries(site),
+			(table, key, target) => firstTarget(table, key) === target,
 		);
+	},
+
+	tsconfigReactTypes(text: string | null, site: SiteDescriptor): string | null {
+		return insertPathEntries(text, REACT_TYPES_ENTRIES, (table, key, target) => {
+			const actual = firstTarget(table, key);
+			return actual !== null && targetDirectory(site, actual) === targetDirectory(site, target);
+		});
 	},
 
 	deployHashDirs(text: string | null, site: SiteDescriptor): string | null {
@@ -468,15 +602,22 @@ const APPLY = {
 	 * the original bytes, which is what preserves the tabs and the key order that
 	 * `JSON.stringify` would not.
 	 */
-	prebuildHook(text: string | null, site: SiteDescriptor): string | null {
+	prebuildHook(text: string | null, site: SiteDescriptor, ctx: EditContext): string | null {
 		if (text === null) return null;
+		const table = scripts(text);
+		if (table === null || namesTheGuard(table)) return null;
 		const block = soleBlock(text, 'scripts');
 		if (block === null || block.kind !== 'object') return null;
-		const fragment = prebuildFragment(site);
+		const fragment = prebuildFragment(site, ctx.bucket);
 
+		const existing = table['prebuild'];
 		const region = text.slice(block.open, block.close + 1);
 		const key = /"prebuild"\s*:\s*"/.exec(region);
-		if (key?.index !== undefined) {
+		if (typeof existing === 'string' && key?.index !== undefined) {
+			// A string that already ends in an operator would take the fragment as the
+			// operand of something else, `a & && fragment` being a syntax error and `a || `
+			// being a masked prefetch.
+			if (/(&|\||;)\s*$/.test(existing)) return null;
 			let cursor = block.open + key.index + key[0].length;
 			while (cursor < text.length) {
 				if (text[cursor] === '\\') {
@@ -489,14 +630,8 @@ const APPLY = {
 			if (cursor >= text.length) return null;
 			return `${text.slice(0, cursor)} && ${fragment}${text.slice(cursor)}`;
 		}
+		if (existing !== undefined) return null;
 		return insertIntoBlock(text, block, [`"prebuild": ${JSON.stringify(fragment)}`]);
-	},
-
-	docsLib(text: string | null): string | null {
-		// Created, never rewritten. A file that exists and does not derive is a file
-		// somebody wrote, and this module's own header invites that.
-		if (text !== null) return null;
-		return docsLibModule();
 	},
 
 	checkDocsShim(_text: string | null, site: SiteDescriptor): string | null {
@@ -550,173 +685,31 @@ const APPLY = {
 		return `${existing}${existing === '' ? '' : '\n'}${header}\n${missing.join('\n')}\n`;
 	},
 
+	// Created, never rewritten. A file that exists and fails its predicate is a file somebody
+	// wrote, and each template's own header invites that.
+	docsServer(text: string | null, site: SiteDescriptor): string | null {
+		return text === null ? docsServerModule(site) : null;
+	},
+
+	pageRouteModule(text: string | null): string | null {
+		return text === null ? docsPageRouteModule() : null;
+	},
+
+	machineRouteModule(text: string | null): string | null {
+		return text === null ? docsMachineRouteModule() : null;
+	},
+
 	refuse(): string | null {
 		return null;
 	},
 } as const;
 
 // ---------------------------------------------------------------------------
-// The instructions the three spreads need, shaped to the consumer in hand
-// ---------------------------------------------------------------------------
-
-/**
- * `routes.ts`, and the two consumers need different sentences.
- *
- * hex-web's `PAGES` is a local `[path: string, file: string][]` inside `routes.ts`, so a
- * docs spread joins it. kcalc's `pages()` maps `PAGES` from `lib/pages.ts`, whose
- * elements carry `key`, `path`, `file`, `priority`, `changefreq` and `ground` and whose
- * `key` is a closed ten-member `PageKey` union with an exhaustive `PAGE_SCOPES` record
- * behind it. A docs page cannot join that registry without widening a union in the
- * consumer's own source, so the instruction there declares the docs routes beside the
- * existing mounts instead.
- */
-function routesInstruction(site: SiteDescriptor, text: string | null): string {
-	const file = joinPosix(site.site, 'app/routes.ts');
-	const head = [
-		`${file}: add the docs routes, importing DOCS_ROUTES from ./lib/docs:`,
-		'',
-		'  import { DOCS_ROUTES } from "./lib/docs";',
-		'',
-		'The machine endpoints must be declared top level, between the bare mount and the',
-		'`route(":lang", ...)` call. A leaf route with no default export is dispatched to',
-		"`queryRoute`, which runs that route's own loader and no parent's, so one mounted",
-		'under `:lang` answers `GET /banana/<base>/llms.txt` with a 200. Their order is',
-		'already correct in DOCS_ROUTES and must be preserved: every static suffix comes',
-		'before the splat, because a dynamic pattern that scores as a static segment ties',
-		'with a real static one and the tie breaks on declaration order.',
-		'',
-		'  // between `...pages("en/")` and `route(":lang", ...)`:',
-		'  ...DOCS_ROUTES.filter((r) => r.kind === "machine").map((r) => route(r.path.slice(1), r.file)),',
-		'',
-	];
-
-	const tupleShaped =
-		text !== null && /PAGES\s*:\s*\[\s*path\s*:\s*string/.test(stripComments(text));
-	if (tupleShaped) {
-		return [
-			...head,
-			'  // inside PAGES, which is a [path, file] tuple array here:',
-			'  ...DOCS_ROUTES.filter((r) => r.kind === "page").map(',
-			'  \t(r) => [r.path.slice(1), r.file] as [string, string],',
-			'  ),',
-			'',
-			'No docs route module may export `headers`. React Router copies only Set-Cookie',
-			'from a parent, so a child `headers` export ships docs pages with no',
-			'Content-Security-Policy and no nonce, and the page renders and never hydrates.',
-		].join('\n');
-	}
-
-	return [
-		...head,
-		'This site maps a page registry rather than a tuple array, and its page key is a',
-		'closed union with an exhaustive scope record behind it, so a docs page cannot join',
-		'that registry without widening a union in this repository. Declare the docs pages',
-		'beside the existing mounts instead:',
-		'',
-		'  function docsPages(idPrefix: string) {',
-		'  \treturn DOCS_ROUTES.filter((r) => r.kind === "page").map((r) =>',
-		'  \t\troute(r.path.slice(1), r.file, { id: `${idPrefix}${r.path.slice(1)}` }),',
-		'  \t);',
-		'  }',
-		'',
-		'  export default [',
-		'  \t...pages("en/"),',
-		'  \t...docsPages("en/"),',
-		'  \t// the machine spread above goes here',
-		'  \troute(":lang", "routes/lang.tsx", [...pages("lang/"), ...docsPages("lang/")]),',
-		'  ] satisfies RouteConfig;',
-		'',
-		'No docs route module may export `headers`. React Router copies only Set-Cookie',
-		'from a parent, so a child `headers` export ships docs pages with no',
-		'Content-Security-Policy and no nonce. On this site it also drops Vary: Cookie and',
-		'the whole cache policy, because that is what the root `headers` export carries.',
-	].join('\n');
-}
-
-/** `paths.ts`, where one consumer has a spread to join and the other has an alias. */
-function localisedPathsInstruction(site: SiteDescriptor, text: string | null): string {
-	const file = joinPosix(site.site, 'app/lib/paths.ts');
-	const stripped = text === null ? '' : stripComments(text);
-	const alias = /export\s+const\s+LOCALISED_PATHS[^=]*=\s*[A-Za-z_$][\w$]*\s*;/.test(stripped);
-
-	if (!alias) {
-		return [
-			`${file}: add the docs addresses to LOCALISED_PATHS:`,
-			'',
-			'  import { DOCS_PATHS } from "./docs";',
-			'  // inside the LOCALISED_PATHS array:',
-			'  \t...DOCS_PATHS,',
-			'',
-			'root.tsx renders the canonical link and all eight hreflang alternates above the',
-			'meta outlet and gates them on this list, and a route can append tags but never',
-			'delete them. A docs slug missing from it ships with no canonical and a noindex.',
-		].join('\n');
-	}
-
-	return [
-		`${file}: LOCALISED_PATHS here is an alias of one registry, so there is nowhere to`,
-		'add a spread. Concatenate instead:',
-		'',
-		'  import { DOCS_PATHS } from "./docs";',
-		'  export const LOCALISED_PATHS: readonly string[] = [...PAGE_PATHS, ...DOCS_PATHS];',
-		'',
-		'Adding the docs slugs to the page registry is not the alternative. That registry is',
-		'simultaneously the route table, the sitemap source, the lastmod key space and the',
-		'i18n scope selector, so an entry there demands a ground, a lastmod key and a scope',
-		'prefix per page, and its key is a closed union. The concatenation keeps the',
-		"registry's own invariant intact for the pages it owns.",
-		'',
-		'root.tsx gates the canonical and the eight alternates on this list, so a docs slug',
-		'missing from it ships with no canonical and a noindex.',
-	].join('\n');
-}
-
-/** The sitemap, where one consumer has an `entries` array and the other has none. */
-function sitemapInstruction(site: SiteDescriptor, text: string | null): string {
-	const file = joinPosix(site.site, 'app/routes/sitemap[.]xml.tsx');
-	const stripped = text === null ? '' : stripComments(text);
-	const hasEntries = /const\s+entries\b[^=]*=\s*\[/.test(stripped);
-
-	const why = [
-		'',
-		'DOCS_SITEMAP already excludes hidden pages. A hidden page stays published,',
-		'indexable and addressable while staying out of the sidebar, out of prev and next,',
-		'and out of the sitemap, and a hand-listed docs spread advertises it to Google.',
-	];
-
-	if (hasEntries) {
-		return [
-			`${file}: derive the docs entries:`,
-			'',
-			'  import { DOCS_SITEMAP } from "~/lib/docs";',
-			'  // inside the entries array:',
-			'  \t...DOCS_SITEMAP,',
-			...why,
-		].join('\n');
-	}
-
-	return [
-		`${file}: this file has no entries array to spread into. It maps a page registry`,
-		'directly, so the docs rows have to be concatenated where the URL list is built:',
-		'',
-		'  import { DOCS_SITEMAP } from "~/lib/docs";',
-		'  const sources = [',
-		'  \t...PAGES.map((page) => ({ path: page.path, priority: page.priority, changefreq: page.changefreq })),',
-		'  \t...DOCS_SITEMAP,',
-		'  ];',
-		'',
-		'and then map `sources` where `PAGES` was mapped. Docs pages have no lastmod key,',
-		'so the lastmod line stays conditional on the lookup, which it already is.',
-		...why,
-	].join('\n');
-}
-
-// ---------------------------------------------------------------------------
 // The table
 // ---------------------------------------------------------------------------
 
 /**
- * One table per descriptor.
+ * One table per descriptor and bucket.
  *
  * Memoised because three of the instructions are shaped to what the consumer's own file
  * looks like, so building the table reads files, and `checks.ts` asks for it once per
@@ -724,31 +717,90 @@ function sitemapInstruction(site: SiteDescriptor, text: string | null): string {
  * a second `detectSite` over the same repository builds a fresh table and re-reads: this
  * is a within-one-run memo and never a cache of the filesystem.
  */
-const TABLES = new WeakMap<SiteDescriptor, Edit[]>();
+const TABLES = new WeakMap<SiteDescriptor, Map<string, Edit[]>>();
 
 /**
  * Every edit, shaped to the repository in hand.
  *
- * Built per descriptor because half of these need a path computed from it and three need
+ * Built per descriptor because half of these need a path computed from it and four need
  * an instruction shaped to what the consumer's own file looks like. The predicates and
  * the appliers are the module-level tables above, so every record carries the same
  * function objects whatever the descriptor, which is what the identity assertion depends
  * on.
  */
-export function editsFor(site: SiteDescriptor): Edit[] {
-	const cached = TABLES.get(site);
+export function editsFor(site: SiteDescriptor, bucket?: string): Edit[] {
+	const forSite = TABLES.get(site) ?? new Map<string, Edit[]>();
+	TABLES.set(site, forSite);
+	const key = bucket ?? '';
+	const cached = forSite.get(key);
 	if (cached !== undefined) return cached;
-	const built = buildEdits(site);
-	TABLES.set(site, built);
+	const built = buildEdits(site, bucket);
+	forSite.set(key, built);
 	return built;
 }
 
-function buildEdits(site: SiteDescriptor): Edit[] {
+function prebuildInstruction(
+	site: SiteDescriptor,
+	file: string,
+	bucket: string | undefined,
+): string {
+	const table = scripts(site.files.read(file));
+	const reading = table === null ? null : readPrebuild(table, site);
+	const named = reading === null ? [] : [...reading.launcherSegments, ...reading.guardSegments];
+	const opening =
+		named.length === 0
+			? `${file}: append to this package's own prebuild:`
+			: `${file}: replace ${named.map((segment) => `\`${segment}\``).join(' and ')} in this package's build chain with:`;
+	return [
+		opening,
+		'',
+		`  ${prebuildFragment(site, bucket)}`,
+		'',
+		...(reading === null || reading.problems.length === 0
+			? []
+			: [
+					'What the current chain does wrong:',
+					'',
+					...reading.problems.map((problem) => `  ${problem}`),
+					'',
+				]),
+		'There is no CI on this repository, so a check that only runs when somebody types it is',
+		'not a guard. prebuild is the one thing that always runs: the deploy builds on the host',
+		'before the Docker build, and the container install runs with scripts disabled and never',
+		"repeats it. Keep the docs segment in this package's own prebuild string, joined by `&&`",
+		'to everything after it, and never in a shell script other front packages share.',
+		'',
+		'The bucket reaches prefetch through `--bucket` in this private package.json, or through',
+		'HEXDOCS_BUCKET in the deploy environment. Never through a site config: an eager glob',
+		"inlines the whole config object into every page's JavaScript.",
+	].join('\n');
+}
+
+function moduleInstruction(file: string, what: string, problems: readonly string[]): string {
+	return [
+		`${file} exists and ${what}, so it was not rewritten: a file that exists is a file somebody wrote.`,
+		'',
+		...problems.map((problem) => `  It ${problem}`),
+		'',
+		'Fix those by hand, or delete the file and run `hexdocs install --write` again, which writes',
+		'the template.',
+	].join('\n');
+}
+
+function buildEdits(site: SiteDescriptor, bucket: string | undefined): Edit[] {
 	const read = (file: string): string | null => site.files.read(file);
 	const routesFile = joinPosix(site.site, 'app/routes.ts');
-	const pathsFile = joinPosix(site.site, 'app/lib/paths.ts');
+	const rootFile = joinPosix(site.site, 'app/root.tsx');
 	const sitemapFile = joinPosix(site.site, 'app/routes/sitemap[.]xml.tsx');
 	const tsconfigFile = joinPosix(site.site, 'tsconfig.json');
+	const packageFile = joinPosix(site.site, 'package.json');
+	const serverFile = joinPosix(site.site, DOCS_SERVER_MODULE);
+	const pageFile = joinPosix(site.site, 'app', DOCS_ROUTE_MODULE.page);
+	const machineFile = joinPosix(site.site, 'app', DOCS_ROUTE_MODULE.machine);
+	const problemsOf = (file: string, of: (text: string) => string[]): string[] => {
+		const text = read(file);
+		return text === null ? [] : of(text);
+	};
 
 	return [
 		{
@@ -810,6 +862,26 @@ function buildEdits(site: SiteDescriptor): Edit[] {
 			].join('\n'),
 		},
 		{
+			id: 'tsconfig-react-types',
+			check: 'wiring-tsconfig-path',
+			file: tsconfigFile,
+			present: PRESENT.tsconfigReactTypes,
+			apply: APPLY.tsconfigReactTypes,
+			instruction: [
+				`${tsconfigFile}: map react to this site's own types in compilerOptions.paths:`,
+				'',
+				...REACT_TYPES_ENTRIES.map(
+					([key, target]) => `  ${JSON.stringify(key)}: [${JSON.stringify(target)}],`,
+				),
+				'',
+				'The package is compiled from the submodule, and tsc resolves a bare `react` from',
+				'there by walking up past a directory that has no node_modules/react. Point these at',
+				'@types/react and never at node_modules/react, which Vite follows too and which then',
+				'bundles a second React into the server build. A key already mapped somewhere else',
+				'was left alone: somebody pointed it there on purpose.',
+			].join('\n'),
+		},
+		{
 			id: 'tsconfig-resolve-json',
 			check: 'wiring-tsconfig-path',
 			file: tsconfigFile,
@@ -823,9 +895,8 @@ function buildEdits(site: SiteDescriptor): Edit[] {
 				'Set `"resolveJsonModule": true` in the TypeScript configuration this site',
 				`extends (${tsconfigFile}, or whichever config it extends).`,
 				'',
-				'app/lib/docs.ts imports *.docs.json through import.meta.glob, and without',
-				'this the typecheck fails on the glob rather than on anything a reader would',
-				'connect to the docs install.',
+				`${serverFile} globs *.docs.json with import.meta.glob, and both consumers set`,
+				'this option in the shared config every front package extends.',
 			].join('\n'),
 		},
 		{
@@ -845,20 +916,10 @@ function buildEdits(site: SiteDescriptor): Edit[] {
 		{
 			id: 'prebuild-hook',
 			check: 'wiring-prebuild-hook',
-			file: joinPosix(site.site, 'package.json'),
+			file: packageFile,
 			present: PRESENT.prebuildHook,
 			apply: APPLY.prebuildHook,
-			instruction: [
-				`${joinPosix(site.site, 'package.json')}: append to this package's own prebuild.`,
-				'',
-				`  ${prebuildFragment(site)}`,
-				'',
-				'There is no CI on this repository, so a check that only runs when somebody',
-				'types it is not a guard. prebuild is the one thing that always runs: the',
-				'deploy builds on the host before the Docker build, and the container install',
-				"runs with scripts disabled and never repeats it. Append to this package's own",
-				'prebuild string and never to a shell script other front packages share.',
-			].join('\n'),
+			instruction: prebuildInstruction(site, packageFile, bucket),
 		},
 		{
 			id: 'check-docs-shim',
@@ -867,7 +928,7 @@ function buildEdits(site: SiteDescriptor): Edit[] {
 			present: PRESENT.checkDocsShim,
 			apply: APPLY.checkDocsShim,
 			instruction:
-				'The generated guard shim. It holds no copy of what is checked and is rewritten in full on every install, so a kit upgrade refreshes it.',
+				'The generated guard shim. It holds no copy of what is checked, so a shim an older kit wrote still works; delete it and run install again to take a newer one.',
 		},
 		{
 			id: 'gitignore',
@@ -893,29 +954,50 @@ function buildEdits(site: SiteDescriptor): Edit[] {
 			apply: APPLY.refuse,
 			byHand: true,
 			instruction: [
-				`No <project>.docs.json under ${joinPosix(site.site, 'app/docs')}.`,
+				`No <project>.docs.json under ${joinPosix(site.site, 'app/docs')}. Scaffold one for the commit this site should serve:`,
 				'',
-				'  hexdocs scaffold site --site <site> --project <project>',
+				`  hexdocs scaffold site --site ${site.site} --project <project> --commit <sha> --version <label> --released <YYYY-MM-DD>`,
 				'',
-				'It names the mount point, the sidebar label in seven languages and the',
-				'labelled commits, and it is the sole build input the routes, LOCALISED_PATHS,',
-				'the hreflang set and the sitemap are all derived from. `hexdocs sync` fills in',
-				'its pages array afterwards.',
+				'It names the mount point, the sidebar label in seven languages and the labelled',
+				'commits, and it is the build input the routes and the sitemap are derived from.',
+				'`hexdocs prefetch` then `hexdocs sync` fill in its pages afterwards.',
 			].join('\n'),
 		},
 		{
-			id: 'docs-lib',
-			check: 'wiring-localised-paths',
-			file: joinPosix(site.site, 'app/lib/docs.ts'),
-			present: PRESENT.docsLib,
-			apply: APPLY.docsLib,
-			instruction: [
-				`${joinPosix(site.site, 'app/lib/docs.ts')} exists and does not derive its three`,
-				'exports from the package, so it was not rewritten: a file that exists and does',
-				'not derive is a file somebody wrote. Make it export DOCS_PATHS, DOCS_ROUTES and',
-				'DOCS_SITEMAP from docsLocalisedPathsFor, docsRouteRows and docsSitemapRows over',
-				'an import.meta.glob of ../docs/*.docs.json, or delete it and run install again.',
-			].join('\n'),
+			id: 'docs-server',
+			check: 'wiring-routes',
+			file: serverFile,
+			present: PRESENT.docsServer,
+			apply: APPLY.docsServer,
+			instruction: moduleInstruction(
+				serverFile,
+				'does not build the docs server and routes the rest of the wiring reads',
+				problemsOf(serverFile, docsServerProblems),
+			),
+		},
+		{
+			id: 'route-page-module',
+			check: 'wiring-routes',
+			file: pageFile,
+			present: PRESENT.pageRouteModule,
+			apply: APPLY.pageRouteModule,
+			instruction: moduleInstruction(
+				pageFile,
+				'does not serve docs pages the way the route table needs',
+				problemsOf(pageFile, (text) => routeModuleProblems('page', text)),
+			),
+		},
+		{
+			id: 'route-machine-module',
+			check: 'wiring-routes',
+			file: machineFile,
+			present: PRESENT.machineRouteModule,
+			apply: APPLY.machineRouteModule,
+			instruction: moduleInstruction(
+				machineFile,
+				'does not serve the machine addresses the way the route table needs',
+				problemsOf(machineFile, (text) => routeModuleProblems('machine', text)),
+			),
 		},
 		{
 			id: 'routes',
@@ -924,16 +1006,16 @@ function buildEdits(site: SiteDescriptor): Edit[] {
 			present: PRESENT.routes,
 			apply: APPLY.refuse,
 			byHand: true,
-			instruction: routesInstruction(site, read(routesFile)),
+			instruction: routesInstruction(routesFile, read(routesFile)),
 		},
 		{
-			id: 'localised-paths',
+			id: 'root-seo',
 			check: 'wiring-localised-paths',
-			file: pathsFile,
-			present: PRESENT.localisedPaths,
+			file: rootFile,
+			present: PRESENT.rootSeo,
 			apply: APPLY.refuse,
 			byHand: true,
-			instruction: localisedPathsInstruction(site, read(pathsFile)),
+			instruction: rootInstruction(rootFile),
 		},
 		{
 			id: 'sitemap',
@@ -942,7 +1024,7 @@ function buildEdits(site: SiteDescriptor): Edit[] {
 			present: PRESENT.sitemap,
 			apply: APPLY.refuse,
 			byHand: true,
-			instruction: sitemapInstruction(site, read(sitemapFile)),
+			instruction: sitemapInstruction(sitemapFile, read(sitemapFile)),
 		},
 		{
 			id: 'mcp-json',
@@ -958,15 +1040,6 @@ function buildEdits(site: SiteDescriptor): Edit[] {
 				'Without it an agent in this repository has no way to read a page, check a tree',
 				'or reach a skill.',
 			].join('\n'),
-		},
-		{
-			id: 'mcp-settings',
-			check: 'wiring-mcp',
-			file: '.claude/settings.json',
-			present: PRESENT.mcpSettings,
-			apply: APPLY.refuse,
-			byHand: true,
-			instruction: settingsInstruction(site),
 		},
 	];
 }

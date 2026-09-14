@@ -1,13 +1,18 @@
 /**
  * The files `install` writes into a consuming site, as string builders.
  *
- * Two of them ship into somebody else's repository and are then read, reviewed and
+ * Four of them ship into somebody else's repository and are then read, reviewed and
  * linted by that repository's own tooling, so they are written in that repository's
- * style rather than this one's: tabs, double quotes, and relative imports with no `.js`
+ * style rather than this one's: tabs, double quotes, and relative imports with no
  * extension, which is the opposite of this package's own rule and is what both
- * consumers' app code actually does. kcalc's front package runs `eslint app scripts
- * --max-warnings 0`, so a shim that satisfied hex-web (which has no lint at all) and not
- * kcalc would break the build it was installed to protect.
+ * consumers' app code actually does. A `.ts` extension there is TS5097 under their
+ * configuration. kcalc's front package runs `eslint app scripts --max-warnings 0`, so a
+ * file that satisfied hex-web (which has no lint at all) and not kcalc would break the
+ * build it was installed to protect.
+ *
+ * Every one of them is written when absent and never rewritten afterwards. A file that
+ * exists and does not satisfy its predicate is a file somebody wrote, so `install` refuses
+ * it and prints what the predicate wants rather than replacing a consumer's edit.
  *
  * The shim holds no copy of what is checked, and that is the property worth defending.
  * Every string it prints, the closing "not checked here" paragraph included, comes out
@@ -17,56 +22,186 @@
  * one row cannot be added without a test turning red.
  */
 
-import type { SiteDescriptor } from './site.js';
+import { BUNDLE_TREE, PUBLIC_TREE } from '../../../src/contracts/manifest.js';
+
+import {
+	DOCS_SERVER_MODULE,
+	dirnamePosix,
+	joinPosix,
+	relativePosix,
+	type SiteDescriptor,
+} from './site.js';
 
 /**
- * `<site>/app/lib/docs.ts`.
+ * The package's node-safe barrel, as a relative specifier from a file in the site.
  *
- * The glob rather than a named import per project, and the reason is the second
- * documented project rather than the first. Vite has to see the pattern literally to
- * expand it, which kcalc's own `i18n.server.ts` says at the code and proves for JSON in
- * this exact stack, and expanding it means adding a docs site is one JSON file with no
- * edit here at all. Sorted, so route order does not depend on filesystem order.
- *
- * The three exported identifiers are constants of this package, not of a consumer. That
- * is what makes one needle table work for two sites whose route files, path registries
- * and sitemaps have nothing else in common.
+ * Relative and extensionless, never `@hex-pro/docs`, for the server module. React Router
+ * loads `app/routes.ts` through a Vite runner with no config file and no plugins, so
+ * `vite-tsconfig-paths` is not there and the alias does not exist, and `routes.ts` imports
+ * `DOCS_ROUTES` from the server module. An aliased import there is a route config that
+ * refuses to load, measured on both consumers as "Cannot find package '@hex-pro/docs'". The
+ * route modules may use the alias, because nothing evaluates them without the plugins.
  */
-export function docsLibModule(): string {
+export function packageIndexFrom(site: SiteDescriptor, fromFile: string): string {
+	return relativePosix(
+		dirnamePosix(joinPosix(site.site, fromFile)),
+		joinPosix(site.mount, 'src/index'),
+	);
+}
+
+/**
+ * `<site>/app/lib/docs.server.ts`: the one module that reads bundles.
+ *
+ * One server module and not two. A client-reachable module inlines every config it globs
+ * into every page's JavaScript, whole objects included, and the only reason an earlier
+ * design split this was a path list that had to reach the client through `paths.ts`.
+ * Nothing does now, so the configs, the route rows and the bundle reader live together,
+ * and the `.server` suffix makes React Router's own guard fail the build if a client
+ * module ever imports it.
+ *
+ * The globs are literal because Vite has to see a pattern to expand it: a computed path
+ * produces a dynamic import that fails in the server bundle rather than an error at build
+ * time. `BUNDLE_TREE` is interpolated here, in the generator, so the consumer's file
+ * carries the literal and this package still spells the directory once.
+ */
+export function docsServerModule(site: SiteDescriptor): string {
+	const index = packageIndexFrom(site, DOCS_SERVER_MODULE);
+	const bundles = `../docs/${BUNDLE_TREE}/*/*`;
 	return `// Written by \`hexdocs install\`. Safe to edit; \`hexdocs verify-install\` reads it.
 //
-// The glob is literal because Vite has to see the pattern to expand it: a computed path
-// here produces a dynamic import that fails in the server bundle rather than an error at
-// build time. Adding a second documented project is one JSON file in ../docs and no edit
-// to this module.
+// The one module in this site that reads documentation bundles, and a .server module so
+// React Router refuses the build if a client module ever imports it.
 //
-// This needs \`resolveJsonModule\` in the TypeScript configuration this site extends.
-// Both existing consumers set it in their shared config/tsconfig.front.json.
-import { docsLocalisedPathsFor, docsRouteRows, docsSitemapRows } from "@hex-pro/docs";
-import type { DocsSiteConfig } from "@hex-pro/docs";
+// app/routes.ts imports DOCS_ROUTES from here, and React Router evaluates routes.ts with
+// no Vite plugins, so the package is imported by a relative path rather than through the
+// @hex-pro/docs alias, which does not exist there. The globs are literal because Vite has
+// to see a pattern to expand it. Adding a second documented project is one JSON file in
+// ../docs and no edit here.
+import { docsRouteRows, docsServer } from "${index}";
+import type { DocsSiteConfig } from "${index}";
 
 const CONFIGS = import.meta.glob("../docs/*.docs.json", {
 	eager: true,
 	import: "default",
 }) as Record<string, DocsSiteConfig>;
 
+/** Sorted, so the route order does not depend on the filesystem. */
 export const DOCS_SITES: DocsSiteConfig[] = Object.keys(CONFIGS)
 	.sort()
 	.map((key) => CONFIGS[key] as DocsSiteConfig);
 
-/** Every docs address, for LOCALISED_PATHS. Hidden pages are included: they are indexable. */
-export const DOCS_PATHS = docsLocalisedPathsFor(DOCS_SITES);
-
-/** Every route row, machine endpoints first, in the order the tie-breaks require. */
+/** Every route this site declares for its documentation. */
 export const DOCS_ROUTES = docsRouteRows(DOCS_SITES);
 
-/** The sitemap rows, with hidden pages already excluded. */
-export const DOCS_SITEMAP = docsSitemapRows(DOCS_SITES);
+/** Pages, machine text and sitemap rows, read from the prefetched bundles. */
+export const DOCS = docsServer({
+	configs: DOCS_SITES,
+	manifests: import.meta.glob("${bundles}/manifest.json", {
+		eager: true,
+		import: "default",
+	}),
+	pages: import.meta.glob("${bundles}/pages/**/*.json", { import: "default" }),
+	text: import.meta.glob<string>(
+		["${bundles}/raw/**/*.md", "${bundles}/llms/*.txt"],
+		{ query: "?raw", import: "default" },
+	),
+});
 `;
 }
 
-/** The two directories `hexdocs prefetch` writes into, for the site's `.gitignore`. */
-export const GITIGNORE_ENTRIES = ['app/docs/_bundles/', 'public/_docs/'] as const;
+/**
+ * `<site>/app/routes/docs.tsx`: every docs page and every redirect source.
+ *
+ * Three exports carry a contract and one deliberately does not exist.
+ *
+ * `handle` is what `root.tsx` reads through `docsSeoFromMatches(useMatches())` to decide the
+ * canonical, the alternates and the robots tag. Without it root treats a docs page like any
+ * address missing from `LOCALISED_PATHS` and ships it noindex, which fails closed and still
+ * keeps every docs page out of the index.
+ *
+ * The loader throws a `Response` for a redirect, a 404 and a 500, and React Router turns
+ * those into a redirect and the root error boundary, so nothing here maps an outcome.
+ *
+ * There is no `headers` export. React Router copies only Set-Cookie from a parent into a
+ * child's headers, so one here ships docs pages with no Content-Security-Policy on hex-web,
+ * where the page then never hydrates, and without the root's Vary and cache policy on kcalc.
+ *
+ * `meta` is the title and the description and nothing else, because root owns robots, the
+ * canonical and the alternates, and a route can add tags but never remove one root wrote.
+ */
+export function docsPageRouteModule(): string {
+	return `// Written by \`hexdocs install\`. Safe to edit; \`hexdocs verify-install\` reads it.
+//
+// Every docs page and every redirect source. The loader throws a Response for a redirect,
+// a 404 and a 500, which React Router turns into the redirect and the root error boundary.
+// root.tsx reads \`handle\` to decide the canonical, the alternates and the robots tag, so
+// \`meta\` here is the title and description only. Do not export \`headers\` from this
+// module: React Router copies only Set-Cookie from a parent, so a child \`headers\` export
+// replaces the root's policy for every docs page.
+import {
+	Link,
+	useLoaderData,
+	type LoaderFunctionArgs,
+	type MetaFunction,
+} from "react-router";
+import { DOCS_HANDLE } from "@hex-pro/docs";
+import { DocsPage } from "@hex-pro/docs/render";
+
+import { DOCS } from "../lib/docs.server";
+
+export const handle = DOCS_HANDLE;
+
+export function loader({ request }: LoaderFunctionArgs) {
+	return DOCS.page(new URL(request.url));
+}
+
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
+	if (!data) return [];
+	return [
+		{ title: data.data.page.title },
+		{ name: "description", content: data.data.page.description },
+	];
+};
+
+export default function DocsRoute() {
+	const { data, themeClass } = useLoaderData<typeof loader>();
+	return <DocsPage {...data} Link={Link} themeClass={themeClass} />;
+}
+`;
+}
+
+/**
+ * `<site>/app/routes/docs.machine.tsx`: `llms.txt`, `llms-full.txt` and every raw page.
+ *
+ * A resource route, which is to say a loader and no default export, and the absence is the
+ * contract. A default export makes every one of these addresses a document route that
+ * renders the site shell around a plain-text body. The rows are declared top level and run
+ * no parent loader, which is why the server validates the language segment itself.
+ */
+export function docsMachineRouteModule(): string {
+	return `// Written by \`hexdocs install\`. Safe to edit; \`hexdocs verify-install\` reads it.
+//
+// llms.txt, llms-full.txt and every raw <slug>.md. A resource route: no default export,
+// or each of these addresses renders the site shell around plain text. These routes are
+// declared top level and run no parent loader, so the server validates the language
+// segment itself. Do not export \`headers\` here either.
+import type { LoaderFunctionArgs } from "react-router";
+
+import { DOCS } from "../lib/docs.server";
+
+export function loader({ request }: LoaderFunctionArgs) {
+	return DOCS.resource(new URL(request.url));
+}
+`;
+}
+
+/**
+ * The two directories `hexdocs prefetch` writes into, for the site's `.gitignore`.
+ *
+ * Built from the contract's constants, so the ignore list, the server module's glob and
+ * prefetch cannot name three different directories.
+ */
+export const GITIGNORE_ENTRIES = [`app/docs/${BUNDLE_TREE}/`, `public/${PUBLIC_TREE}/`] as const;
 
 /**
  * `<site>/scripts/check-docs.mjs`.
@@ -75,6 +210,13 @@ export const GITIGNORE_ENTRIES = ['app/docs/_bundles/', 'public/_docs/'] as cons
  * from `prebuild` because there is no CI on either repository, exactly as
  * `check-locales.mjs` says about itself, so a check that only runs when somebody types
  * it is not a guard.
+ *
+ * The `global console, process` block comment on the line after the shebang is not for a
+ * reader. kcalc's base eslint configuration declares node globals for `.ts`, `.tsx`,
+ * `.js` and `.jsx` only, so an `.mjs` script gets `no-undef` with no globals at all.
+ * Measured with kcalc's own eslint over this file: seventeen `'console' is not defined`
+ * and `'process' is not defined` errors without the line, exit 0 with it, and every script
+ * already in that directory opens the same way.
  *
  * The exit codes translate one convention into another and the choice is deliberate.
  * hex-web's own guards use 1 for "problems found" and 2 for "could not read what it was
@@ -85,10 +227,15 @@ export const GITIGNORE_ENTRIES = ['app/docs/_bundles/', 'public/_docs/'] as cons
  * none. A spawn that failed or output that did not parse exits 1, which is the "no
  * verdict" case and is the one thing that must stay distinguishable from a run that
  * reached a verdict and found problems. Every non-zero code fails `prebuild` either way.
+ *
+ * A launcher that is not on disk gets its own sentence, because it has one cause in
+ * practice: a clone that never initialised the submodule. The spawn error for that case
+ * is `ENOENT` and a path, which names neither the submodule nor the command that fixes it.
  */
 export function checkDocsShim(site: SiteDescriptor): string {
 	const launcher = `${site.mountFromSite}/kit/bin/hexdocs`;
 	return `#!/usr/bin/env node
+/* global console, process */
 /**
  * The docs wiring guard. Written by \`hexdocs install\`.
  *
@@ -110,6 +257,7 @@ export function checkDocsShim(site: SiteDescriptor): string {
  */
 
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -117,6 +265,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const FRONT = resolve(HERE, "..");
 const REPO = resolve(FRONT, ${JSON.stringify(site.repoFromSite)});
 const LAUNCHER = resolve(FRONT, ${JSON.stringify(launcher)});
+const MOUNT = ${JSON.stringify(site.mount)};
 const SITE = ${JSON.stringify(site.site)};
 
 const LABELS = {
@@ -134,6 +283,15 @@ function noVerdict(reason, detail) {
 			"nothing was checked, so nothing was cleared.",
 	);
 	process.exit(1);
+}
+
+if (!existsSync(LAUNCHER)) {
+	noVerdict(
+		\`could not run \${LAUNCHER}, because it is not there\`,
+		"The launcher lives inside the docs submodule, so this almost always means the\\n" +
+			"submodule is not checked out. From the repository root, run:\\n\\n" +
+			\`  git submodule update --init \${MOUNT}\\n\`,
+	);
 }
 
 let stdout = "";
@@ -216,32 +374,40 @@ process.exit(typeof report.exitCode === "number" ? report.exitCode : 3);
 }
 
 /**
- * The `.mcp.json` entry, as an object so the file is edited by parse and re-serialise.
+ * The `.mcp.json` entry.
  *
- * Safe here and nowhere else in the install table: `.mcp.json` is strict JSON with no
- * comments in both consumers, so a round trip loses nothing as long as the indent is
- * preserved, and both files are tab indented. `tsconfig.json` is the counter-example and
- * is why every other JSON edit in this package is an insertion into the original bytes.
+ * `APPLY.mcpJson` inserts it into the original bytes rather than parsing and
+ * re-serialising the file, because a round trip through `JSON.stringify` puts every array
+ * element of every other server on its own line. This object is the command the predicate
+ * compares and the text the insertion is built from, so the two cannot name different
+ * launchers.
  */
 export function mcpServerEntry(site: SiteDescriptor): { command: string; args: string[] } {
 	return { command: `./${site.mount}/kit/start.sh`, args: [] };
 }
 
 /**
- * The settings a person has to apply, printed and never written.
+ * The editor settings a person may want, printed by `install` and checked by nothing.
  *
- * It could not be established whether Claude Code merges `enabledMcpjsonServers` across
- * `.claude/settings.json` and `.claude/settings.local.json` or lets the local file
- * override the project one wholesale. If it overrides, an installer writing a
- * `settings.json` naming only this server would silently disable every other MCP server
- * the repository has, and hex-web has three. So the edit is printed, the row fails until
- * somebody applies it, and this comment is the reason rather than an omission.
+ * Not a check, and the reason is where it runs. `verify-install` is the build gate: the
+ * generated shim runs it from `prebuild` on the deploy host. Whether one developer's editor
+ * enables an MCP server has nothing to do with whether the site builds, and kcalc keeps its
+ * enable only in a globally ignored local settings file, so a row demanding it failed every
+ * clone but one and would have failed every deploy. `doctor` has no checks of its own by
+ * contract, so there was nowhere else for the row to go, and it was deleted rather than
+ * moved.
+ *
+ * Printed rather than written, because it could not be established whether Claude Code
+ * merges `enabledMcpjsonServers` across `.claude/settings.json` and
+ * `.claude/settings.local.json` or lets the local file replace the project one. If it
+ * replaces, an installer writing a `settings.json` naming only this server would silently
+ * disable every other MCP server the repository has, and hex-web has three.
  */
 export function settingsInstruction(site: SiteDescriptor): string {
 	const skills = `${site.mount}/.claude/skills`;
 	return [
-		'Add to .claude/settings.json (create it if it does not exist), or to your own',
-		'.claude/settings.local.json:',
+		'Optional, and not checked: to use the docs MCP server and skills from an editor in this',
+		'repository, add to .claude/settings.json or to your own .claude/settings.local.json:',
 		'',
 		'  {',
 		'    "enabledMcpjsonServers": ["hexdocs"],',

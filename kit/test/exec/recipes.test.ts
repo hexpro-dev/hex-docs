@@ -56,6 +56,7 @@ const READ_IDS = [
 	'git.log-walk',
 	'git.ls-files-stage',
 	'git.merge-base-is-ancestor',
+	'react-router.routes',
 ].sort();
 
 const WRITE_IDS = ['aws.put-object', 'aws.put-object-gzip'].sort();
@@ -80,6 +81,7 @@ const ARGV: Readonly<Record<string, readonly string[]>> = {
 	'git.ls-files-stage': ['ls-files', '-s', '--', '<hole>'],
 	'git.merge-base-is-ancestor': ['merge-base', '--is-ancestor', '<hole>', '<hole>'],
 	'gh.api': ['api', '<hole>'],
+	'react-router.routes': ['routes', '--json'],
 	'aws.head-object': [
 		's3api',
 		'head-object',
@@ -212,9 +214,12 @@ describe('the recipe tables', () => {
 		expect(actual).toEqual(expected);
 	});
 
-	test('the binaries are exactly git, aws and gh, in both directions', () => {
+	test('the binaries are exactly these, in both directions', () => {
+		// Three on PATH and one by path. The fourth is relative on purpose: it is resolved
+		// against the cwd the caller passes, which is the consuming site, so what runs is that
+		// site's own React Router and not whatever this machine has installed globally.
 		const bins = [...new Set(allIds.map((id) => recipeOf(id).bin))].sort();
-		expect(bins).toEqual(['aws', 'gh', 'git']);
+		expect(bins).toEqual(['./node_modules/.bin/react-router', 'aws', 'gh', 'git']);
 	});
 
 	test('a hole is a symbol, so no argument value can be mistaken for one', () => {
@@ -332,6 +337,16 @@ describe('no recipe can mutate a repository', () => {
 		expect([...writeOps].sort()).toEqual(['put-object']);
 	});
 
+	test('the only react-router recipe prints the route table and takes nothing from the caller', () => {
+		// `routes --json` loads the site's route config and prints it. `build`, `dev` and
+		// `typegen` are the subcommands that write, and none of them is representable here
+		// because the argv has no hole a subcommand could arrive through.
+		const ids = allIds.filter((id) => recipeOf(id).bin === './node_modules/.bin/react-router');
+		expect(ids).toEqual(['react-router.routes']);
+		expect(recipeOf('react-router.routes').argv).toEqual(['routes', '--json']);
+		expect(holeCount('react-router.routes')).toBe(0);
+	});
+
 	test('the only gh recipe is a plain api read', () => {
 		const gh = allIds.filter((id) => recipeOf(id).bin === 'gh');
 		expect(gh).toEqual(['gh.api']);
@@ -386,12 +401,18 @@ describe('hole counts', () => {
 		expect(actual).toEqual(EXPECTED);
 	});
 
-	test('the four zero-hole recipes are exactly the ones with nothing to fill', () => {
+	test('the five zero-hole recipes are exactly the ones with nothing to fill', () => {
 		// Named because they are the shape this file cannot drive with a correct arity: a
 		// correct call to one of them reaches `spawnSync`. Their too-many arm is exercised
 		// below; their too-few arm does not exist.
 		const zero = allIds.filter((id) => holeCount(id) === 0);
-		expect(zero).toEqual(['git.head', 'git.head-date', 'git.is-shallow', 'git.log-walk']);
+		expect(zero).toEqual([
+			'git.head',
+			'git.head-date',
+			'git.is-shallow',
+			'git.log-walk',
+			'react-router.routes',
+		]);
 	});
 });
 
