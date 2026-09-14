@@ -24,7 +24,7 @@ import { READ_RECIPES, type ReadRecipeId, type Recipe } from '../exec/recipes.js
 import { NO_EXEC, runRecipe, type Exec } from '../exec/run.js';
 import { jsonSchemaOf } from '../registry/params.js';
 import { TOOLS, BY_TOOL } from '../registry/index.js';
-import { invoke, type AnyCommand, type Ctx } from '../registry/command.js';
+import { invoke, type Ctx, type ToolCommand } from '../registry/command.js';
 
 import { confinementRefusal } from './confine.js';
 import { serve, type ServerInfo, type Streams, type ToolDescriptor } from './protocol.js';
@@ -49,8 +49,8 @@ export const OPEN_WORLD: Readonly<Record<Recipe['bin'], boolean>> = {
 };
 
 /** A tool's recipes, which is what its annotations and its gate are both derived from. */
-function runsOf(command: AnyCommand): readonly ReadRecipeId[] {
-	return command.tool === null ? [] : command.runs;
+function runsOf(command: ToolCommand): readonly ReadRecipeId[] {
+	return command.runs;
 }
 
 /**
@@ -68,7 +68,7 @@ function runsOf(command: AnyCommand): readonly ReadRecipeId[] {
  */
 export function toolDescriptors(): ToolDescriptor[] {
 	return TOOLS.map((command) => ({
-		name: command.tool as string,
+		name: command.tool,
 		title: command.summary,
 		description: `${command.summary}\n\n${command.detail}`,
 		inputSchema: jsonSchemaOf(command.params),

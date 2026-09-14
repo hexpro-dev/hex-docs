@@ -220,6 +220,9 @@ export type AnyCommand =
 	| (AnyCommandBase & ToolDeclaration)
 	| (AnyCommandBase & { readonly tool: null; readonly writes: Writes });
 
+/** The half of that union the MCP server can dispatch to. */
+export type ToolCommand = Extract<AnyCommand, { readonly tool: string }>;
+
 /**
  * The one cast in the package, and why it is a cast rather than a solved problem.
  *

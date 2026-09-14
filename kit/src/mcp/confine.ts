@@ -32,7 +32,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import type { Finding } from '../../../src/contracts/diagnostics.js';
 import { checkFindings } from '../compile/lint/checks.js';
 import { raw } from '../compile/types.js';
-import type { AnyCommand } from '../registry/command.js';
+import type { AnyCommand, ToolCommand } from '../registry/command.js';
 
 /**
  * A path with every symbolic link resolved, as far as the path exists.
@@ -41,15 +41,16 @@ import type { AnyCommand } from '../registry/command.js';
  * link. Without this a root naming a directory that is not there would be compared as
  * written while its existing parent was compared resolved, and `/var` against
  * `/private/var` on macOS would put every temporary directory outside itself.
+ *
+ * The walk stops at the filesystem root as well as at a path that exists, so a volume that
+ * is not mounted cannot loop it. `realpathSync` then throws on that root, which the tool
+ * call reports as an error, and nothing has run.
  */
 function realpathOf(path: string): string {
 	let existing = path;
 	const rest: string[] = [];
-	while (!existsSync(existing)) {
-		const parent = dirname(existing);
-		if (parent === existing) return path;
+	for (; !existsSync(existing) && dirname(existing) !== existing; existing = dirname(existing)) {
 		rest.unshift(basename(existing));
-		existing = parent;
 	}
 	return join(realpathSync(existing), ...rest);
 }
@@ -122,7 +123,7 @@ export class ToolRefusal extends Error {
 
 /** The refusal for a call whose paths leave the project, or `null` when they do not. */
 export function confinementRefusal(
-	command: AnyCommand,
+	command: ToolCommand,
 	args: Readonly<Record<string, unknown>>,
 	projectRoot: string,
 	kitVersion: string,
@@ -138,5 +139,5 @@ export function confinementRefusal(
 		],
 		kitVersion,
 	);
-	return new ToolRefusal(command.tool ?? command.name, findings);
+	return new ToolRefusal(command.tool, findings);
 }

@@ -16,7 +16,7 @@
  * `registry.test.ts` rather than restated.
  */
 
-import type { AnyCommand } from './command.js';
+import type { AnyCommand, ToolCommand } from './command.js';
 
 import { bundle } from '../commands/bundle.js';
 import { build } from '../commands/build.js';
@@ -65,9 +65,17 @@ export const BY_NAME: ReadonlyMap<string, AnyCommand> = new Map(
 	COMMANDS.map((command) => [command.name, command]),
 );
 
-/** The MCP surface, derived. There is no second list. */
-export const TOOLS: readonly AnyCommand[] = COMMANDS.filter((command) => command.tool !== null);
+/**
+ * The MCP surface, derived. There is no second list.
+ *
+ * Typed as the tool half of the union rather than as `AnyCommand`, so the server reads a
+ * tool's name and its declared recipes without a branch for a `null` tool that this filter
+ * has already removed.
+ */
+export const TOOLS: readonly ToolCommand[] = COMMANDS.filter(
+	(command): command is ToolCommand => command.tool !== null,
+);
 
-export const BY_TOOL: ReadonlyMap<string, AnyCommand> = new Map(
-	TOOLS.map((command) => [command.tool as string, command]),
+export const BY_TOOL: ReadonlyMap<string, ToolCommand> = new Map(
+	TOOLS.map((command) => [command.tool, command]),
 );
