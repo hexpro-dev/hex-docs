@@ -25,11 +25,15 @@ export const passedUnchanged: DocsLinkComponent = reactRouterLink;
 
 /**
  * The types Vite 7.3.1's `import.meta.glob` gives the three globs in a consumer's
- * `app/lib/docs.server.ts`, transcribed from its `types/importGlob.d.ts` because Vite is
- * not a dependency here. With no type argument the `As` parameter infers as `string`, so a
- * lazy glob resolves to `unknown` whatever its `query` says, and an eager one is a record of
- * `unknown`. The server has to accept exactly these, or the template is a type error in
- * every site that installs it.
+ * `app/lib/docs.server.ts` when they carry no type argument, transcribed from its
+ * `types/importGlob.d.ts` because Vite is not a dependency here. With no type argument the
+ * `As` parameter infers as `string`, so a lazy glob resolves to `unknown` whatever its
+ * `query` says, and an eager one is a record of `unknown`.
+ *
+ * The module `install` writes passes `<string>` to the text glob, which narrows it, so these
+ * are not the types that module produces. They are the widest a consumer can produce by
+ * editing that file, whose first line says it is safe to edit, and the server has to accept
+ * them or that edit is a type error in the site's own server module.
  */
 declare const eagerGlob: Record<string, unknown>;
 declare const lazyGlob: Record<string, () => Promise<unknown>>;

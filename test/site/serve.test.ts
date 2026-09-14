@@ -10,21 +10,25 @@
 
 import { beforeAll, describe, expect, test } from 'vitest';
 
+import { TRANSLATION_STATES, type TranslationState } from '../../src/contracts/frontmatter.js';
 import { LOCALES, type Locale } from '../../src/contracts/locales.js';
 import {
 	RAW_ASSET_LINK,
 	RAW_PAGE_LINK,
 	type BundleManifest,
+	type PageLocaleRecord,
 	type PageRecord,
 } from '../../src/contracts/manifest.js';
+import type { CompiledPage } from '../../src/contracts/page.js';
 import type { DocsSiteConfig } from '../../src/contracts/site.js';
-import { indexableLanguages } from '../../src/site/route.js';
+import { docsRoute, indexableLanguages } from '../../src/site/route.js';
 import { docsServer, type DocsSources } from '../../src/site/serve.js';
 import {
 	fixtureBundle,
 	fixtureSite,
 	fixtureSources,
 	globKey,
+	languageSweep,
 	type FixtureBundle,
 } from '../support/bundle.js';
 
@@ -479,6 +483,39 @@ describe('resource()', () => {
 		expect(english).toContain(bundle.manifest.pages['reference/api']?.locales.en?.title);
 	});
 
+	test('serves a page in its own language when only a snippet it includes is scaffolded', async () => {
+		// `servedLocale` reads the page's own state, and here the effective state gives the
+		// opposite answer. Every other reader in this module reads the effective state, so a
+		// change "to match" would move the served language and `Content-Language` of a real
+		// translation, and the corpus could not show it: its only records whose two states
+		// differ are `current` against `stale`, where both readings pick the requested locale.
+		// Only `effective` moves, because `checkBundle` recounts coverage from `state` and a
+		// changed `state` is a 500 on every request.
+		const record = bundle.manifest.pages['index'] as PageRecord;
+		const ja = record.locales.ja as PageLocaleRecord;
+		expect(ja.state).toBe('current');
+		const manifest: BundleManifest = {
+			...bundle.manifest,
+			pages: {
+				...bundle.manifest.pages,
+				index: {
+					...record,
+					locales: { ...record.locales, ja: { ...ja, effective: 'scaffolded' } },
+				},
+			},
+		};
+		const server = docsServer(withManifest(manifest));
+
+		const raw = await server.resource(url('/ja/fixture-app/docs/index.md'));
+		expect([raw.status, raw.headers.get('Content-Language')]).toEqual([200, 'ja']);
+		expect(await raw.text()).toBe(servedAt('raw/ja/index.md', 'ja'));
+
+		// `index` is first in `llmsOrder`, so the full text opens with whichever file was served.
+		expect(manifest.llmsOrder[0]).toBe('index');
+		const full = await (await server.resource(url('/ja/fixture-app/docs/llms-full.txt'))).text();
+		expect(full.startsWith(servedAt('raw/ja/index.md', 'ja').replace(/\n+$/, ''))).toBe(true);
+	});
+
 	test('answers 404 for an address that is not a resource, and never throws', async () => {
 		const server = docsServer(sources);
 		for (const path of [
@@ -696,30 +733,19 @@ describe('the languages a page names agree with the pages that are indexable', (
 	test('for every page in every locale, a locale is named exactly when its page is served indexable', async () => {
 		// Swept, with no pair picked by hand, because a hand-picked pair is how the scaffolded
 		// Spanish chip matrix would have been named as an alternate while serving noindex.
-		const server = docsServer(sources);
-		let checked = 0;
-		let excluded = 0;
-		for (const slug of site.pages) {
-			for (const locale of LOCALES) {
-				const prefix = locale === 'en' ? '' : `/${locale}`;
-				const path = slug === 'index' ? '' : `/${slug.replace(/\/?index$/, '')}`;
-				const loaded = await server.page(url(`${prefix}/fixture-app/docs${path}`));
-				expect({ slug, locale, named: loaded.seo.languages.includes(locale) }).toEqual({
-					slug,
-					locale,
-					named: loaded.seo.indexable,
-				});
-				if (!loaded.seo.indexable) excluded += 1;
-				checked += 1;
-			}
+		const swept = await languageSweep(docsServer(sources), site);
+		for (const address of swept) {
+			expect(address).toEqual({ ...address, named: address.indexable });
 		}
 		// The pair the corpus built for this, named: Spanish exists and is scaffolded.
-		const chip = await server.page(url('/es/fixture-app/docs/reference/chip-support'));
-		expect([chip.seo.indexable, chip.seo.languages.includes('es')]).toEqual([false, false]);
-		expect(checked).toBe(site.pages.length * LOCALES.length);
+		expect(
+			swept.find((address) => address.slug === 'reference/chip-support' && address.locale === 'es'),
+		).toMatchObject({ indexable: false, named: false });
+		expect(swept.length).toBe(site.pages.length * LOCALES.length);
 		// Both answers occur, or the agreement above is between two constants.
+		const excluded = swept.filter((address) => !address.indexable).length;
 		expect(excluded).toBeGreaterThan(0);
-		expect(excluded).toBeLessThan(checked);
+		expect(excluded).toBeLessThan(swept.length);
 	});
 
 	test('names them in LOCALES order whatever order the record keys are in', () => {
@@ -731,19 +757,77 @@ describe('the languages a page names agree with the pages that are indexable', (
 		);
 	});
 
-	test('reads the effective state over the page own state', () => {
-		// A page current in Japanese that includes a scaffolded snippet is served noindex, and
-		// only `effective` says so without loading the payload.
-		const record = bundle.manifest.pages['index'] as PageRecord;
-		const ja = record.locales.ja as NonNullable<PageRecord['locales']['ja']>;
-		const snippetScaffolded = {
-			...record,
-			locales: {
-				...record.locales,
-				ja: { ...ja, state: 'current' as const, effective: 'scaffolded' as const },
-			},
+	test('agree for every own and effective state the compiler can write, through the route', async () => {
+		// Every pair, over one record, rather than the pairs a corpus happens to hold. The sweep
+		// above cannot tell a reader of `effective` from a reader of `state` on this corpus, and
+		// neither can the perturbed sweep in `divergence.test.ts` tell apart a reader that
+		// honours `effective` only when `state` is `current`: that one names a stale page that
+		// includes a scaffolded snippet as an alternate while the page is served `noindex`.
+		//
+		// Worst last, as the compiler reduces them. It writes `effective` only when it is worse
+		// than the page's own state, because it is the worst of the page and what it includes,
+		// so a better one is not a pair any bundle carries. `source` is the source locale's own
+		// state and never a translation's.
+		const WORST_LAST = ['source', 'current', 'stale', 'scaffolded', 'missing'] as const;
+		expect([...WORST_LAST].sort()).toEqual([...TRANSLATION_STATES].sort());
+
+		const slug = 'index';
+		const record = bundle.manifest.pages[slug] as PageRecord;
+		const { effective: _corpus, ...ja } = record.locales.ja as PageLocaleRecord;
+		const payload = (locale: Locale, state: TranslationState): CompiledPage => {
+			const page = JSON.parse(bundle.objects.get(`pages/${locale}/${slug}.json`) as string);
+			return { ...page, translation: { ...page.translation, state } } as CompiledPage;
 		};
-		expect(indexableLanguages(snippetScaffolded)).not.toContain('ja');
-		expect(indexableLanguages(record)).toContain('ja');
+
+		const answers = new Set<boolean>();
+		let pairs = 0;
+		for (const [at, own] of WORST_LAST.entries()) {
+			if (own === 'source') continue;
+			for (const effective of [undefined, ...WORST_LAST.slice(at + 1)]) {
+				const entry: PageLocaleRecord = {
+					...ja,
+					state: own,
+					...(effective === undefined ? {} : { effective }),
+				};
+				const manifest: BundleManifest = {
+					...bundle.manifest,
+					pages: {
+						...bundle.manifest.pages,
+						[slug]: { ...record, locales: { ...record.locales, ja: entry } },
+					},
+				};
+				// The payload a bundle carries for whichever locale is served, whose state is that
+				// locale's effective state, which is what the compiler writes into it.
+				const result = await docsRoute({
+					manifest,
+					site,
+					locale: 'ja',
+					slug,
+					bundleBase: '/_docs/fixture-app/1.1.0',
+					load: async (served) => {
+						const stored = manifest.pages[slug]?.locales[served] as PageLocaleRecord;
+						return payload(served, stored.effective ?? stored.state);
+					},
+				});
+				if (!result.ok) throw new Error(`docsRoute refused ${own}/${effective}: ${result.reason}`);
+				expect({
+					own,
+					effective,
+					named: result.seo.languages.includes('ja'),
+					served: result.data.page.locale,
+				}).toEqual({
+					own,
+					effective,
+					named: result.seo.indexable,
+					served: own === 'scaffolded' ? 'en' : 'ja',
+				});
+				answers.add(result.seo.indexable);
+				pairs += 1;
+			}
+		}
+		// `current`, `stale`, `scaffolded` and `missing`, each with no effective state and with
+		// every worse one.
+		expect(pairs).toBe(4 + 3 + 2 + 1);
+		expect([...answers].sort()).toEqual([false, true]);
 	});
 });

@@ -40,7 +40,7 @@ import {
 import type { DocsSeo, DocsSiteConfig, VersionEntry } from '../contracts/site.js';
 import { isSectionRoot, requireSlug, slugToPath } from '../contracts/slug.js';
 import { docsHref, docsRawHref, type DocsSitemapRow } from './address.js';
-import { docsRoute, indexableLanguages, type DocsPageData } from './route.js';
+import { docsRoute, indexableLanguages, servedLocale, type DocsPageData } from './route.js';
 
 export interface DocsSources {
 	configs: readonly DocsSiteConfig[];
@@ -52,10 +52,13 @@ export interface DocsSources {
 	 * Lazy glob of `../docs/_bundles/*\/*\/raw/**\/*.md` and `../docs/_bundles/*\/*\/llms/*.txt`,
 	 * `query: '?raw'`, `import: 'default'`.
 	 *
-	 * Typed as resolving to `unknown`, not `string`, because that is what Vite 7's
-	 * `import.meta.glob` infers for a `query` glob with no type argument, and a narrower type
-	 * here is a TS2322 in every consumer's server module. Each value is checked when it is
-	 * read instead.
+	 * Typed as resolving to `unknown`, not `string`. The module `install` writes passes
+	 * `import.meta.glob<string>`, which Vite 7 types as resolving to `string`, but that type
+	 * argument is an assertion Vite never checks, and the module is the consumer's to edit.
+	 * The same glob written without it resolves to `unknown`, which a `string` here would
+	 * refuse with TS2322. So the field takes the widest glob a consumer may write, and each
+	 * value is checked when it is read, which is also what refuses a glob written without
+	 * `import: 'default'`.
 	 */
 	text: Record<string, () => Promise<unknown>>;
 }
@@ -367,21 +370,6 @@ function locate<E>(url: URL, table: Map<string, E>): Located<E> {
 }
 
 /**
- * The locale a page's raw markdown is served in.
- *
- * The requested locale when the page has a record there whose own state is not
- * `scaffolded`, and the source locale otherwise. A scaffolded file is English under a
- * translation's name, so serving it would label English text `Content-Language: es`; the
- * source file carries the same words and the right header. A page current in its own
- * right that transcludes a scaffolded snippet is still served in the requested language,
- * because the file is that language and `Content-Language` describes the file.
- */
-function rawLocale(record: PageRecord, requested: Locale, source: Locale): Locale {
-	const entry = record.locales[requested];
-	return entry !== undefined && entry.state !== 'scaffolded' ? requested : source;
-}
-
-/**
  * The raw link destinations the compiler wrote, made into addresses.
  *
  * `RAW_PAGE_LINK` becomes `<locale prefix><basePath>/`, so a link in a Japanese body goes
@@ -545,7 +533,7 @@ export function docsServer(sources: DocsSources): DocsServer {
 			if (entry.kind === 'raw') {
 				const record = manifest.pages[entry.slug];
 				if (record === undefined) return plain(404, 'Not Found');
-				const served = rawLocale(record, locale, source);
+				const served = servedLocale(record, locale, source);
 				const key = rawKey(served, entry.slug);
 				const text = await readText(bundle.files, key);
 				if (text === undefined) return missingObject(key);
@@ -554,12 +542,12 @@ export function docsServer(sources: DocsSources): DocsServer {
 
 			// `llms-full.txt` is not stored. It is the raw markdown of every page in
 			// `llmsOrder`, hidden pages included because a hidden page is published, each in
-			// the locale `rawLocale` picks, joined by one blank line. Every page opens with its
+			// the locale `servedLocale` picks, joined by one blank line. Every page opens with its
 			// own `# Title`, so the join needs no separator of its own.
 			const bodies: string[] = [];
 			const languages = new Set<Locale>();
 			for (const slug of manifest.llmsOrder) {
-				const served = rawLocale(manifest.pages[slug] as PageRecord, locale, source);
+				const served = servedLocale(manifest.pages[slug] as PageRecord, locale, source);
 				const key = rawKey(served, slug);
 				const text = await readText(bundle.files, key);
 				if (text === undefined) return missingObject(key);

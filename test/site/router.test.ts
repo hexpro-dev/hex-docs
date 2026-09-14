@@ -12,9 +12,10 @@
  * will in hex-web, and a docs row that swallowed either would show here.
  */
 
+import { matchRoutes } from 'react-router';
 import { beforeAll, describe, expect, test } from 'vitest';
 
-import { docsRouteRows, type DocsRouteRow } from '../../src/site/address.js';
+import { DOCS_MACHINE_MODULE, docsRouteRows, type DocsRouteRow } from '../../src/site/address.js';
 import { DOCS_HANDLE } from '../../src/site/seo.js';
 import { docsServer, type DocsServer } from '../../src/site/serve.js';
 import {
@@ -279,6 +280,71 @@ describe('the URL table', () => {
 
 	test.each(table)('%s', async (url, expected) => {
 		expect(summary(await run(url))).toEqual(expected);
+	});
+
+	test('every address reaches the same route with the docs rows declared in the opposite order', () => {
+		const reversed = [...ROWS].reverse();
+		for (const [address, expected] of table) {
+			expect({ address, route: leafOf(reversed, address) }).toEqual({
+				address,
+				route: expected.route,
+			});
+		}
+	});
+});
+
+/** The leaf route id a URL reaches through hex-web's table over these rows, or null. */
+function leafOf(rows: readonly DocsRouteRow[], address: string): string | null {
+	const pathname = new URL(address, 'http://docs.test').pathname;
+	const matches = matchRoutes(dataRoutes(hexWebRoutes(rows), {}), pathname);
+	return (matches?.at(-1)?.route.id as string | undefined) ?? null;
+}
+
+describe('the declaration order of the rows', () => {
+	test('decides nothing where a :lang row and a static row both match one URL', () => {
+		// A mount at `/docs` with a page at `docs/index`. `/docs/docs` is that page's own
+		// address and also the docs home under the `:lang` parent with `lang` set to `docs`,
+		// and the raw rows overlap the same way. Neither consumer mounts there today, and a
+		// mount named after the thing it holds is the obvious one to reach for.
+		const site = { ...fixtureSite(bundle, '/docs'), pages: ['index', 'docs/index'] };
+		const rows = docsRouteRows([site]);
+		// [address, the static row's path, the route it reaches, the route the `:lang` row reaches]
+		const cases: [string, string, string, string][] = [
+			['/docs/docs', '/docs/docs', 'en/docs/docs', 'lang/docs'],
+			[
+				'/docs/docs/index.md',
+				'/docs/docs/index.md',
+				'docs:/docs/docs/index.md',
+				'docs:/:lang/docs/index.md',
+			],
+		];
+		for (const [address, path, route, shadowed] of cases) {
+			expect(leafOf(rows, address)).toBe(route);
+			expect(leafOf([...rows].reverse(), address)).toBe(route);
+			// The `:lang` row matches on its own, so the two answers above are an overlap the
+			// score settled rather than two rows that never met.
+			expect(
+				leafOf(
+					rows.filter((row) => row.path !== path),
+					address,
+				),
+			).toBe(shadowed);
+		}
+	});
+
+	test('can be seen to matter, so the comparison above is not between two constants', () => {
+		// Two rows that tie on score and match the same URL. React Router takes the first one
+		// declared, which is the property `docsRouteRows` never relies on.
+		const planted: DocsRouteRow = {
+			path: '/:other/hex-nfc/docs/llms.txt',
+			file: DOCS_MACHINE_MODULE,
+			kind: 'machine',
+			id: 'docs:planted',
+		};
+		const rows = [...ROWS, planted];
+		const address = '/ja/hex-nfc/docs/llms.txt';
+		expect(leafOf(rows, address)).toBe('docs:/:lang/hex-nfc/docs/llms.txt');
+		expect(leafOf([...rows].reverse(), address)).toBe('docs:planted');
 	});
 });
 
