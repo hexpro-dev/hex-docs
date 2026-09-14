@@ -1586,8 +1586,8 @@ does not.
 ## The hex-web integration (step 8)
 
 Step 8 is the first time this package met a real consumer, and the package had to change
-before hex-web could mount it. What follows is the hex-docs half. The consumer half is
-recorded at the end of the section once it lands.
+before hex-web could mount it. What follows is mostly the hex-docs half; what the consumer
+half measured is its own subsection near the end.
 
 ### Step 5 was green against strings and could not build a real site
 
@@ -1830,6 +1830,36 @@ that passed when both docs pages answered 500, and comments claiming more than t
 One finding was pre-existing and outside this step: a request with thousands of path segments
 blocks the server's event loop, through React Router's lazy route discovery on every document
 render.
+
+### What mounting it in hex-web measured
+
+hex-web's branch `docs/hex-nfc` holds the mount, unmerged, because the only published hex-nfc
+bundle is still the init scaffold and `prefetch` now refuses to build it. Everything below was
+measured against that branch's production build served by `react-router-serve`, with the real
+bundle and, separately, with the fixture corpus mounted as an uncommitted second project.
+
+- **A cold prefetch through the real prebuild string** made five AWS calls, extracted five files and
+  stopped on `prefetch-skew` until `sync` ran, exactly as documented. A later build with no AWS
+  profile in the environment made zero calls.
+- **Byte reproducibility across platforms, for the first time.** hex-nfc 8492565 compiled on macOS
+  with its pinned toolchain matched the bundle the Linux runner published, all five objects and
+  their gzip members byte for byte.
+- **Client cost.** A non-docs page's JavaScript grew by 449 bytes gzipped, the SEO reader in root.
+  The docs stylesheet is its own chunk, linked only on docs routes.
+- **Routing and SEO.** The docs home carries a slashless canonical and names only `en` and
+  `x-default`; `/ja/…` is `noindex` with no canonical; a stale translation stays indexable with its
+  banner; a scaffolded one is the English page, `noindex`; the sitemap lists each page only in the
+  languages it is indexable in; redirects and the language rules on machine text answer in one hop
+  with the query kept; `csp:check` holds on the docs pages; `locales:check` needed no key.
+- **In headless Chrome** (the extension was not connected, and `check-paint.mjs` already drives
+  Chrome over the DevTools Protocol with no dependency): no console error or hydration warning on any
+  page; `/` opens search and typing a `/` inside it stays literal; Enter navigates client-side to a
+  hashed result and lands on the heading; Escape returns focus to the trigger; CJK search returns
+  results; Arabic mirrors; nothing overflows at 390px; with JavaScript off the page renders and the
+  search control is disabled rather than dead. The layout defects the first screenshots showed are
+  the two stylesheet subsections above.
+- **Prune on a real site.** Removing a docs config removed that project's extracted trees on the next
+  build and nothing else.
 
 ### What step 8 deliberately does not do
 
