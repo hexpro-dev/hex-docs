@@ -130,7 +130,7 @@ Chinese, Arabic and Japanese documentation, permanently, with nothing able to re
 because there would be no state between "missing" and "done".
 
 Two independent things then make the compiler grade the file `scaffolded`, and either
-alone is enough: the flag, and a body that is not byte-identical to the source. Remove the
+alone is enough: the flag, and a body that is byte-identical to the source. Remove the
 flag when you have actually translated the file, and not before.
 
 While translating:
@@ -156,8 +156,16 @@ hexdocs check --locale ja
 hexdocs page guide/writing-a-tag --locale ja
 ```
 
-Read the rendered page, not only the report. What the checks cannot tell you is whether
+Read the page itself, not only the report. What the checks cannot tell you is whether
 the Japanese reads like documentation or like translated English, whether the Arabic
 reading order is right, and whether a table makes sense to somebody using a screen reader.
 Those are the three things marked as a person's job, and saying so is more useful than a
 green report that implies otherwise.
+
+`hexdocs page` returns the markdown the bundle stores, which is not the file on disk. The
+includes are expanded, and every link and image destination has been rewritten to a token
+the site replaces with a real address when it serves the file: a page link reads
+`hexdocs:page/<slug>.md` and an image reads `hexdocs:asset/<sha256>.<ext>`. Never copy one
+of those into a source file. In source, a link is relative to the file it is written in
+and an image is a relative path to `docs/site/assets/`, and `link-resolves` refuses the
+token as an error.

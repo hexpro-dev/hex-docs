@@ -30,6 +30,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import { materialiseCorpus } from '../../../fixtures/index.js';
 import type { Locale } from '../../../src/contracts/locales.js';
+import { RAW_ASSET_LINK, RAW_PAGE_LINK } from '../../../src/contracts/manifest.js';
 import { buildBundle } from '../../src/compile/build.js';
 import { writeBundle } from '../../src/compile/bundle.js';
 import { nearestSlugs, page, windowOf, type PageResult } from '../../src/commands/page.js';
@@ -245,6 +246,30 @@ describe('paging a non-Latin page', () => {
 			expect(fromSource.text, `${slug}/${locale}`).toBe(fromBundle.text);
 			expect(fromSource.total).toBe(fromBundle.total);
 		}
+	});
+});
+
+describe('the destinations in the markdown format', () => {
+	test('are the tokens a site resolves, and the text an agent reads first says so', async () => {
+		// The bundle stores every link and image as a token that a site replaces with an
+		// address when it serves the file. This command has no site, so it returns the tokens,
+		// from a source tree and from a bundle alike. Its description called the output "the
+		// document a reader gets", and an agent that copied a destination out of it into a
+		// source file wrote a link `link-resolves` refuses. So the output and the description
+		// are asserted together: if the command ever resolves the tokens, the first half fails
+		// and the description has to change with it, and if the description drops the scheme,
+		// the second half fails.
+		const slug = 'guide/first-tag';
+		const fromSource = await readSource({ slug, locale: 'ja', limit: 1_000_000 });
+		const fromBundle = await read({ slug, locale: 'ja', limit: 1_000_000 });
+		for (const text of [fromSource.text, fromBundle.text]) {
+			expect(text).toContain(`](${RAW_PAGE_LINK}`);
+			expect(text).toContain(`](${RAW_ASSET_LINK}`);
+		}
+
+		expect(page.detail).toContain(`${RAW_PAGE_LINK}<slug>.md`);
+		expect(page.detail).toContain(`${RAW_ASSET_LINK}<sha256>.<ext>`);
+		expect(page.detail).not.toContain('the document a reader gets');
 	});
 });
 

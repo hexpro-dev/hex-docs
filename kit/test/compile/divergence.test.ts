@@ -23,10 +23,18 @@ import { gunzipSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import { materialiseCorpus } from '../../../fixtures/index.js';
-import { SOURCE_LOCALE, type Locale } from '../../../src/contracts/locales.js';
+import { LOCALES, SOURCE_LOCALE, type Locale } from '../../../src/contracts/locales.js';
 import { pageKey, rawKey, searchKey } from '../../../src/contracts/manifest.js';
+import type { SearchIndex } from '../../../src/contracts/search.js';
+import { searchIndex } from '../../../src/search/query.js';
 import { compiledPageSchema } from '../../src/contracts/bundle.schema.js';
 import { buildBundle, type BuildResult } from '../../src/compile/build.js';
+import { scaffold } from '../../src/commands/scaffold.js';
+import { NO_EXEC } from '../../src/exec/run.js';
+import { invoke } from '../../src/registry/command.js';
+import { TODO_TRANSLATE_PAGE } from '../../src/templates/page.js';
+
+import { rawDestinations, unservedInternalLinks } from './destinations.js';
 
 const GENERATOR = '@hex-pro/docs-kit@0.1.0';
 
@@ -121,6 +129,92 @@ describe('a page with no source-locale file', () => {
 		// because it cannot see inside a gzipped object.
 		for (const doc of docs) expect(Object.keys(result.manifest.pages)).toContain(doc.slug);
 	});
+
+	test('is not a link target, so a link and a nav entry naming it are reported', () => {
+		// The link resolver was handed every published slug, and the page records are that
+		// set minus the slugs with no source-locale file. So a link to this page resolved with
+		// no finding, the raw markdown carried `hexdocs:page/secours.md`, the payload carried
+		// an internal link, and a site, which builds its route rows from `manifest.pages`,
+		// answered both with a 404. The nav check had the same hole, and the entry was
+		// dropped from `manifest.nav` with nothing said. The only finding naming the page was
+		// `translation-missing`, a warning under the default parity, so a clean project
+		// published it.
+		const repo = corpus();
+		writeFileSync(
+			site(repo, 'content/fr/secours.md'),
+			'---\ntitle: Secours\ndescription: Une page qui n’existe qu’en français.\n---\n\n## Première étape\n\nAppuyez sur le bouton.\n',
+		);
+		const home = site(repo, 'content/en/index.md');
+		writeFileSync(home, `${readFileSync(home, 'utf8')}\nSee [the rescue page](secours.md) too.\n`);
+		const navFile = site(repo, 'nav.json');
+		const nav = JSON.parse(readFileSync(navFile, 'utf8')) as { items: unknown[] };
+		nav.items.push({ doc: 'secours' });
+		writeFileSync(navFile, JSON.stringify(nav, null, '\t'));
+		commit(repo, 'link and list a French-only page');
+
+		const result = build(repo);
+		const reported = result.lint.envelope.findings
+			.filter((finding) => finding.rule === 'link-resolves' && finding.message.includes('secours'))
+			.map((finding) => ({
+				file: finding.location.kind === 'file' ? finding.location.file : undefined,
+				severity: finding.severity,
+				// The page exists, in French. A message saying no page has the slug sends the
+				// author to check a path that is spelled correctly.
+				namesTheMissingFile: finding.message.includes('no en file'),
+			}))
+			.sort((a, b) => ((a.file ?? '') < (b.file ?? '') ? -1 : 1));
+		expect(reported).toEqual([
+			{ file: 'content/en/index.md', severity: 'error', namesTheMissingFile: true },
+			{ file: 'nav.json', severity: 'error', namesTheMissingFile: true },
+		]);
+
+		// And no object points a reader at it. The raw markdown keeps the link as it was
+		// typed, which is the spelling of a destination the compiler refused and carries the
+		// error above, rather than a token a site turns into an address it has no route for.
+		const raw = rawDestinations(result);
+		expect(raw.offending).toEqual([]);
+		expect(raw.unresolved).toEqual(['raw/en/index.md.gz: secours.md']);
+		expect(unservedInternalLinks(result).offending).toEqual([]);
+	});
+
+	test('an English page deleted with its translations left behind is reported at every link', () => {
+		// The way this state actually arises. Without the leftover translations the same
+		// deletion was already a `link-resolves` error at every inbound link; with them, the
+		// build added one warning, no error, and published a dangling link from every page
+		// in every language that linked the deleted one.
+		const repo = corpus();
+		rmSync(site(repo, 'content/en/guide/troubleshooting.md'));
+		commit(repo, 'delete the English troubleshooting page');
+
+		const result = build(repo);
+		expect(result.manifest.pages['guide/troubleshooting']).toBeUndefined();
+
+		const reported = result.lint.envelope.findings.filter(
+			(finding) =>
+				finding.rule === 'link-resolves' && finding.message.includes('guide/troubleshooting'),
+		);
+		const files = reported.map((finding) =>
+			finding.location.kind === 'file' ? finding.location.file : '',
+		);
+		expect(files).toContain('nav.json');
+		// Every language links the page, so every language has to report it: the resolver
+		// reads the source locale for a link written in any of them.
+		const locales = new Set(
+			files.filter((file) => file.startsWith('content/')).map((file) => file.split('/')[1]),
+		);
+		expect([...locales].sort()).toEqual([...LOCALES].sort());
+		for (const finding of reported) expect(finding.severity).toBe('error');
+
+		const raw = rawDestinations(result);
+		expect(raw.offending).toEqual([]);
+		expect(raw.seen.page).toBeGreaterThan(0);
+		// One refused destination per reported link: no page that links the deleted one
+		// links it in a snippet, and neither leftover translation links itself, so every
+		// destination left as typed in a published object is a finding above and the other
+		// way round.
+		expect(raw.unresolved).toHaveLength(files.filter((file) => file.startsWith('content/')).length);
+		expect(unservedInternalLinks(result).offending).toEqual([]);
+	});
 });
 
 describe('two asset files with identical bytes', () => {
@@ -187,6 +281,57 @@ describe('a link to a draft', () => {
 	});
 });
 
+describe('a page scaffolded into a locale by hexdocs scaffold', () => {
+	test('is indexed in that locale with the source page a reader is served, not the stub', async () => {
+		// The scaffolder writes the source's headings with a TODO under each, and
+		// `translated: false`. A reader has to be served the source page at that address,
+		// because a scaffolded file is not a translation, and the raw markdown already was.
+		// The index was built from the locale's own compiled page whenever the locale
+		// had a file, so the French index answered "TODO" with every section of the page and
+		// held none of the English prose a French reader actually lands on.
+		//
+		// The corpus cannot show it: its one scaffolded file is a byte copy of the English
+		// page, so the stub and the source index the same words. So the file here comes from
+		// the real command, and the test says what it wrote before relying on it.
+		const repo = corpus();
+		const out = await invoke(
+			scaffold,
+			{ kind: 'page', slug: 'guide/troubleshooting', locale: ['fr'], root: repo },
+			{
+				cwd: repo,
+				kitVersion: GENERATOR,
+				exec: NO_EXEC,
+				write: null,
+				now: () => new Date('2026-06-01T00:00:00Z'),
+				log: () => undefined,
+			},
+		);
+		const files = (out.data as unknown as { files: { path: string; contents: string }[] }).files;
+		expect(files.map((file) => file.path)).toEqual([
+			'docs/site/content/fr/guide/troubleshooting.md',
+		]);
+		const stub = (files[0] as { contents: string }).contents;
+		expect(stub).toContain(TODO_TRANSLATE_PAGE);
+		expect(stub).not.toContain('antenna');
+		writeFileSync(join(repo, 'docs/site/content/fr/guide/troubleshooting.md'), stub);
+		commit(repo, 'scaffold the French troubleshooting page');
+
+		const result = build(repo);
+		expect(result.manifest.pages['guide/troubleshooting']?.locales.fr?.state).toBe('scaffolded');
+
+		const index = objectJson(result, searchKey('fr')) as unknown as SearchIndex;
+		const onPage = (query: string) =>
+			searchIndex(index, query).filter((hit) => hit.doc.slug === 'guide/troubleshooting');
+		expect(onPage('TODO')).toEqual([]);
+		// A word only the English body has, so a hit on it is the source page's prose.
+		expect(onPage('antenna').length).toBeGreaterThan(0);
+		// And marked as text in the wrong language, which is what the result row's notice
+		// reads, the same state a page with no French file at all gets.
+		const docs = index.docs.filter((doc) => doc.slug === 'guide/troubleshooting');
+		expect(new Set(docs.map((doc) => doc.translated))).toEqual(new Set(['missing']));
+	});
+});
+
 describe('a scaffolded snippet', () => {
 	test('makes the page that includes it read scaffolded', () => {
 		// A snippet's state came from git dates alone, so it could never be `scaffolded`, so
@@ -227,6 +372,20 @@ describe('a scaffolded snippet', () => {
 		expect(result.manifest.pages['reference/chip-support']?.locales.en).not.toHaveProperty(
 			'effective',
 		);
+
+		// The search index chooses the page by its own state, as `rawLocale` does, and this is
+		// the one case where own and effective part. The page is a real Chinese translation
+		// and is served in Chinese, so its Chinese prose is what the index has to hold;
+		// choosing by the effective state would index the English page at a Chinese address.
+		// The effective state is still what marks the result, so every section reads missing.
+		const index = objectJson(result, searchKey('zh')) as unknown as SearchIndex;
+		expect(
+			searchIndex(index, '三家供应商的空白标签').some(
+				(hit) => hit.doc.slug === 'reference/chip-support',
+			),
+		).toBe(true);
+		const docs = index.docs.filter((doc) => doc.slug === 'reference/chip-support');
+		expect(new Set(docs.map((doc) => doc.translated))).toEqual(new Set(['missing']));
 	});
 
 	test('and the source locale is still the source', () => {

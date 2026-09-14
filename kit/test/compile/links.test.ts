@@ -63,6 +63,7 @@ const assetTargets = new Map(
 const targets: LinkTargets = {
 	slugs: new Set(project.pages.keys()),
 	redirects,
+	withheld: new Map(),
 	assets: assetTargets,
 };
 
@@ -261,7 +262,42 @@ describe('what a relative path is refused for', () => {
 		expect(message).toBe(
 			'"setup.md" resolves to the slug "guide/setup", which no page in this project has.',
 		);
-		expect(fix).toContain('hexdocs mv');
+		expect(fix).toContain('redirectFrom');
+		// There is no such command. The remediation named one, so an author following it
+		// got "there is no command called" from the CLI.
+		expect(fix).not.toContain('hexdocs mv');
+	});
+
+	test('a slug with a file and no page record says which of the two reasons applies', () => {
+		// Both pages exist in the tree, so "no page in this project has" is false of them and
+		// sends the author to check a correctly spelled path. The build withholds a slug
+		// with no source-locale file and a draft; `divergence.test.ts` drives the first
+		// through a real build, and this pins the two messages apart.
+		const withheld: LinkTargets = {
+			...targets,
+			slugs: new Set(
+				[...targets.slugs].filter(
+					(slug) => slug !== 'guide/troubleshooting' && slug !== 'notes/scratch',
+				),
+			),
+			withheld: new Map([
+				['guide/troubleshooting', 'no-source-file'],
+				['notes/scratch', 'draft'],
+			]),
+		};
+		const translationOnly = refused(
+			createLinkResolver(SECTION_INDEX, withheld)('troubleshooting.md', undefined),
+		);
+		expect(translationOnly.message).toBe(
+			'"troubleshooting.md" resolves to the slug "guide/troubleshooting", which has no en file, so the bundle carries no page for it.',
+		);
+		expect(translationOnly.fix).toContain('content/en/guide/troubleshooting.md');
+
+		const draft = refused(createLinkResolver(HOME, withheld)('notes/scratch.md', undefined));
+		expect(draft.message).toBe(
+			'"notes/scratch.md" resolves to the slug "notes/scratch", which is a draft, so the bundle carries no page for it.',
+		);
+		expect(draft.fix).toContain('draft: true');
 	});
 });
 

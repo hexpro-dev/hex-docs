@@ -263,6 +263,7 @@ describe('where a link in <slug>.md goes', () => {
 		const targets = {
 			slugs: new Set(['guide/first-tag', 'guide/troubleshooting', 'reference/chip-support']),
 			redirects: new Map([['guide/old-name', 'guide/first-tag']]),
+			withheld: new Map(),
 			assets: new Map([['assets/scan-screen.png', { src: ASSET, width: 4, height: 4 }]]),
 		};
 		const file = 'content/en/guide/example.md';

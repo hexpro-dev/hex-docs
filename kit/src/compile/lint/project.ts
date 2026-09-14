@@ -70,7 +70,8 @@ function navFindings(context: ProjectRuleContext): RawFinding[] {
 			);
 		}
 		seen.add(entry.slug);
-		if (!context.pages.has(entry.slug)) {
+		const files = context.pages.get(entry.slug);
+		if (files === undefined) {
 			findings.push(
 				raw(
 					'link-resolves',
@@ -80,6 +81,23 @@ function navFindings(context: ProjectRuleContext): RawFinding[] {
 					{
 						remediation:
 							'Add the page, or remove the entry. A nav entry pointing at nothing renders as a link to a 404.',
+						excerpt: entry.slug,
+					},
+				),
+			);
+		} else if (!files.has(SOURCE_LOCALE)) {
+			// A slug with only translations compiles and gets no page record, so the entry was
+			// dropped from `manifest.nav` with nothing said: `has(slug)` asked whether any file
+			// existed, and the bundle asks whether the source-locale one does. The usual way
+			// here is an English page deleted and its translations left behind.
+			findings.push(
+				raw(
+					'link-resolves',
+					{ kind: 'file', file: 'nav.json' },
+					null,
+					`The nav names "${entry.slug}", which has no ${SOURCE_LOCALE} file, so the bundle carries no page for it.`,
+					{
+						remediation: `Write content/${SOURCE_LOCALE}/${entry.slug}.md, or remove the entry. A page is published from its source-locale file, and its translations are only ever served beside it.`,
 						excerpt: entry.slug,
 					},
 				),
