@@ -15,7 +15,7 @@
  * choose.
  */
 
-import type { ReactElement, ReactNode, Ref } from 'react';
+import type { ReactNode, Ref } from 'react';
 
 import type { Locale } from '../contracts/locales.js';
 import type { DocsEventMap } from '../contracts/theme.js';
@@ -26,8 +26,14 @@ import type { DocsAddress } from '../site/address.js';
  *
  * This one prop is what keeps `react-router` out of the package while still giving an
  * internal link a client-side navigation, which `ast.ts` commits to where it declares the
- * `internal` kind. The shape is the intersection of what React Router 7's `Link`, Next's
+ * `internal` kind. The props are the intersection of what React Router 7's `Link`, Next's
  * and Astro's all accept, so a consumer passes its own component unchanged.
+ *
+ * The return type is `ReactNode` and not `ReactElement`, and that is what makes "unchanged"
+ * true. React Router's `Link` is a `ForwardRefExoticComponent`, whose call signature
+ * returns `ReactNode` under React 19's types, so against `ReactElement` passing it directly
+ * is a TS2322 in the consumer and every template needs a wrapper component to get past it.
+ * `test/render/link-type.test.tsx` holds the assignment that fails if this narrows again.
  */
 export type DocsLinkComponent = (props: {
 	to: string;
@@ -46,7 +52,7 @@ export type DocsLinkComponent = (props: {
 	 */
 	ref?: Ref<HTMLAnchorElement>;
 	onClick?: () => void;
-}) => ReactElement;
+}) => ReactNode;
 
 /**
  * The typed dispatcher for the package's custom events.

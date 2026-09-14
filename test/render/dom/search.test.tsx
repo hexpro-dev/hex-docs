@@ -244,3 +244,65 @@ describe('the dialog', () => {
 		expect(document.getElementById(IDS.searchInput)).toBeTruthy();
 	});
 });
+
+describe('the slash shortcut', () => {
+	const opens = (): number => events.filter((event) => event.name === 'hexdocs:search-open').length;
+	/** Long enough for a dispatched open to have reached the effect that reports it. */
+	const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 20));
+
+	test('opens the dialog from anywhere on the page, with Shift held as AZERTY types it', async () => {
+		// The hint on the trigger promises this. On a French AZERTY keyboard `/` is Shift and
+		// the colon key, and on a Spanish one it is Shift and 7, so the event arrives with
+		// `shiftKey` true and a handler that counted Shift as a modifier would do nothing.
+		mount();
+		const allowed = fireEvent.keyDown(document.body, { key: '/', shiftKey: true });
+		await waitFor(() => expect(document.activeElement).toBe(input()));
+		expect(opens()).toBe(1);
+		// Default prevented, or the slash would be typed into the input it just focused.
+		expect(allowed).toBe(false);
+		expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1);
+	});
+
+	test('does nothing with Command, Control or Alt held, or mid-composition', async () => {
+		mount();
+		for (const modifier of ['metaKey', 'ctrlKey', 'altKey']) {
+			fireEvent.keyDown(document.body, { key: '/', [modifier]: true });
+		}
+		fireEvent.keyDown(document.body, { key: '/', isComposing: true });
+		await settle();
+		expect(opens()).toBe(0);
+	});
+
+	test('does nothing while focus is somewhere the reader types', async () => {
+		mount();
+		const field = document.createElement('div');
+		field.innerHTML =
+			'<input id="i"><textarea id="t"></textarea><select id="s"></select><div contenteditable="true"><span id="c">x</span></div>';
+		document.body.append(field);
+		for (const id of ['i', 't', 's', 'c']) {
+			fireEvent.keyDown(document.getElementById(id) as HTMLElement, { key: '/' });
+		}
+		await settle();
+		expect(opens()).toBe(0);
+		field.remove();
+	});
+
+	test('does not open a second time while the dialog is already open', async () => {
+		// One open is one `hexdocs:search-open`. A slash pressed with focus on the close button
+		// would otherwise report a second open for a dialog that never closed.
+		mount();
+		fireEvent.click(trigger());
+		await waitFor(() => expect(document.activeElement).toBe(input()));
+		fireEvent.keyDown(screen.getByRole('button', { name: /close/i }), { key: '/' });
+		await settle();
+		expect(opens()).toBe(1);
+	});
+
+	test('stops listening once the search is unmounted', async () => {
+		mount();
+		cleanup();
+		fireEvent.keyDown(document.body, { key: '/' });
+		await settle();
+		expect(opens()).toBe(0);
+	});
+});

@@ -106,7 +106,7 @@ describe('links', () => {
 				children: [{ type: 'text', value: 'g' }],
 			},
 		]);
-		expect(html).toBe('<a href="/fixture-app/docs/guide/">g</a>');
+		expect(html).toBe('<a href="/fixture-app/docs/guide">g</a>');
 	});
 
 	test('an internal link with an anchor keeps it', () => {

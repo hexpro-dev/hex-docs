@@ -113,20 +113,41 @@ export function activeOptionId(
 		: optionId(state.active);
 }
 
+/** The parts of a `keydown` the shortcut decision reads, so it can be decided in a node test. */
+export interface ShortcutKey {
+	key: string;
+	isComposing: boolean;
+	metaKey: boolean;
+	ctrlKey: boolean;
+	altKey: boolean;
+	/** The focused element, or nothing when focus is on the document itself. */
+	target: { tagName?: string; isContentEditable?: boolean } | null;
+}
+
 /**
  * Whether a keystroke should open search.
  *
  * `/` is the shortcut, and it must not fire while the reader is typing into something.
  * Without the guard, a reader writing a support reply in a comment box on the same page
- * loses the character and gets a dialog. The check is on the element rather than on a
- * modifier because a text field is the whole class of thing this must not steal from.
+ * loses the character and gets a dialog. `isContentEditable` rather than the attribute,
+ * because it is also true inside a descendant of an editable element, which is where the
+ * caret actually is.
+ *
+ * Three more refusals. A key arriving mid-composition belongs to an input method, which is
+ * how Japanese and Chinese readers type, and the character is theirs. Command, Control and
+ * Alt with `/` are the browser's and the operating system's shortcuts, not ours.
+ *
+ * **Shift is not a modifier here, and that is the decision most likely to be undone.** On a
+ * French AZERTY keyboard `/` is Shift and the colon key, and on Spanish and German layouts
+ * it is Shift and 7, so `key === '/'` arrives with `shiftKey` true. Counting Shift would
+ * leave the hint printed on the button promising a shortcut that does nothing on the
+ * keyboards most French and Spanish readers use, which is exactly the kind of failure
+ * nobody on an American keyboard ever sees.
  */
-export function opensSearch(
-	key: string,
-	target: { tagName?: string; isContentEditable?: boolean },
-): boolean {
-	if (key !== '/') return false;
-	const tag = (target.tagName ?? '').toUpperCase();
+export function opensSearch(event: ShortcutKey): boolean {
+	if (event.key !== '/' || event.isComposing) return false;
+	if (event.metaKey || event.ctrlKey || event.altKey) return false;
+	const tag = (event.target?.tagName ?? '').toUpperCase();
 	if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return false;
-	return target.isContentEditable !== true;
+	return event.target?.isContentEditable !== true;
 }

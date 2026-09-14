@@ -7,7 +7,7 @@ import { CONSUMER_ROOT } from '../../fixtures/index.js';
 import { LOCALES } from '../../src/contracts/locales.js';
 import { assetKey, rawKey, searchKey } from '../../src/contracts/manifest.js';
 import type { DocsSiteConfig } from '../../src/contracts/site.js';
-import { bundleUrl, docsHref, docsLocalisedPaths } from '../../src/site/address.js';
+import { bundleUrl, docsHref, docsRawHref } from '../../src/site/address.js';
 
 const SITE = JSON.parse(
 	readFileSync(join(CONSUMER_ROOT, 'fixture-app.docs.json'), 'utf8'),
@@ -16,15 +16,15 @@ const SITE = JSON.parse(
 const base = '/fixture-app/docs';
 
 describe('the path a slug resolves to', () => {
-	test('the docs home is the mount with a trailing slash', () => {
-		expect(docsHref({ basePath: base, locale: 'en', slug: 'index' })).toBe('/fixture-app/docs/');
+	test('the docs home is the mount itself, with no trailing slash', () => {
+		// hex-nfc's only page. Both consumers strip one trailing slash before they compare a
+		// path, so the slashed spelling shipped this page with noindex and no alternates.
+		expect(docsHref({ basePath: base, locale: 'en', slug: 'index' })).toBe('/fixture-app/docs');
 	});
 
-	test('a section root keeps its trailing slash and a leaf has none', () => {
-		// The one rule two implementations get different answers for, which is why the
-		// consumer is handed `docsLocalisedPaths` rather than a loop to write.
+	test('a section root is spelled exactly like a leaf, with no trailing slash', () => {
 		expect(docsHref({ basePath: base, locale: 'en', slug: 'guide/index' })).toBe(
-			'/fixture-app/docs/guide/',
+			'/fixture-app/docs/guide',
 		);
 		expect(docsHref({ basePath: base, locale: 'en', slug: 'guide/first-tag' })).toBe(
 			'/fixture-app/docs/guide/first-tag',
@@ -44,7 +44,7 @@ describe('the path a slug resolves to', () => {
 		// `/pt-br/...` redirects to this spelling in both consumers. Lower-casing here
 		// would emit the address that redirects, on every link, in one language.
 		expect(docsHref({ basePath: base, locale: 'pt-BR', slug: 'index' })).toBe(
-			'/pt-BR/fixture-app/docs/',
+			'/pt-BR/fixture-app/docs',
 		);
 	});
 
@@ -55,25 +55,30 @@ describe('the path a slug resolves to', () => {
 			docsHref({ basePath: base, locale: 'en', version: '1.0.0', slug: 'guide/first-tag' }),
 		).toBe('/fixture-app/docs/v/1.0.0/guide/first-tag');
 		expect(docsHref({ basePath: base, locale: 'ar', version: '1.0.0', slug: 'index' })).toBe(
-			'/ar/fixture-app/docs/v/1.0.0/',
+			'/ar/fixture-app/docs/v/1.0.0',
 		);
 	});
 
-	test('an anchor goes last, after the trailing slash of a section root', () => {
+	test('an anchor goes last, straight after the path', () => {
 		expect(
 			docsHref({ basePath: base, locale: 'en', slug: 'guide/index', anchor: 'before-you-start' }),
-		).toBe('/fixture-app/docs/guide/#before-you-start');
+		).toBe('/fixture-app/docs/guide#before-you-start');
+		expect(docsHref({ basePath: base, locale: 'ja', slug: 'index', anchor: 'top' })).toBe(
+			'/ja/fixture-app/docs#top',
+		);
 	});
 
-	test('never emits a double slash, in any locale, for any page in the fixture site', () => {
+	test('never emits a double slash or a trailing one, in any locale, for any page', () => {
 		// The join is written without a collapse pass over the result, so this is what
-		// says the join is right rather than tidied. A double slash is a different URL to
-		// a crawler and an exact-match miss to `isLocalisedPath`.
+		// says the join is right rather than tidied. A double slash is a different URL to a
+		// crawler, and a trailing one is the spelling both consumers normalise away before
+		// comparing, so neither can be the canonical address.
 		let checked = 0;
 		for (const locale of LOCALES) {
 			for (const slug of SITE.pages) {
 				const href = docsHref({ basePath: base, locale, slug });
 				expect(href).not.toMatch(/\/\//);
+				expect(href.endsWith('/'), href).toBe(false);
 				expect(href.startsWith('/')).toBe(true);
 				checked += 1;
 			}
@@ -89,27 +94,25 @@ describe('the path a slug resolves to', () => {
 	});
 });
 
-describe('the localised path list the consumer builds its route table from', () => {
-	const paths = docsLocalisedPaths(SITE);
-
-	test('is one bare path per page, and agrees with the address builder', () => {
-		expect(paths.length).toBe(SITE.pages.length);
-		// Both directions against the same builder every link goes through. A consumer
-		// loop that disagreed about the trailing slash would put a self-referential
-		// canonical and eight alternates pointing at 404s on a real page.
-		const built = SITE.pages.map((slug) => docsHref({ basePath: base, locale: 'en', slug }));
-		expect([...paths].sort()).toEqual([...built].sort());
+describe('the raw markdown address', () => {
+	test('is the wire slug with .md, so the home is index.md and a section root keeps its index', () => {
+		// The spelling llms.txt links with and the raw tree is keyed by. The address path
+		// would make the home `/fixture-app/docs.md`.
+		expect(docsRawHref({ basePath: base, locale: 'en', slug: 'index' })).toBe(
+			'/fixture-app/docs/index.md',
+		);
+		expect(docsRawHref({ basePath: base, locale: 'en', slug: 'guide/index' })).toBe(
+			'/fixture-app/docs/guide/index.md',
+		);
+		expect(docsRawHref({ basePath: base, locale: 'pt-BR', slug: 'guide/first-tag' })).toBe(
+			'/pt-BR/fixture-app/docs/guide/first-tag.md',
+		);
 	});
 
-	test('is sorted, so a diff of it is a diff of the page set', () => {
-		expect(paths).toEqual([...paths].sort());
-	});
-
-	test('carries no locale prefix and no version pin', () => {
-		for (const path of paths) {
-			expect(path.startsWith(base)).toBe(true);
-			expect(path).not.toContain('/v/');
-		}
+	test('refuses a slug it cannot parse, like every other address builder', () => {
+		expect(() => docsRawHref({ basePath: base, locale: 'en', slug: '../secret' })).toThrow(
+			/docsRawHref/,
+		);
 	});
 });
 

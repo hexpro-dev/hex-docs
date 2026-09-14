@@ -8,6 +8,7 @@ import {
 	opensSearch,
 	searchReducer,
 	type SearchState,
+	type ShortcutKey,
 } from '../../src/site/search-state.js';
 import { searchOptionId } from '../../src/site/ids.js';
 
@@ -155,23 +156,58 @@ describe('loading', () => {
 });
 
 describe('the slash shortcut', () => {
-	test('opens search from an ordinary element', () => {
-		expect(opensSearch('/', { tagName: 'DIV' })).toBe(true);
-		expect(opensSearch('/', {})).toBe(true);
+	/** A plain `/` on an ordinary element, with every refusal off, so each case changes one fact. */
+	const key = (overrides: Partial<ShortcutKey> = {}): ShortcutKey => ({
+		key: '/',
+		isComposing: false,
+		metaKey: false,
+		ctrlKey: false,
+		altKey: false,
+		target: { tagName: 'DIV' },
+		...overrides,
+	});
+
+	test('opens search from an ordinary element, and from the document itself', () => {
+		expect(opensSearch(key())).toBe(true);
+		expect(opensSearch(key({ target: {} }))).toBe(true);
+		expect(opensSearch(key({ target: null }))).toBe(true);
 	});
 
 	test('does not steal the character from anything the reader types into', () => {
 		// Without this a reader writing a support reply in a comment box on the same page
 		// loses the character and gets a dialog.
 		for (const tagName of ['INPUT', 'TEXTAREA', 'SELECT', 'input', 'textarea']) {
-			expect(opensSearch('/', { tagName })).toBe(false);
+			expect({ tagName, opens: opensSearch(key({ target: { tagName } })) }).toEqual({
+				tagName,
+				opens: false,
+			});
 		}
-		expect(opensSearch('/', { tagName: 'DIV', isContentEditable: true })).toBe(false);
+		expect(opensSearch(key({ target: { tagName: 'DIV', isContentEditable: true } }))).toBe(false);
+	});
+
+	test('does not take a key an input method is still composing', () => {
+		expect(opensSearch(key({ isComposing: true }))).toBe(false);
+	});
+
+	test('leaves Command, Control and Alt with a slash to the browser', () => {
+		for (const modifier of ['metaKey', 'ctrlKey', 'altKey'] as const) {
+			expect({ modifier, opens: opensSearch(key({ [modifier]: true })) }).toEqual({
+				modifier,
+				opens: false,
+			});
+		}
+	});
+
+	test('does not count Shift, because AZERTY and Spanish keyboards type a slash with it', () => {
+		// The contract has no `shiftKey` field at all, so there is nothing for a future
+		// modifier check to read. The event the component passes in does carry one, which
+		// is what `test/render/dom/search.test.tsx` drives.
+		expect(opensSearch({ ...key(), shiftKey: true } as ShortcutKey)).toBe(true);
 	});
 
 	test('ignores every other key', () => {
-		for (const key of ['k', 'Escape', 'Enter', '?', 'F']) {
-			expect(opensSearch(key, { tagName: 'DIV' })).toBe(false);
+		for (const other of ['k', 'Escape', 'Enter', '?', 'F', ':', '7']) {
+			expect({ other, opens: opensSearch(key({ key: other })) }).toEqual({ other, opens: false });
 		}
 	});
 });

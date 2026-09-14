@@ -141,13 +141,12 @@ export function looksLikePage(value: unknown): value is CompiledPage {
 /**
  * Slugs the bundle carries that the site config does not list, and the reverse.
  *
- * Not called by the route: it is for the consumer's build-time guard, and it exists
+ * Not called by the route: `hexdocs prefetch` calls it before a build, and it exists
  * because the failure is invisible at runtime. `site.pages` is written by `hexdocs sync`
- * at one commit and is the sole input to `LOCALISED_PATHS`, while the manifest is the
+ * at one commit and is the sole input to the route rows, while the manifest is the
  * authority on what the bundle contains. A bundle carrying a slug the config predates
- * renders, links from the sidebar and appears in prev/next, while the host's
- * `isLocalisedPath` returns false for it, so the page ships with no canonical, no
- * alternates and no `noindex`.
+ * renders in the sidebar and in prev/next and has no route row, so every link to it is a
+ * 404; a config carrying a slug the bundle lacks has a route row that 404s.
  */
 export function pageSkew(
 	manifest: BundleManifest,
@@ -350,10 +349,10 @@ export async function docsRoute(input: DocsRouteInput): Promise<DocsRouteResult>
 	}
 
 	const record = input.manifest.pages[input.slug];
-	// Refused when the bundle has it and the site config does not, because the consuming
-	// site's `isLocalisedPath` would return false and the page would ship with no
-	// canonical, no alternates and no `noindex`. `pageSkew` is what names the state at
-	// build time; here it is simply not a page this mount serves.
+	// Refused when the bundle has it and the site config does not. The config is what the
+	// route rows and the sitemap are built from, so a page served here and absent there is
+	// an address nothing routes to and nothing lists. `pageSkew` is what names the state
+	// at build time; here it is simply not a page this mount serves.
 	if (record === undefined || !input.site.pages.includes(input.slug)) {
 		return { ok: false, reason: 'no-such-page' };
 	}

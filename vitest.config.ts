@@ -152,13 +152,16 @@ export default defineConfig({
 				'src/search/**': { statements: 99, branches: 97, functions: 100, lines: 99 },
 
 				// The address, notice, direction and id rules the consuming site reads outside
-				// a React tree. Re-measured at step 6: 197/197 statements, 151/158 branches,
-				// 39/39 functions, 164/164 lines. Held at the top because every function here is pure, takes a
-				// contract type and returns a string or a small object, so there is nothing
-				// in it that is expensive to cover and nothing that is unreachable. The one
-				// uncovered branch is the equal arm of `docsLocalisedPaths`'s comparator,
-				// which cannot fire because two pages cannot share a slug: the same
-				// total-order tail `src/contracts/**` already carries.
+				// a React tree, and since step 8 the docs server and the root's SEO read.
+				// Re-measured at step 8: 429/429 statements, 296/298 branches, 72/72 functions,
+				// 359/359 lines. Held at the top because every function here takes contract
+				// types and injected sources and returns a string, a small object or a
+				// `Response`, so there is nothing in it that is expensive to cover. `serve.ts`
+				// is every one of its refusals driven by `test/site/serve.test.ts`, because a
+				// defensive arm nobody has run is one nobody has seen work. The two uncovered
+				// branches are `labelOf`'s last fallback in `route.ts`, a nav entry with no record
+				// in the reader's locale or the source's, which the compiler never writes: a
+				// page with no source-locale file gets no page record at all.
 				'src/site/**': { statements: 100, branches: 95, functions: 100, lines: 100 },
 
 				// The React half. Measured 246/272 statements, 170/191 branches, 87/93

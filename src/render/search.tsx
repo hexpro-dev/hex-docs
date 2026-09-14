@@ -40,6 +40,7 @@ import { IDS, searchOptionId } from '../site/ids.js';
 import {
 	INITIAL_SEARCH,
 	activeOptionId,
+	opensSearch,
 	searchReducer,
 	type SearchState,
 } from '../site/search-state.js';
@@ -123,6 +124,37 @@ export function DocsSearch(props: SearchProps): ReactElement {
 		dispatch({ type: 'results', hits });
 	}, [state.open, state.query, state.status]);
 
+	const emit = props.emit;
+	const open = useCallback(() => {
+		load();
+		emit('hexdocs:search-open', {});
+		dispatch({ type: 'open' });
+	}, [load, emit]);
+
+	// The `/` shortcut the trigger's hint promises. Listened for on the document rather than
+	// on the trigger, because the reader is anywhere on the page when they press it, and
+	// ignored while the dialog is already open so one open is one `hexdocs:search-open`.
+	// `preventDefault` because the character would otherwise land in the input the dialog
+	// is about to focus, and Firefox would open its own quick find first.
+	useEffect(() => {
+		const onKeyDown = (event: KeyboardEvent): void => {
+			if (dialog.current?.open === true) return;
+			const shortcut = opensSearch({
+				key: event.key,
+				isComposing: event.isComposing,
+				metaKey: event.metaKey,
+				ctrlKey: event.ctrlKey,
+				altKey: event.altKey,
+				target: event.target instanceof HTMLElement ? event.target : null,
+			});
+			if (!shortcut) return;
+			event.preventDefault();
+			open();
+		};
+		document.addEventListener('keydown', onKeyDown);
+		return () => document.removeEventListener('keydown', onKeyDown);
+	}, [open]);
+
 	const dismiss = (slug: string | null): void => {
 		chose.current = slug;
 		dialog.current?.close();
@@ -139,11 +171,7 @@ export function DocsSearch(props: SearchProps): ReactElement {
 				aria-haspopup="dialog"
 				onPointerEnter={load}
 				onFocus={load}
-				onClick={() => {
-					load();
-					props.emit('hexdocs:search-open', {});
-					dispatch({ type: 'open' });
-				}}
+				onClick={open}
 			>
 				{uiString(props.locale, 'searchOpen')}
 				<span className="hx-search-hint" aria-hidden="true">
