@@ -458,6 +458,59 @@ describe('label-bundle-exists', () => {
 		expect(row('label-bundle-exists')?.note).toContain('There is no default');
 		expect(calls).toEqual([]);
 	});
+
+	/** Every `--flag` spelled in a piece of text, without the hyphens. */
+	const flagsIn = (text: string): string[] =>
+		[...text.matchAll(/(?<![\w-])--([a-z][a-z-]*)/g)].map((match) => match[1] ?? '');
+
+	test('with credentials and no bucket, the row names no flag label lacks and asks for the bucket name', async () => {
+		// `label` declares no `--bucket`. The shared refusal told the reader to pass one, the
+		// CLI answered that with "Unknown option", and the remediation opened with "configure
+		// AWS credentials" on a machine that had them. This environment is a real one: a
+		// project that pins `AWS_PROFILE` and sets no `HEXDOCS_BUCKET`.
+		vi.stubEnv('AWS_PROFILE', 'a-profile');
+		const declared = Object.keys(label.params);
+		const cached = (await runLabel({ cache: cache(NEW_COMMIT) })).row('label-bundle-exists');
+		const missing = (await runLabel()).row('label-bundle-exists');
+		const finding = onlyFinding(missing);
+		const said = [
+			cached?.note ?? '',
+			missing?.note ?? '',
+			finding.message,
+			finding.remediation ?? '',
+		];
+
+		for (const text of said) {
+			for (const flag of flagsIn(text))
+				expect([flag, declared.includes(flag)]).toEqual([flag, true]);
+			expect(text).not.toContain('..');
+		}
+		expect(cached?.note).toContain('Set HEXDOCS_BUCKET');
+		expect(finding.remediation).toContain('set HEXDOCS_BUCKET so the bucket can be asked');
+		expect(finding.remediation).not.toContain('configure AWS credentials');
+	});
+
+	test('with neither credentials nor a bucket, the remediation asks for both', async () => {
+		const finding = onlyFinding((await runLabel()).row('label-bundle-exists'));
+		expect(finding.remediation).toContain(
+			'configure AWS credentials so the bucket can be asked, and set HEXDOCS_BUCKET to name it',
+		);
+		expect(flagsIn(finding.remediation ?? '')).toEqual([]);
+	});
+
+	test('with credentials and a bucket that did not answer, the remediation does not ask for either', async () => {
+		vi.stubEnv('AWS_PROFILE', 'an-expired-profile');
+		vi.stubEnv('HEXDOCS_BUCKET', BUCKET);
+		const { row } = await runLabel({
+			answers: {
+				'aws.head-object': () => fail(255, 'ExpiredToken: The provided token has expired'),
+			},
+		});
+		const finding = onlyFinding(row('label-bundle-exists'));
+		expect(finding.remediation).toContain('fix what stopped the bucket answering');
+		expect(finding.remediation).toContain('ExpiredToken');
+		expect(finding.remediation).not.toContain('HEXDOCS_BUCKET');
+	});
 });
 
 // ---------------------------------------------------------------------------

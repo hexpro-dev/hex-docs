@@ -522,17 +522,27 @@ export const label = defineCommand({
 		const cached = join(cache, prefix, MANIFEST_KEY);
 		const local: Arm = existsSync(cached) ? 'yes' : 'no';
 
-		const bucket = bucketOf(undefined);
+		// No `--bucket` on this command, so the refusal names the environment variable alone.
+		const bucket = bucketOf(undefined, { flagDeclared: false });
 		let remote: Arm;
+		// The second half of the remediation when the bucket could not be asked, chosen by
+		// which input was missing. One sentence for all three led with "configure AWS
+		// credentials" on a machine that had them and was missing only the bucket name.
+		let askTheBucket: string;
 		if (!awsConfigured()) {
 			remote = {
 				unavailable:
 					'no AWS credentials are configured in this environment, so the bucket was not asked',
 			};
+			askTheBucket =
+				'configure AWS credentials so the bucket can be asked' +
+				('why' in bucket ? ', and set HEXDOCS_BUCKET to name it' : '');
 		} else if ('why' in bucket) {
 			remote = { unavailable: bucket.why };
+			askTheBucket = 'set HEXDOCS_BUCKET so the bucket can be asked';
 		} else {
 			remote = headManifest(ctx, bucket.bucket, `${prefix}/${MANIFEST_KEY}`, ctx.cwd);
+			askTheBucket = 'fix what stopped the bucket answering';
 		}
 
 		// The two arms and their six combinations. The bucket is the authority on whether a
@@ -582,7 +592,7 @@ export const label = defineCommand({
 								null,
 								`No bundle for ${input.commit.slice(0, 8)}: ${cached} does not exist, and the bucket could not be asked.`,
 								{
-									remediation: `Run \`hexdocs prefetch\` on this machine, or configure AWS credentials so the bucket can answer. ${remote.unavailable}.`,
+									remediation: `Run \`hexdocs prefetch\` on this machine, or ${askTheBucket}. ${remote.unavailable.replace(/\.$/, '')}.`,
 								},
 							),
 						],

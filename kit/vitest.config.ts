@@ -144,16 +144,25 @@ export default defineConfig({
 
 				// The consumer wiring. Held above the package floor because the failure mode
 				// is a green row over a broken install, which is the exact class this
-				// repository's counting rule exists to catch. Measured 92.1/84.6/99.3/96.9;
-				// the uncovered branches are the unreadable-file arms of several probes,
-				// where the row fails either way.
-				'src/wiring/**': { statements: 92, branches: 84, functions: 99, lines: 96 },
+				// repository's counting rule exists to catch. Re-measured after step 8, which
+				// added `route-table.ts`, `prebuild.ts` and `instructions.ts` and rewrote
+				// `checks.ts` and `edits.ts`: 1190/1257 statements, 794/899 branches, 213/213
+				// functions, 1056/1073 lines. The step 5 floors sat two to four points under
+				// that, loose enough that skipping all nineteen tests in
+				// `test/wiring/route-table.test.ts` passed. Measured without that file: 93.95
+				// statements and 86.42 branches, so both of these floors fail on it, and
+				// statements is held at 94 rather than 93 for exactly that case. The uncovered
+				// branches are the unreadable-file arms of several probes, where the row fails
+				// either way.
+				'src/wiring/**': { statements: 94, branches: 87, functions: 100, lines: 97 },
 
 				// The widest surface with the most error arms, and the lowest numbers in the
 				// package for the same reason `src/compile/lint/**` is: several of those arms
 				// are network failures a recording fake can only produce in the shapes
-				// somebody thought of. Measured 90.9/78.7/92.1/91.9.
-				'src/commands/**': { statements: 90, branches: 78, functions: 92, lines: 91 },
+				// somebody thought of. Re-measured after step 8 and the review fixes to
+				// `prefetch`, `sync` and `label`: 1612/1737 statements, 920/1124 branches,
+				// 240/258 functions, 1470/1569 lines.
+				'src/commands/**': { statements: 91, branches: 80, functions: 92, lines: 92 },
 
 				// Every branch is coverable because `Exec` is injected. Measured
 				// 92/84.9/100/91.6, and what is left is the malformed-response arms of the

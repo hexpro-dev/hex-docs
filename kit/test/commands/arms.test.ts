@@ -214,6 +214,16 @@ describe('bucketOf', () => {
 		expect(why).toContain('somebody else owns');
 	});
 
+	test('for a command with no --bucket, the refusal names the environment variable alone', () => {
+		// `label` takes the bucket from the environment only, and a refusal telling its reader
+		// to pass `--bucket` is an instruction the CLI answers with "Unknown option".
+		const result = withEnv(undefined, () => bucketOf(undefined, { flagDeclared: false }));
+		const why = (result as { why: string }).why;
+		expect(why).toContain('Set HEXDOCS_BUCKET');
+		expect(why).not.toContain('--bucket');
+		expect(why).toContain('There is no default');
+	});
+
 	test('the parameter table declares no fallback, which is what makes the refusal reachable', () => {
 		// The other half of the same fact. `shapeOf` applies a `fallback` before a handler
 		// runs, so a fallback added to `BUCKET` would fill `--bucket` in at the boundary and

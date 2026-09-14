@@ -181,14 +181,52 @@ export const prefetch = defineCommand({
 			);
 		}
 
+		// A file where the directory belongs, or a directory that cannot be listed, is a named
+		// failure here rather than a throw. `existsSync` answers true for a regular file, so the
+		// listing below used to throw ENOTDIR before the shape check that claims to refuse this
+		// was ever reached, and a throw reaches the CLI as a stack under a sentence calling it a
+		// bug in hexdocs. Nothing has been fetched, pruned or written yet.
+		let names: string[];
+		try {
+			if (!statSync(docsDirectory).isDirectory()) {
+				const why = `${DOCS_DIR.join('/')} is not a directory, so no site config can be read out of it. Replace it with a directory holding the <project>.docs.json files, or point --site at the directory that holds app/docs.`;
+				return output(
+					[failedRow('prefetch-configs', 1, 'site configs', why)],
+					{ site: siteDirectory, prefetched: false, why },
+					[why],
+				);
+			}
+			names = readdirSync(docsDirectory).sort();
+		} catch (error) {
+			const why = `${DOCS_DIR.join('/')} could not be read (${(error as NodeJS.ErrnoException).code}), so no site config was. Nothing was downloaded, pruned or written.`;
+			return output(
+				[failedRow('prefetch-configs', 1, 'site configs', why)],
+				{ site: siteDirectory, prefetched: false, why },
+				[why],
+			);
+		}
+
 		const configs: DocsSiteConfig[] = [];
 		const configProblems: string[] = [];
 		const projects = new Map<string, string>();
 		let read = 0;
-		for (const name of readdirSync(docsDirectory).sort()) {
+		for (const name of names) {
 			if (!name.endsWith('.docs.json')) continue;
 			const path = join(docsDirectory, name);
-			if (!statSync(path).isFile()) continue;
+			let isFile: boolean;
+			try {
+				isFile = statSync(path).isFile();
+			} catch (error) {
+				// A link to nothing, or an entry that cannot be looked at. Counted and failed
+				// rather than skipped: a config left out of this loop is a project whose trees
+				// the prune then removes, because no plan names them.
+				read += 1;
+				configProblems.push(
+					`${name} could not be read (${(error as NodeJS.ErrnoException).code}).`,
+				);
+				continue;
+			}
+			if (!isFile) continue;
 			read += 1;
 			const parsed = readSiteConfig(path);
 			if ('why' in parsed) {
@@ -321,20 +359,42 @@ export const prefetch = defineCommand({
 				'Nothing was pruned or written.',
 			);
 		} else {
-			removed = prune(
-				siteDirectory,
-				new Set(plans.flatMap((plan) => plan.entries.map((entry) => entry.destination))),
-				writer,
-			);
-			const done = extract(plans, writer);
-			extracted = done;
-			extractRow = checkRow(
-				'prefetch-extract',
-				done.files,
-				'files',
-				checkFindings(done.problems, ctx.kitVersion),
-				`${done.written} written, ${done.unchanged} already current, ${removed} removed.`,
-			);
+			// One catch around both, because the filesystem can refuse either of them and the
+			// shape check above only looked as far as the label directories, and only at whether
+			// each level could be read. Below a label, and at any level that can be read and not
+			// written, the refusal arrives here part way through: the prune may already have
+			// emptied the old label, and extraction may already have written files. Stopping at
+			// the first refusal is deliberate, because carrying on into a tree that cannot be
+			// written produces more of the same. Without the catch it reached the CLI as a stack
+			// under a sentence calling it a bug in hexdocs, with no row saying what had gone.
+			const before = writer.removed.length;
+			try {
+				removed = prune(
+					siteDirectory,
+					new Set(plans.flatMap((plan) => plan.entries.map((entry) => entry.destination))),
+					writer,
+				);
+				const done = extract(plans, writer);
+				extracted = done;
+				extractRow = checkRow(
+					'prefetch-extract',
+					done.files,
+					'files',
+					checkFindings(done.problems, ctx.kitVersion),
+					`${done.written} written, ${done.unchanged} already current, ${removed} removed.`,
+				);
+			} catch (error) {
+				const refused = filesystemRefusal(error);
+				if (refused === null) throw error;
+				removed = writer.removed.length - before;
+				const shown = relative(siteDirectory, refused.path).split(sep).join('/');
+				extractRow = failedRow(
+					'prefetch-extract',
+					plans.reduce((total, plan) => total + plan.entries.length, 0),
+					'files',
+					`Prefetch stopped at ${shown}: ${refused.syscall} was refused with ${refused.code}. ${removed} stale ${removed === 1 ? 'entry' : 'entries'} had already been removed and some files may already have been written, so the two trees are part way between what they held and what the configs name. Fix the mode or the owner of that path and run prefetch again. The cache row passed, so every bundle is already on this machine and that run needs no download.`,
+				);
+			}
 		}
 
 		const rows = [configRow, treeRow, cacheRow, extractRow, skew(bundles)];
@@ -850,7 +910,7 @@ function uncompressedMismatch(key: string, expected: string, found: string): Raw
 
 /** Said once on the row rather than once per entry, because every entry has the same fix. */
 const TREE_SHAPE_REASON =
-	'Every directory from the site down to a label directory has to be a real one. A symbolic link there would carry every write and every prune somewhere outside the site, so it is refused rather than followed or removed. So is a file standing in for app, app/docs, public or either tree root, and anything inside the trees that is neither a directory nor a regular file, because prefetch made none of them and it is not for this command to delete them. Replace it with a real directory, or remove it. A stray regular file inside either tree, a Finder .DS_Store included, is not refused: it is removed with the other stale files.';
+	'Every directory from the site down to a label directory has to be a real one. A symbolic link there would carry every write and every prune somewhere outside the site, so it is refused rather than followed or removed. So is a file standing in for public or either tree root, and anything inside the trees that is neither a directory nor a regular file, because prefetch made none of them and it is not for this command to delete them. Replace it with a real directory, or remove it. A stray regular file inside either tree, a Finder .DS_Store included, is not refused: it is removed with the other stale files.';
 
 /**
  * Every entry from the site directory down to the label directories, measured with `lstat`.
@@ -862,9 +922,11 @@ const TREE_SHAPE_REASON =
  * in place. Removing the link instead would be a delete of something this command did not
  * create, at a level where nothing it writes is a link.
  *
- * Above the trees, `app`, `app/docs`, `public` and the two tree roots have to be
- * directories, and a file in place of one is refused: those are the site's own paths, and
- * the only way past a file there is deleting it.
+ * Above the trees, `public` and the two tree roots have to be directories, and a file in
+ * place of one is refused: those are the site's own paths, and the only way past a file
+ * there is deleting it. `app` and `app/docs` are looked at and counted as well, but a file
+ * standing in for either never reaches this: the configs are read out of `app/docs` first,
+ * so a file there fails the configs row, and a file at `app` leaves no `app/docs` to find.
  *
  * Inside the trees, at the project and label levels, a regular file is not a problem here.
  * It is not a planned destination, so `prune` removes it like any other stale file. That
@@ -881,7 +943,10 @@ const TREE_SHAPE_REASON =
  * An entry that cannot be looked at, a directory with no search or read permission, is a
  * problem on the same row rather than a throw. A throw reaches the CLI as a stack trace
  * under a sentence calling it a bug in hexdocs, and a mode on a site's own directory is not
- * one.
+ * one. This looks only as far as the label directories and only asks whether each level can
+ * be read, so a refusal below a label, or on a level that can be read and not written, comes
+ * from the prune or from extraction instead, and `run` turns it into a failing
+ * `prefetch-extract` row.
  *
  * `examined` counts every entry that was there to look at, a regular file left for the
  * prune included. The site's `app/docs` always is, because the configs were read out of it,
@@ -959,10 +1024,11 @@ function treeShape(siteDirectory: string): { examined: number; problems: string[
  * What is kept is exactly the set of destinations the plans produced, compared as paths
  * built by the same `join` from the same site directory, so the keep set and the files
  * extraction writes cannot drift into disagreeing and oscillating between runs. A regular
- * file at a kept path stays; anything else goes: a file no plan names, a symbolic link at
- * any depth (unlinked, never followed, so what it points at survives), and then every
- * directory the walk left empty **that no planned destination sits under**. The two tree
- * roots themselves are never removed.
+ * file with exactly one link, at a kept path, stays; anything else goes: a file no plan
+ * names, a symbolic link at any depth (unlinked, never followed, so what it points at
+ * survives), a hard link at a kept path (the same escape by another link type, and removed
+ * for the same reason), and then every directory the walk left empty **that no planned
+ * destination sits under**. The two tree roots themselves are never removed.
  *
  * That last clause is what keeps the dry run readable. A stray file standing where a label
  * directory goes leaves its project directory empty for a moment, and without the clause
@@ -1001,7 +1067,11 @@ function prune(siteDirectory: string, keep: ReadonlySet<string>, writer: Writer)
 			if (entry.isDirectory()) {
 				if (walk(path) && !wanted.has(path)) writer.remove(path);
 				else remaining += 1;
-			} else if (entry.isFile() && keep.has(path)) {
+			} else if (entry.isFile() && keep.has(path) && lstatSync(path).nlink === 1) {
+				// A hard link answers as a regular file, and extraction's write opens the path
+				// and truncates it, which rewrites the inode every other name for it shares.
+				// Unlinking removes only this name, so what the other names hold survives and
+				// extraction writes a file of its own.
 				remaining += 1;
 			} else {
 				writer.remove(path);
@@ -1071,6 +1141,22 @@ function skew(bundles: readonly Bundle[]): CheckRow {
 	return problems.length > 0
 		? failedRow('prefetch-skew', compared, 'page sets', problems.join(' '))
 		: checkRow('prefetch-skew', compared, 'page sets', []);
+}
+
+/**
+ * The path, the call and the code of an error the filesystem raised, or `null` for anything
+ * else.
+ *
+ * Narrow on purpose. Only an error carrying all three is a refusal about a named path that a
+ * person can go and fix; anything without them is a defect in this command, and rethrowing it
+ * is what keeps that a stack trace rather than a row that reads like an environment problem.
+ */
+function filesystemRefusal(error: unknown): { path: string; syscall: string; code: string } | null {
+	if (typeof error !== 'object' || error === null) return null;
+	const { path, syscall, code } = error as NodeJS.ErrnoException;
+	return typeof path === 'string' && typeof syscall === 'string' && typeof code === 'string'
+		? { path, syscall, code }
+		: null;
 }
 
 /** The one shape every return takes, so a field cannot be forgotten on one path. */

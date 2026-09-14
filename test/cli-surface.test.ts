@@ -242,6 +242,62 @@ describe('when the first-run install is wrong for a consuming workspace', () => 
 		expect((first?.problems ?? []).join(' ')).toContain('more characters to stderr');
 		expect((first?.problems ?? []).join(' ')).toContain('hexdocs: installing');
 	}, 180_000);
+
+	test('without --prod the kit carries its devDependencies, and the row names them', () => {
+		// The MCP SDK, vitest and typescript stay out of every consumer's tree because the
+		// install is production only. Dropping the flag passed every row before this: the one
+		// test that went red did so on `editLauncher`'s own precondition in the case above.
+		const root = copyRepo();
+		editLauncher(
+			root,
+			'--ignore-workspace --frozen-lockfile --prod',
+			'--ignore-workspace --frozen-lockfile',
+		);
+
+		const row = checkFirstRun(root);
+		expect(row.state).toBe('FAIL');
+		const said = (row.problems ?? []).join(' ');
+		expect(said).toContain('does not list');
+		expect(said).toContain('vitest');
+	}, 180_000);
+
+	/**
+	 * The three launcher properties that decide when an installed tree is replaced, each
+	 * removed in turn. The first is the defect: a kit dependency change on a working copy that
+	 * persists left the old tree in place. The other two are the boundary that keeps the fix
+	 * from stripping a development install.
+	 */
+	const REINSTALL: readonly { name: string; from: string; to: string; says: string }[] = [
+		{
+			name: 'a tree it installed is never reinstalled',
+			from: 'elif [ "$stamped_tree" = "$(tree_metadata)" ] && [ "$stamped_inputs" != "$kit_inputs" ]; then\n\tinstall_kit\n',
+			to: '',
+			says: 'did not reinstall a tree it had installed itself',
+		},
+		{
+			name: 'a tree somebody else installed is reinstalled',
+			from: 'elif [ "$stamped_tree" = "$(tree_metadata)" ] && [ "$stamped_inputs" != "$kit_inputs" ]; then',
+			to: 'elif [ "$stamped_inputs" != "$kit_inputs" ]; then',
+			says: 'reinstalled a tree whose pnpm metadata no longer matches its stamp',
+		},
+		{
+			name: 'the install writes no stamp',
+			from: `printf '%s\\n%s\\n' "$kit_inputs" "$(tree_metadata)" >"$STAMP"`,
+			to: ':',
+			says: 'left no stamp',
+		},
+	];
+
+	for (const entry of REINSTALL) {
+		test(`when ${entry.name}, the row says so`, () => {
+			const root = copyRepo();
+			editLauncher(root, entry.from, entry.to);
+
+			const row = checkFirstRun(root);
+			expect(row.state, (row.problems ?? []).join(' | ')).toBe('FAIL');
+			expect((row.problems ?? []).join(' ')).toContain(entry.says);
+		}, 180_000);
+	}
 });
 
 describe('when the first run cannot be exercised on this machine', () => {
@@ -296,6 +352,28 @@ describe('when the first run cannot be exercised on this machine', () => {
 		expect(row.state).toBe('SKIPPED');
 		expect(row.note ?? '').toContain('does not hold the kit dependencies');
 		expect(row.note ?? '').toContain('pnpm --dir kit install');
+	}, 180_000);
+
+	test('a failed install that replays its log to stdout fails rather than skipping', () => {
+		// The launcher's one promise about a failed install: the log goes to stderr, where the
+		// deploy reads its failure message, and nothing goes to stdout, where `hexdocs mcp`
+		// speaks JSON-RPC. The skip above used to test both streams together, so the log on the
+		// wrong one still read as an empty store.
+		const root = copyRepo();
+		const path = join(root, 'kit', 'bin', 'hexdocs');
+		const text = readFileSync(path, 'utf8');
+		expect(text.split('cat "$install_log" >&2').length).toBe(2);
+		writeFileSync(path, text.replace('cat "$install_log" >&2', 'cat "$install_log"'), 'utf8');
+		const store = mkdtempSync(join(tmpdir(), 'hexdocs-empty-store-'));
+		temporaries.push(store);
+
+		const row = withEnv({ npm_config_store_dir: store, CI: undefined }, () => checkFirstRun(root));
+
+		expect(row.state).toBe('FAIL');
+		expect((row.problems ?? []).join(' ')).toContain(
+			'to stdout, where `hexdocs mcp` speaks JSON-RPC',
+		);
+		expect((row.problems ?? []).join(' ')).toContain('ERR_PNPM_NO_OFFLINE_TARBALL');
 	}, 180_000);
 });
 

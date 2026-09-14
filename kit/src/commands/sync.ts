@@ -421,7 +421,15 @@ export const sync = defineCommand({
 			next = replaced;
 		}
 
-		if (!sameStrings(config.hidden ?? [], hidden)) {
+		// A member that is present and empty, beside a bundle with nothing to put in it, is an
+		// edit too. The schema accepts `"hidden": []` and the comparison reads it as equal to
+		// absent, while the object this edit is proved against below has no member at all, so
+		// leaving it made that proof refuse every run as a bug in hexdocs and nothing was ever
+		// written. `redirects` below has the same clause for `{}`.
+		if (
+			!sameStrings(config.hidden ?? [], hidden) ||
+			(config.hidden !== undefined && hidden.length === 0)
+		) {
 			const span = rootSpan(next);
 			const value = renderArray(
 				hidden,
@@ -443,7 +451,10 @@ export const sync = defineCommand({
 			next = edited;
 		}
 
-		if (!sameMap(config.redirects ?? {}, Object.fromEntries(redirects))) {
+		if (
+			!sameMap(config.redirects ?? {}, Object.fromEntries(redirects)) ||
+			(config.redirects !== undefined && redirects.length === 0)
+		) {
 			const span = rootSpan(next);
 			const edited =
 				span === null
@@ -486,11 +497,16 @@ export const sync = defineCommand({
 					? null
 					: (JSON.parse(next.slice(commitSpan.start, commitSpan.end)) as string);
 			if (commit !== entry.commit) {
-				// The parsed config and the file text disagree about which entry is which, which
-				// cannot happen and would write a digest against the wrong sha if it did.
+				// The file text and the parsed config disagree about this entry's commit. In
+				// strict JSON the one way to get there is a `commit` key written twice, which
+				// `findValue` refuses to choose between: `JSON.parse` keeps the last and another
+				// reader may keep the first, so a digest written here is pinned to whichever sha
+				// that reader picks. The proof below cannot see it, because it compares through
+				// `JSON.parse` as well. A digest landing in the wrong element altogether is the
+				// proof's to catch, not this check's.
 				return refused(
 					configPath,
-					`Version ${index + 1} in ${configPath} is not the entry labelled ${entry.label}.`,
+					`Version ${index + 1} in ${configPath} does not read as exactly one \`commit\` of ${entry.commit}, the entry labelled ${entry.label}, so no digest was written into it. A \`commit\` key written twice is the usual cause: keep one.`,
 				);
 			}
 			const written = setMember(next, element, 'digest', JSON.stringify(digest));

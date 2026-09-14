@@ -24,6 +24,7 @@ import {
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
+	readdirSync,
 	rmSync,
 	statSync,
 	writeFileSync,
@@ -255,18 +256,31 @@ async function checkMcp(root, tools) {
  *
  * Every other row runs a launcher whose `node_modules` already exists, so the install
  * branch at the top of `kit/bin/hexdocs` never executes anywhere in the ladder. That branch
- * is the one a deploy meets after every submodule bump, and step 8 found it broken in
+ * is the one a fresh checkout meets, and the one a working copy that persists between builds
+ * meets after a submodule bump that changes the kit's dependencies. Step 8 found it broken in
  * hex-web's shape: without `--ignore-workspace`, pnpm walks up from the kit to the site's
  * workspace root and installs that instead.
  *
  * So the kit is copied without its `node_modules` to `common/docs/kit` inside a throwaway
  * pnpm workspace that excludes the mount the way hex-web's does, and `--help` is run from
  * the site directory with stdin closed and `CI` set, which is what the deploy's build step
- * gives it. Four things are asserted: the exit code and the command list; output
+ * gives it. Asserted of the first run: the exit code and the command list; output
  * byte-identical, on both streams, to a second run once the kit is installed, so the install
  * added nothing to either (the deploy reports the tail of stderr, and install chatter there
- * would bury the row that says why a build failed); and no `node_modules` at the workspace
- * root.
+ * would bury the row that says why a build failed); no `node_modules` at the workspace root;
+ * and exactly the packages `dependencies` names at the top of the kit's tree, so a
+ * devDependency reaching a consumer is a failure rather than a larger install nobody sees.
+ *
+ * Then three more runs against the installed kit, each after `package.json` changes, which is
+ * what a submodule bump that touches the kit's dependencies looks like from here. A tree the
+ * launcher installed is reinstalled, silently on both streams. A tree whose pnpm metadata no
+ * longer matches the launcher's stamp, and a tree with no stamp at all, are left alone: those
+ * are trees somebody else installed, a development install among them, and the launcher's
+ * `--prod` install would strip its devDependencies. The metadata change is simulated by
+ * rewriting the stamp's second line rather than by running a full install, which would make
+ * the row depend on the store holding every devDependency. Whether an install ran is read
+ * from the mtime of `node_modules/.modules.yaml`, which pnpm rewrites on every install,
+ * including one with nothing to do (measured on pnpm 10.33).
  *
  * The install is forced offline through `npm_config_offline`, which pnpm reads as its own
  * setting (measured: an empty store then fails with `ERR_PNPM_NO_OFFLINE_TARBALL`). A
@@ -342,6 +356,16 @@ export function checkFirstRun(root) {
 
 		const said = `${spawned.stdout}${spawned.stderr}`;
 		if (spawned.status !== 0 && said.includes('ERR_PNPM_NO_OFFLINE_TARBALL')) {
+			// The environment is unusable, and the launcher's failure branch still ran, so its
+			// one stream promise is checked before the skip. A launcher that exits in the install
+			// branch never reaches tsx, so any byte on stdout is install output on the stream
+			// `hexdocs mcp` speaks JSON-RPC on, and the reason the install failed is then missing
+			// from stderr, which is the stream the deploy reports.
+			if (spawned.stdout !== '') {
+				return check(name, 1, unit, [
+					`The failed install wrote ${spawned.stdout.length} characters to stdout, where \`hexdocs mcp\` speaks JSON-RPC, instead of to stderr: ${JSON.stringify(spawned.stdout.slice(0, 200))}`,
+				]);
+			}
 			return unusable(
 				'The pnpm store on this machine does not hold the kit dependencies, and the install is run offline. Run `pnpm --dir kit install` once to fill it.',
 			);
@@ -375,13 +399,121 @@ export function checkFirstRun(root) {
 				'The install created node_modules at the workspace root, so it installed the consuming workspace rather than the kit.',
 			);
 		}
-		if (!existsSync(join(mount, 'kit', 'node_modules', '.bin', 'tsx'))) {
+		const kit = join(mount, 'kit');
+		const modules = join(kit, 'node_modules');
+		if (!existsSync(join(modules, '.bin', 'tsx'))) {
 			problems.push('The kit has no node_modules/.bin/tsx after its first run.');
+			return check(name, 1, unit, problems);
 		}
-		return check(name, 1, unit, problems);
+
+		const manifestPath = join(kit, 'package.json');
+		const declared = Object.keys(
+			JSON.parse(readFileSync(manifestPath, 'utf8')).dependencies ?? {},
+		).sort();
+		const installed = topLevelPackages(modules);
+		const undeclared = installed.filter((entry) => !declared.includes(entry));
+		const absent = declared.filter((entry) => !installed.includes(entry));
+		if (undeclared.length > 0) {
+			problems.push(
+				`The first run installed ${undeclared.join(', ')} into the kit, and package.json does not list ${undeclared.length === 1 ? 'it' : 'them'} under dependencies, so a consumer pays for packages it never runs.`,
+			);
+		}
+		if (absent.length > 0) {
+			problems.push(
+				`The first run did not install ${absent.join(', ')}, which dependencies lists.`,
+			);
+		}
+
+		const stamp = join(modules, '.hexdocs-installed-from');
+		if (!existsSync(stamp)) {
+			problems.push(
+				'The first run left no stamp at kit/node_modules/.hexdocs-installed-from, so no later change to the kit dependencies would reinstall the tree.',
+			);
+			return check(name, 1, unit, problems);
+		}
+
+		const metadata = join(modules, '.modules.yaml');
+		const installedAt = () => statSync(metadata).mtimeMs;
+		// A change to package.json, one byte at a time, so each run below sees a kit that is
+		// not the one the stamp records.
+		const bump = () =>
+			writeFileSync(manifestPath, `${readFileSync(manifestPath, 'utf8')}\n`, 'utf8');
+
+		const stampBefore = readFileSync(stamp, 'utf8');
+		let at = installedAt();
+		bump();
+		const reinstalled = launch();
+		if (installedAt() === at) {
+			problems.push(
+				'After package.json changed, the launcher did not reinstall a tree it had installed itself, so a submodule bump that adds a dependency ends in ERR_MODULE_NOT_FOUND on a working copy that persists.',
+			);
+		}
+		if (readFileSync(stamp, 'utf8') === stampBefore) {
+			problems.push(
+				'The reinstall did not rewrite the stamp, so every later run reinstalls again.',
+			);
+		}
+		if (reinstalled.status !== 0) {
+			problems.push(`The run after package.json changed exited ${reinstalled.status}.`);
+		}
+		for (const stream of /** @type {const} */ (['stdout', 'stderr'])) {
+			if (reinstalled[stream] !== warm[stream]) {
+				problems.push(
+					`The reinstall wrote ${reinstalled[stream].length - warm[stream].length} more characters to ${stream} than a warm run: ${JSON.stringify(reinstalled[stream].replace(warm[stream], '').slice(0, 200))}`,
+				);
+			}
+		}
+
+		const [inputs] = readFileSync(stamp, 'utf8').split('\n');
+		const foreign = [
+			{
+				what: 'whose pnpm metadata no longer matches its stamp',
+				plant: () => writeFileSync(stamp, `${inputs}\nnot the metadata this tree has\n`, 'utf8'),
+			},
+			{ what: 'with no stamp', plant: () => rmSync(stamp) },
+		];
+		for (const tree of foreign) {
+			tree.plant();
+			bump();
+			at = installedAt();
+			const left = launch();
+			if (installedAt() !== at) {
+				problems.push(
+					`The launcher reinstalled a tree ${tree.what}, which is a tree somebody else installed. Its install is --prod, and over a development install that removes the devDependencies the test suite runs on.`,
+				);
+			}
+			if (left.status !== 0) {
+				problems.push(`The run over a tree ${tree.what} exited ${left.status}.`);
+			}
+		}
+
+		return check(name, 2, unit, problems);
 	} finally {
 		rmSync(workspace, { recursive: true, force: true });
 	}
+}
+
+/**
+ * The packages at the top of a `node_modules`, with scoped names joined to their scope.
+ *
+ * Entries starting with a dot are pnpm's own (`.bin`, `.pnpm`, `.modules.yaml`) and the
+ * launcher's stamp. With pnpm's isolated layout the top level holds exactly the direct
+ * dependencies of the install, so this is the list `--prod` decides.
+ *
+ * @param {string} modules
+ * @returns {string[]}
+ */
+function topLevelPackages(modules) {
+	const found = [];
+	for (const entry of readdirSync(modules)) {
+		if (entry.startsWith('.')) continue;
+		if (entry.startsWith('@')) {
+			for (const scoped of readdirSync(join(modules, entry))) found.push(`${entry}/${scoped}`);
+		} else {
+			found.push(entry);
+		}
+	}
+	return found.sort();
 }
 
 /** Both launchers are executable. A submodule checked out without the bit is unusable. */

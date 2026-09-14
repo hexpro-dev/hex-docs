@@ -25,6 +25,7 @@ import {
 	chmodSync,
 	cpSync,
 	existsSync,
+	linkSync,
 	lstatSync,
 	mkdirSync,
 	readFileSync,
@@ -61,7 +62,7 @@ import {
 } from '../../../src/contracts/manifest.js';
 import { buildBundle } from '../../src/compile/build.js';
 import { writeBundle } from '../../src/compile/bundle.js';
-import { sha256Hex } from '../../src/compile/serialise.js';
+import { gunzipMember, gzipMember, sha256Hex } from '../../src/compile/serialise.js';
 import { prefetch } from '../../src/commands/prefetch.js';
 import { ALL_RECIPES, HOLE, type Recipe, type RecipeId } from '../../src/exec/recipes.js';
 import { fileWriter, recordingWriter } from '../../src/io/write.js';
@@ -528,8 +529,11 @@ describe('a cold cache', () => {
 			const first = await run(site, { cache, serve: cachedBundle, bucket: BUCKET });
 
 			expect(first.code).toBe(0);
-			// The manifest plus every object it names, each fetched exactly once. A cache that
-			// re-hashed wrongly would show up as a second download of the same key.
+			// The manifest plus every object it names, each fetched exactly once. A fill that
+			// downloaded a key it already held would show up here as a second download of it.
+			// A fill that never re-hashed what it held would not, because a cold cache holds
+			// nothing: that half is the truncated object under "a cache that is not what it
+			// claims to be".
 			expect(first.fake.of('aws.get-object')).toHaveLength(manifest.objects.length + 1);
 			expect(new Set(first.fake.of('aws.get-object').map((call) => call.holes[1])).size).toBe(
 				manifest.objects.length + 1,
@@ -633,6 +637,130 @@ describe('the digest a site pinned', () => {
 			expect(existsSync(join(site.directory, 'public', '_docs'))).toBe(false);
 		} finally {
 			removeConsumer(site.consumer);
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// The cache, which is re-verified rather than trusted
+// ---------------------------------------------------------------------------
+
+/**
+ * A private copy of the compiled cache, so a plant in it reaches no other test.
+ *
+ * Both commits are copied, laid out as `<project>/<commit>/ast-N`, which is the layout
+ * `bundleCache` reads.
+ */
+function copyCache(name: string): { cache: string; bundle: string } {
+	const cache = join(root, name);
+	cpSync(bundleRoot, cache, { recursive: true });
+	return { cache, bundle: join(cache, ...prefix.split('/')) };
+}
+
+describe('a cache that is not what it claims to be', () => {
+	test('a truncated object is downloaded again, and the site gets the whole file', async () => {
+		// The half-written file an interrupted download leaves. It exists, so a fill that
+		// trusted existence would skip it, and a truncated gzip member then throws inside
+		// extraction rather than reporting anything. The assertion is that the cache heals:
+		// one download of that key and no other, and the bytes in the site are the pristine
+		// ones. A refusal would not be enough, because a fill that never re-hashed the cache
+		// can still be refused later by the extraction digest.
+		const site = makeSite('glob-workspace');
+		const { cache, bundle } = copyCache('truncated');
+		try {
+			const key = pageKey('en', 'index');
+			const cached = join(bundle, ...key.split('/'));
+			const pristine = readFileSync(cached);
+			writeFileSync(cached, pristine.subarray(0, Math.floor(pristine.length / 2)));
+
+			const outcome = await run(site, { cache, serve: cachedBundle, bucket: BUCKET });
+
+			expect(outcome.code).toBe(0);
+			expect(outcome.fake.of('aws.get-object').map((call) => call.holes[1])).toEqual([
+				`${prefix}/${key}`,
+			]);
+			expect(readFileSync(cached)).toEqual(pristine);
+			const landed = join(trees(site).bundle, PROJECT, LABEL, 'pages', 'en', 'index.json');
+			expect(readFileSync(landed)).toEqual(gunzipMember(pristine));
+		} finally {
+			removeConsumer(site.consumer);
+			rmSync(cache, { recursive: true, force: true });
+		}
+	});
+
+	test('a prefix holding another commit is refused by the manifest it carries, before anything lands', async () => {
+		// The whole older bundle under the newer commit's prefix, not only its manifest. A
+		// manifest copied alone leaves the newer objects beside it, and those fail their stored
+		// digests against the older manifest whether or not the self-declaration is compared,
+		// so a test planted that way passes with the comparison deleted. Planted whole, every
+		// object agrees with the manifest beside it, and the commit the manifest names is the
+		// only thing that says two bundles were confused.
+		const site = makeSite('glob-workspace');
+		const { cache, bundle } = copyCache('confused');
+		try {
+			rmSync(bundle, { recursive: true });
+			cpSync(
+				join(bundleRoot, ...bundlePrefix(PROJECT, OLDER.commit, manifest.ast).split('/')),
+				bundle,
+				{
+					recursive: true,
+				},
+			);
+
+			const outcome = await run(site, { cache, serve: cachedBundle, bucket: BUCKET });
+
+			const cacheRow = row(outcome, 'prefetch-cache');
+			expect(cacheRow.status).toBe('fail');
+			expect(cacheRow.findings.map((finding) => finding.rule)).toEqual(['bundle-digest-mismatch']);
+			expect(cacheRow.findings[0]?.message).toContain(
+				`says it is ${PROJECT} at ${OLDER.commit.slice(0, 12)}, and this version asks for ${PROJECT} at ${manifest.commit.slice(0, 12)}`,
+			);
+			expect(outcome.fake.of('aws.get-object')).toEqual([]);
+			expect(existsSync(trees(site).bundle)).toBe(false);
+			expect(existsSync(trees(site).public)).toBe(false);
+			expect(outcome.code).toBe(3);
+		} finally {
+			removeConsumer(site.consumer);
+			rmSync(cache, { recursive: true, force: true });
+		}
+	});
+
+	test('a stored object that matches its own digest and decompresses to the wrong text is refused', async () => {
+		// The second digest family. The member is a valid gzip and `objects[].digest` is
+		// patched to match it, so the stored-bytes check passes and only the page record's
+		// uncompressed digest can say the content is wrong. No digest is pinned, because a pin
+		// would refuse the patched manifest first. Nothing is said about the rest of the site:
+		// the other files are written before the row fails, and that is the current behaviour.
+		const site = makeSite('glob-workspace');
+		const { cache, bundle } = copyCache('decompresses-wrong');
+		try {
+			const key = pageKey('en', 'index');
+			const tampered = gzipMember(Buffer.from('{"tampered":true}\n', 'utf8'));
+			writeFileSync(join(bundle, ...key.split('/')), tampered);
+			const manifestPath = join(bundle, MANIFEST_KEY);
+			const doctored = JSON.parse(readFileSync(manifestPath, 'utf8')) as BundleManifest;
+			const object = doctored.objects.find((candidate) => candidate.key === key);
+			expect(object).toBeDefined();
+			if (object !== undefined) object.digest = sha256Hex(tampered);
+			writeFileSync(manifestPath, JSON.stringify(doctored), 'utf8');
+
+			const outcome = await run(site, { cache });
+
+			expect(row(outcome, 'prefetch-cache').status).toBe('pass');
+			const extract = row(outcome, 'prefetch-extract');
+			expect(extract.status).toBe('fail');
+			expect(extract.findings.map((finding) => finding.rule)).toEqual(['bundle-digest-mismatch']);
+			const expected = manifest.pages['index']?.locales.en?.digest ?? '';
+			expect(extract.findings[0]?.message).toContain(
+				`${key} decompresses to ${sha256Hex(gunzipMember(tampered)).slice(0, 12)} and the manifest records ${expected.slice(0, 12)}`,
+			);
+			const landed = join(trees(site).bundle, PROJECT, LABEL, 'pages', 'en', 'index.json');
+			expect(existsSync(landed)).toBe(false);
+			expect(outcome.fake.calls).toEqual([]);
+			expect(outcome.code).toBe(3);
+		} finally {
+			removeConsumer(site.consumer);
+			rmSync(cache, { recursive: true, force: true });
 		}
 	});
 });
@@ -846,6 +974,42 @@ describe('pruning', () => {
 			expect(readFileSync(destination)).toEqual(manifestBytes);
 			expect(readFileSync(join(outside, 'precious.txt'), 'utf8')).toBe('not the site\n');
 			expect(second.writer.removed).toEqual(expect.arrayContaining([linkedDirectory, destination]));
+		} finally {
+			removeConsumer(site.consumer);
+			rmSync(outside, { recursive: true, force: true });
+		}
+	});
+
+	test('a hard link at a planned destination is replaced, and the file it shares an inode with survives', async () => {
+		// A hard link is a regular file to `readdirSync`, so a prune that kept every regular
+		// file at a kept path left it, and extraction's write then truncated the shared inode
+		// in place: a run with every row green rewrote a file outside the site with a manifest.
+		// It takes an `ln`, or a snapshot tool such as `cp -al` run against the working tree,
+		// which is the same precondition as the symbolic link case above.
+		const site = makeSite('glob-workspace');
+		const outside = join(root, 'outside-hard-link');
+		try {
+			await run(site);
+			mkdirSync(outside, { recursive: true });
+			const precious = join(outside, 'precious.txt');
+			writeFileSync(precious, 'DO NOT MODIFY\n', 'utf8');
+			const destination = join(trees(site).bundle, PROJECT, LABEL, MANIFEST_KEY);
+			const manifestBytes = readFileSync(destination);
+			rmSync(destination);
+			linkSync(precious, destination);
+			expect(lstatSync(destination).nlink).toBe(2);
+
+			const second = await run(site);
+
+			expect(second.code).toBe(0);
+			expect(readFileSync(precious, 'utf8')).toBe('DO NOT MODIFY\n');
+			expect(lstatSync(destination).nlink).toBe(1);
+			expect(readFileSync(destination)).toEqual(manifestBytes);
+			expect(second.writer.removed).toEqual([destination]);
+
+			const third = await run(site);
+			expect(third.writer.written).toEqual([]);
+			expect(third.writer.removed).toEqual([]);
 		} finally {
 			removeConsumer(site.consumer);
 			rmSync(outside, { recursive: true, force: true });
@@ -1147,6 +1311,77 @@ describe('a tree this command will not write into', () => {
 		});
 	}
 
+	/**
+	 * Below a label directory, where the shape check does not look and `prune` and
+	 * extraction do the work. Each lock is placed after a clean first run, so the cache row
+	 * passes and the refusal arrives part way through changing the trees.
+	 */
+	const REFUSED_WRITES: readonly {
+		name: string;
+		lock: (site: Site) => { path: string; mode: number };
+		named: string;
+	}[] = [
+		{
+			// The prune empties the old label and then cannot remove the directory itself,
+			// because removing an entry needs write permission on the directory holding it.
+			name: 'a relabel whose project directory cannot be written',
+			lock: (site) => {
+				writeConfig(site, { label: '1.2.0' });
+				return { path: join(trees(site).bundle, PROJECT), mode: 0o555 };
+			},
+			named: `app/docs/_bundles/${PROJECT}/${LABEL}: rmdir was refused with EACCES`,
+		},
+		{
+			// Nothing is stale, so the prune has nothing to do and extraction meets it.
+			name: 'a file extraction has to create in a directory that cannot be written',
+			lock: (site) => {
+				const directory = join(trees(site).bundle, PROJECT, LABEL, 'pages', 'en');
+				rmSync(join(directory, 'index.json'));
+				return { path: directory, mode: 0o555 };
+			},
+			named: `app/docs/_bundles/${PROJECT}/${LABEL}/pages/en/index.json: open was refused with EACCES`,
+		},
+		{
+			name: 'a directory inside a label that cannot be listed',
+			lock: (site) => ({
+				path: join(trees(site).bundle, PROJECT, LABEL, 'pages', 'en'),
+				mode: 0o000,
+			}),
+			named: `app/docs/_bundles/${PROJECT}/${LABEL}/pages/en: scandir was refused with EACCES`,
+		},
+	];
+
+	for (const entry of REFUSED_WRITES) {
+		test.skipIf(asRoot)(
+			`${entry.name} fails the extract row, naming it, rather than throwing`,
+			async () => {
+				// A throw here reached the CLI as "a bug in hexdocs" and a stack, after the prune
+				// had already removed part of the old tree, with no row saying what went.
+				const site = makeSite('glob-workspace');
+				let locked: string | null = null;
+				try {
+					expect((await run(site)).code).toBe(0);
+					const { path, mode } = entry.lock(site);
+					chmodSync(path, mode);
+					locked = path;
+
+					const outcome = await run(site);
+
+					const extract = row(outcome, 'prefetch-extract');
+					expect(extract.status).toBe('fail');
+					expect(String(extract.note)).toContain(entry.named);
+					expect(String(extract.note)).toContain('run prefetch again');
+					expect(outcome.data['prefetched']).toBe(false);
+					expect(outcome.data['removed']).toBe(outcome.writer.removed.length);
+					expect(outcome.code).toBe(3);
+				} finally {
+					if (locked !== null) chmodSync(locked, 0o755);
+					removeConsumer(site.consumer);
+				}
+			},
+		);
+	}
+
 	test('a clean site passes and counts the directories it looked at', async () => {
 		const site = makeSite('glob-workspace');
 		try {
@@ -1347,6 +1582,82 @@ describe('a site that declares nothing', () => {
 			removeConsumer(site.consumer);
 		}
 	});
+});
+
+describe('a docs directory the configs cannot be read out of', () => {
+	/**
+	 * Each is planted after a clean first run, so there is a tree a wrong answer could prune.
+	 * An entry that could not be read is a failure rather than a skip for exactly that reason:
+	 * skipping a config is pruning every tree its project owns.
+	 */
+	const CASES: readonly {
+		name: string;
+		plant: (docs: string) => string | null;
+		named: string;
+		asRootToo: boolean;
+	}[] = [
+		{
+			// `TREE_SHAPE_REASON` said a file standing in for app/docs was refused, and the
+			// directory listing threw ENOTDIR before the shape check was ever reached.
+			name: 'app/docs is a regular file',
+			plant: (docs) => {
+				rmSync(docs, { recursive: true });
+				writeFileSync(docs, 'not a directory\n', 'utf8');
+				return null;
+			},
+			named: 'app/docs is not a directory',
+			asRootToo: true,
+		},
+		{
+			name: 'a config is a symbolic link to nothing',
+			plant: (docs) => {
+				symlinkSync(join(docs, 'gone.json'), join(docs, 'other-app.docs.json'));
+				return null;
+			},
+			named: 'other-app.docs.json could not be read (ENOENT)',
+			asRootToo: true,
+		},
+		{
+			name: 'app/docs cannot be listed',
+			plant: (docs) => {
+				chmodSync(docs, 0o311);
+				return docs;
+			},
+			named: 'app/docs could not be read (EACCES)',
+			asRootToo: false,
+		},
+	];
+
+	const asRoot = typeof process.getuid === 'function' && process.getuid() === 0;
+
+	for (const entry of CASES) {
+		test.skipIf(asRoot && !entry.asRootToo)(
+			`${entry.name} fails the configs row, naming it, and removes nothing`,
+			async () => {
+				const site = makeSite('glob-workspace');
+				const docs = join(site.directory, 'app', 'docs');
+				let locked: string | null = null;
+				try {
+					expect((await run(site)).code).toBe(0);
+					locked = entry.plant(docs);
+
+					const outcome = await run(site, { serve: cachedBundle, bucket: BUCKET });
+
+					const configs = row(outcome, 'prefetch-configs');
+					expect(configs.status).toBe('fail');
+					expect(String(configs.note)).toContain(entry.named);
+					expect(outcome.rows.map((found) => found.id)).toEqual(['prefetch-configs']);
+					expect(outcome.fake.calls).toEqual([]);
+					expect(outcome.writer.removed).toEqual([]);
+					expect(outcome.writer.written).toEqual([]);
+					expect(outcome.code).toBe(3);
+				} finally {
+					if (locked !== null) chmodSync(locked, 0o755);
+					removeConsumer(site.consumer);
+				}
+			},
+		);
+	}
 });
 
 // ---------------------------------------------------------------------------

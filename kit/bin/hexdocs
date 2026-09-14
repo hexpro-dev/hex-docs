@@ -7,7 +7,9 @@
 #
 #   * The probe is `[ -x node_modules/.bin/tsx ]`, not `[ -d node_modules ]`. A
 #     half-finished install leaves the directory present and the binary absent, and a
-#     directory probe then trusts it forever and execs something that is not there.
+#     directory probe then trusts it forever and execs something that is not there. A tree
+#     this script installed is also checked against the kit it was installed for; see
+#     "The tree this script installed" below.
 #   * `exec node_modules/.bin/tsx`, not `npx tsx`. npx re-resolves on every run and
 #     reaches the network when the local copy is missing, which turns a broken install
 #     into a silent download instead of an error.
@@ -27,14 +29,16 @@ export HEXDOCS_PROJECT_ROOT="${HEXDOCS_PROJECT_ROOT:-$PWD}"
 # Its output goes to a file and is replayed to stderr only on failure. On success stderr
 # stays empty, and that is load bearing in a consumer: the deploy's build step rejects with
 # the last twenty lines of stderr, falling back to stdout only when stderr is empty, and the
-# CLI's rows are on stdout. A first build after a submodule bump that printed pnpm's
-# progress lines, even a one-line announcement from this script, would push the row that
-# says why the build failed out of the only message anybody reads. `--silent` is not the
-# answer either: it hides the reason an install failed, which is the one time the output
-# matters.
+# CLI's rows are on stdout. A first build after a submodule bump that changed the kit's
+# dependencies, printing pnpm's progress lines or even a one-line announcement from this
+# script, would push the row that says why the build failed out of the only message anybody
+# reads. `--silent` is not the answer either: it hides the reason an install failed, which is
+# the one time the output matters.
 #
 # stdin is closed for the install, so it can never read a JSON-RPC frame meant for the
-# server this script is about to exec.
+# server this script is about to exec. That redirect is defensive and nothing guards it:
+# measured against pnpm 10.33, pnpm does not read an inherited stdin that is not a terminal,
+# so removing it changes nothing a test can observe today.
 install_toolchain() {
 	install_log=$(mktemp "${TMPDIR:-/tmp}/hexdocs-install.XXXXXX")
 	if (cd "$KIT_DIR" && "$@") </dev/null >"$install_log" 2>&1; then
@@ -47,7 +51,33 @@ install_toolchain() {
 	exit 1
 }
 
-if [ ! -x "$KIT_DIR/node_modules/.bin/tsx" ]; then
+# The tree this script installed, and the kit it was installed for.
+#
+# Checking only that tsx exists trusts an installed tree forever. The deploy host builds in
+# a working copy that persists, `node_modules` is gitignored, so a submodule bump that added
+# a dependency left the old tree in place and the build died on ERR_MODULE_NOT_FOUND with no
+# install attempted. So after an install this writes a stamp beside the tree: a checksum of
+# `package.json` and `pnpm-lock.yaml`, and a checksum of the metadata pnpm wrote for the
+# tree. Comparing the lockfile's mtime with the directory's is not the answer: measured on
+# pnpm 10.33, an install with nothing to do does not move the mtime of `node_modules`, so
+# every run after the first reinstall would pay for another.
+#
+# It reinstalls only a tree that still carries this script's stamp. A tree with no stamp was
+# installed by somebody else, which is how anybody working on the kit itself installs it,
+# with its devDependencies, and the install below is `--prod`: running it over that tree
+# would take vitest and the MCP SDK out from under the test suite. The second checksum is
+# the same boundary one step later. pnpm keeps an unknown file in `node_modules` across an
+# install, so a full install over a tree this script made leaves the stamp behind, and the
+# changed metadata is what says the tree is no longer this script's to replace. The limit:
+# a tree installed by hand, including by following the message at the bottom of this file,
+# is never reinstalled by it, and needs the same command run again after a dependency change.
+STAMP="$KIT_DIR/node_modules/.hexdocs-installed-from"
+kit_inputs=$(cat "$KIT_DIR/package.json" "$KIT_DIR/pnpm-lock.yaml" 2>/dev/null | cksum)
+tree_metadata() {
+	cat "$KIT_DIR/node_modules/.modules.yaml" 2>/dev/null | cksum
+}
+
+install_kit() {
 	if command -v pnpm >/dev/null 2>&1; then
 		# --ignore-workspace, because a consuming site is usually a pnpm workspace and the
 		# kit sits inside it. Without the flag pnpm walks up to the workspace root and
@@ -72,6 +102,26 @@ if [ ! -x "$KIT_DIR/node_modules/.bin/tsx" ]; then
 		echo "hexdocs: install one, or run 'pnpm install --prod' in $KIT_DIR yourself." >&2
 		exit 1
 	fi
+	# Only after the install succeeded, because `install_toolchain` exits on a failure: a
+	# stamp written over a broken tree would stop the next run retrying.
+	printf '%s\n%s\n' "$kit_inputs" "$(tree_metadata)" >"$STAMP"
+}
+
+stamped_inputs=
+stamped_tree=
+if [ -r "$STAMP" ]; then
+	{
+		IFS= read -r stamped_inputs || true
+		IFS= read -r stamped_tree || true
+	} <"$STAMP"
+fi
+
+# No stamp reads as two empty lines, and an empty line never equals the output of `cksum`,
+# so a tree with no stamp fails the metadata comparison and is left alone.
+if [ ! -x "$KIT_DIR/node_modules/.bin/tsx" ]; then
+	install_kit
+elif [ "$stamped_tree" = "$(tree_metadata)" ] && [ "$stamped_inputs" != "$kit_inputs" ]; then
+	install_kit
 fi
 
 exec "$KIT_DIR/node_modules/.bin/tsx" "$KIT_DIR/src/cli/main.ts" "$@"
