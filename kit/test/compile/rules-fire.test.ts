@@ -440,16 +440,42 @@ const CASES: readonly Case[] = [
 			}),
 	},
 	{
-		name: 'a page whose slug ties with a built-in route',
+		name: 'a page at a reserved root, and a page at the path of a section root in another language',
 		rules: ['slug-reserved'],
+		arms: [
+			{
+				rule: 'slug-reserved',
+				matches: /is a reserved route under a docs mount/,
+				why: 'A first segment the routing keeps for itself.',
+			},
+			{
+				rule: 'slug-reserved',
+				matches:
+					/^content\/ja\/developer\.md and content\/en\/developer\/index\.md are both served at "developer"/,
+				why: 'A page and a section root sharing a path, split across two languages so a check that looks inside one locale at a time finds nothing. The corpus has every section root in every language, so both files are planted.',
+			},
+		],
 		run: () =>
-			built((repo) =>
+			built((repo) => {
 				write(
 					repo,
 					'content/en/search.md',
 					'---\ntitle: Search\ndescription: A page named after a machine address.\n---\n\n## Section\n\nText.\n',
-				),
-			),
+				);
+				// `developer` has no section root in any language, so neither locale holds both
+				// files on its own. `guide` would not do: the corpus has `guide/index.md` in
+				// Japanese as well, and a check confined to one locale would still fire there.
+				write(
+					repo,
+					'content/en/developer/index.md',
+					'---\ntitle: Developer notes\ndescription: The section root for the developer pages.\n---\n\n## Section\n\nText.\n',
+				);
+				write(
+					repo,
+					'content/ja/developer.md',
+					'---\ntitle: \u30ac\u30a4\u30c9\ndescription: \u30ac\u30a4\u30c9\u306e\u30da\u30fc\u30b8\u3067\u3059\u3002\n---\n\n## \u7bc0\n\n\u672c\u6587\u3002\n',
+				);
+			}),
 	},
 	{
 		name: 'a link to a fragment the target page does not have',
