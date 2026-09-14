@@ -1655,9 +1655,13 @@ said the redirect existed.
 
 **`wiring-routes` runs the consumer's own `react-router routes --json`** through a read recipe,
 then checks the structure: each page row once at the bare mount and once under `:lang`, each
-machine row top level with its id. It is allowed over MCP by name, deliberately, because it
-executes the consumer's route config, which is exactly what that consumer's own build executes.
-A missing binary is `not-run`. `wiring-root-seo` (formerly `wiring-localised-paths`) checks that
+machine row top level with its id. It is allowed over MCP by name, deliberately, and it is safe
+there only because every MCP tool call's `root` and `site` are confined to the project the server
+was started in (`kit/src/mcp/confine.ts`): the recipe runs the site's own
+`node_modules/.bin/react-router`, so an unconfined root would let a tool call run any binary a
+directory names. The hex-web review found exactly that, under tool annotations stating the tool
+was read-only and closed-world; the annotations are now derived from the recipes each tool
+declares, and the server runs nothing a tool did not declare. A missing binary is `not-run`. `wiring-root-seo` (formerly `wiring-localised-paths`) checks that
 root asks `docsSeoFromMatches`.
 
 **The prebuild predicate binds, it does not match.** `kit/src/commands/prefetch-params.ts` holds
@@ -1718,10 +1722,14 @@ did not exist, for a property each was the only record of; those tests now exist
 ### Deploy facts this step established
 
 - The front builds with `npm run build` on the deploy host, and hash `extra_dirs` are keyed by
-  project type, so a hex-docs submodule bump rebuilds all five front projects.
-- `git pull` does not check out a newly added submodule, even with `submodule.recurse` set. The
-  first deploy after the integration merges needs `git submodule update --init common/docs`,
-  or the prebuild fails with exit 127 on a launcher that is not there.
+  project type, so a hex-docs submodule bump rebuilds every front project: four in hex-web today
+  (`pro`, `apps`, `games`, `citadel`), since `analytics` sets `has_front: false`.
+- In a checkout whose submodules were initialised one at a time, which is how `~/Hex/hex-web` was
+  set up, `git pull` leaves a newly added submodule empty even with `submodule.recurse` set; a
+  `--recurse-submodules` clone gets it checked out. Either way, the first deploy after the
+  integration merges should run `git submodule update --init common/docs` first, because an
+  empty mount fails the prebuild before any guard runs, with only
+  `sh: ../../common/docs/kit/bin/hexdocs: No such file or directory` and exit 127.
 - `wiring-routes` needs the consumer's dependencies installed, which they are at prebuild time.
 - Generated consumer files have to be measured under both consumers' eslint: hex-web lints `.mjs`
   with node globals, and kcalc gives `.mjs` none.
@@ -1797,12 +1805,40 @@ so a correct fix drawn another way still passes, and the plain link beside the c
 reference, so no probe has to know the ground colour. `test/paint.test.ts` breaks each of them
 with one mutation that exactly one probe can see.
 
+### What the hex-web review changed
+
+Thirty-two agents over four lenses against the branch and its running build: 28 findings, 22
+survived. Three were security defects in this package, and none of the three was visible from
+hex-web's side of the diff. The SVG safety scan was a denylist that passed an XHTML `iframe`
+with `srcdoc`, and a consuming site serves bundle assets as same-origin static files with no
+CSP, so a navigation to the asset ran script on the site's origin; it is now an allowlist over a
+namespace-aware walk that refuses what it cannot reason about. The MCP tools were unconfined, as
+above. And `aws.get-object`, whose hole is an output path, sat in the MCP recipe set under a
+comment saying the server cannot write; no tool needed it and it now lives in its own table.
+
+Two guards were added that stop a site shipping something it should not. `prefetch` refuses a
+labelled bundle whose source pages still carry the scaffold's placeholder description or its
+TODO body markers, read from the constants the templates export, so the scaffold can never be
+labelled into production by accident; a scaffolded translation is not refused, because it is
+served as the source page. And a machine address with a trailing slash is a 301, because
+`llms.txt` links relatively and every link under the slash spelling 404d. The generated docs guard
+prints failing rows last, because the deploy reports only the last twenty lines and the fixed
+"not checked here" paragraph used to push them out.
+
+The rest was hex-web's own text: a relabel runbook that could not run as written, a CSP check
+that passed when both docs pages answered 500, and comments claiming more than the code does.
+One finding was pre-existing and outside this step: a request with thousands of path segments
+blocks the server's event loop, through React Router's lazy route discovery on every document
+render.
+
 ### What step 8 deliberately does not do
 
 Pinned version addresses (`/v/<label>/`) have no route rows; `docsRoute` still accepts `pinned`.
 There is no `Accept: text/markdown` negotiation, which would need `Vary: Accept` from root's
 `headers`. There is no JSON-LD helper; a consumer builds its own. `search.json` was removed, since
-nothing specified or read it. And three kcalc guards conflict with docs and are recorded for
+nothing specified or read it. On a phone the sidebar renders before the article with no
+collapse, which is a design question for when a project has enough pages to make it matter. And
+three kcalc guards conflict with docs and are recorded for
 kcalc's own install rather than fixed here: `seo-audit.mjs` expects exactly its registry's URLs in
 the sitemap, `check-assets.mjs` refuses `.png` and `.svg` in `public/`, and `check-forbidden.mjs`
 scans the prefetched trees.
