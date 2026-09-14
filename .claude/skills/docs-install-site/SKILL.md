@@ -122,6 +122,23 @@ pnpm build
 `pnpm build` is the one that matters. The docs guard hangs off `prebuild`, and `prebuild` is
 the one thing that always runs; there is no CI on these repositories.
 
+On a checkout where the docs submodule was never initialised, a build stops on the prebuild's
+prefetch segment, before the guard runs, with the shell's own error and exit 127. On macOS it
+reads:
+
+```
+sh: ../../common/docs/kit/bin/hexdocs: No such file or directory
+```
+
+The path is the launcher as the prebuild string spells it, relative to the site. Run
+`git submodule update --init common/docs` from the repository root, with the mount this site
+uses. `git pull` does not check out a submodule a commit added on every clone, so the first
+build after the docs integration merges is where this appears. The guard's own sentence about
+the submodule is printed only when `node scripts/check-docs.mjs` is run by hand.
+
+When the guard does run and a row fails, the rows that did not pass are printed last, with
+their findings, so they are what a deploy log's last lines show.
+
 ## 7. What the report says it did not check
 
 `verify-install` closes with a list of what it deliberately does not cover. `root.tsx`, the

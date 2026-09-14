@@ -237,8 +237,25 @@ export const GITIGNORE_ENTRIES = [`app/docs/${BUNDLE_TREE}/`, `public/${PUBLIC_T
  * reached a verdict and found problems. Every non-zero code fails `prebuild` either way.
  *
  * A launcher that is not on disk gets its own sentence, because it has one cause in
- * practice: a clone that never initialised the submodule. The spawn error for that case
- * is `ENOENT` and a path, which names neither the submodule nor the command that fixes it.
+ * practice: a clone that never initialised the submodule. That branch is reached only when
+ * somebody runs this guard on its own, `node scripts/check-docs.mjs`, and never from the
+ * build. Every prebuild chain `verify-install` accepts runs the prefetch segment first, and
+ * that segment calls the same launcher by the same relative path, so on a missing submodule
+ * the shell stops the chain there with its own error and exit 127 before this file runs. On
+ * the Mac that deploys, that error reads `sh: <mount>/kit/bin/hexdocs: No such file or
+ * directory`, and the message below quotes it with the real path, so a person who runs the
+ * guard by hand after a failed build can match the two lines. Reaching this sentence from
+ * the build would need a prebuild segment that tests for the launcher first, which the
+ * prebuild predicate does not bind, and whose obvious spelling, `test -x ... ||`, hides a
+ * failing step before it.
+ *
+ * **Failures are printed last.** A deploy reports the last twenty lines of a failed build,
+ * and the rows that failed and what to do about them have to be those lines. So a row that
+ * failed or did not run is printed once in the table without its detail, and again after the
+ * summary with its note and its findings, remediation last, and the closing paragraph about
+ * what is not checked is printed only on a clean run, where nothing needs the space. Measured
+ * against the review's replica of the deploy's tail: with the paragraph after the rows, a
+ * failure in the first row of nine was not among the twenty lines at all.
  */
 export function checkDocsShim(site: SiteDescriptor): string {
 	const launcher = `${site.mountFromSite}/kit/bin/hexdocs`;
@@ -259,6 +276,9 @@ export function checkDocsShim(site: SiteDescriptor): string {
  *   0  clean
  *   3  problems found; this is \`hexdocs verify-install\`'s own code, passed through
  *   1  the launcher could not be spawned, or its output did not parse. No verdict.
+ *
+ * What did not pass is printed last, after the summary, because a deploy reports only the
+ * last twenty lines of a failed build.
  *
  * Node builtins only.
  */
@@ -294,12 +314,18 @@ function noVerdict(reason, detail) {
 	process.exit(1);
 }
 
+// Reached only when this file is run on its own. From prebuild, the prefetch segment calls
+// the same launcher first, so a missing submodule stops the build there with the shell's
+// error and exit 127, and this message is never printed.
 if (!existsSync(LAUNCHER)) {
 	noVerdict(
 		\`could not run \${LAUNCHER}, because it is not there\`,
 		"The launcher lives inside the docs submodule, so this almost always means the\\n" +
 			"submodule is not checked out. From the repository root, run:\\n\\n" +
-			\`  git submodule update --init \${MOUNT}\\n\`,
+			\`  git submodule update --init \${MOUNT}\\n\\n\` +
+			"A build stops earlier on the same cause, on the prefetch segment of prebuild, and\\n" +
+			"what it prints is the shell's own error, on macOS:\\n\\n" +
+			${JSON.stringify(`  sh: ${launcher}: No such file or directory\n`)},
 	);
 }
 
@@ -335,15 +361,19 @@ if (rows === null || rows.length === 0) {
 }
 
 const width = rows.reduce((max, row) => Math.max(max, String(row.id).length), 0);
+const blocking = rows.filter((row) => row.status === "fail" || row.status === "not-run");
+const labelOf = (row) => (LABELS[row.status] ?? String(row.status)).padEnd(7);
 console.log(\`docs wiring for \${report.site} (\${report.kitVersion})\\n\`);
 for (const row of rows) {
-	const label = (LABELS[row.status] ?? String(row.status)).padEnd(7);
-	const tail =
-		row.status === "pass" || row.status === "fail"
-			? \`\${row.examined} \${row.unit}\`
-			: (row.note ?? "");
-	console.log(\`  \${String(row.id).padEnd(width)}  \${label}  \${tail}\`);
-	if ((row.status === "pass" || row.status === "fail") && row.note) {
+	// A row that did not pass has its detail printed after the summary instead, so that it
+	// ends the output, and its note is not printed twice.
+	const deferred = blocking.includes(row);
+	let tail = "";
+	if (row.status === "pass" || row.status === "fail") tail = \`\${row.examined} \${row.unit}\`;
+	else if (!deferred) tail = row.note ?? "";
+	console.log(\`  \${String(row.id).padEnd(width)}  \${labelOf(row)}  \${tail}\`.trimEnd());
+	if (deferred) continue;
+	if (row.status === "pass" && row.note) {
 		console.log(\`  \${" ".repeat(width)}  \${" ".repeat(7)}  \${row.note}\`);
 	}
 	for (const finding of row.findings ?? []) {
@@ -371,12 +401,26 @@ if (skipped > 0) {
 	}
 }
 
-if (Array.isArray(report.notCheckedHere) && report.notCheckedHere.length > 0) {
-	console.log("\\nNot checked here, and still a person's job:");
-	for (const line of report.notCheckedHere) console.log(\`  \${line}\`);
-}
-
 if (report.nextAction?.why) console.log(\`\\nNext: \${report.nextAction.why}\`);
+
+if (blocking.length === 0) {
+	if (Array.isArray(report.notCheckedHere) && report.notCheckedHere.length > 0) {
+		console.log("\\nNot checked here, and still a person's job:");
+		for (const line of report.notCheckedHere) console.log(\`  \${line}\`);
+	}
+} else {
+	console.log("\\nWhat did not pass, and what to do about it:");
+	for (const row of blocking) {
+		const counted = row.status === "fail" ? \`\${row.examined} \${row.unit}\` : "";
+		console.log(\`  \${row.id}  \${labelOf(row).trimEnd()}  \${counted}\`.trimEnd());
+		if (row.note) console.log(\`    \${row.note}\`);
+		for (const finding of row.findings ?? []) {
+			console.log(\`    \${finding.message}\`);
+			if (finding.consequence) console.log(\`    \${finding.consequence}\`);
+			if (finding.remediation) console.log(\`    \${finding.remediation}\`);
+		}
+	}
+}
 
 process.exit(typeof report.exitCode === "number" ? report.exitCode : 3);
 `;
