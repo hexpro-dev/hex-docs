@@ -103,6 +103,14 @@ label, `prefetch` extracts the bundle and then exits 3 on `prefetch-skew`. That 
 working, not a failure to chase: `sync` reads the bundle `prefetch` just cached and writes the
 new `pages`, and the next `prefetch` is clean.
 
+A label on a commit whose pages are still what `hexdocs init` or `hexdocs scaffold` wrote is
+refused before anything is extracted. The row is `prefetch-placeholders`, and it names the
+project, the label, the page and which placeholder it found: the placeholder description, or
+one of the two TODO lines for writing a page. A site would otherwise serve that page as
+indexable, with "Replace this sentence" as its meta description. Write the page, publish that
+commit, and label it instead. A scaffolded translation is not refused, because its language is
+served the source page and its TODO lines never reach a reader.
+
 `prefetch` is keyed by sha, so relabelling a sha does no network at all, and a warm cache
 needs no AWS credentials. It verifies the stored digest of every object as fetched and the
 uncompressed digest of every payload after extracting, then lands the page payloads and

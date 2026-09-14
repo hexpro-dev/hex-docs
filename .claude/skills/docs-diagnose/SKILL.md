@@ -105,6 +105,17 @@ alternates. An address no route matches is not in `LOCALISED_PATHS` either, beca
 addresses never join that list. `prefetch-skew` fails the site's prebuild in both directions
 and names up to three slugs each way. Run `hexdocs sync`.
 
+**The site's prebuild fails on `prefetch-placeholders`.** A labelled version points at a
+commit whose source-language pages still carry the scaffold's placeholder description or its
+TODO lines for writing a page. Nothing was extracted. Label a commit whose pages have been
+written; relabelling an unfinished commit is not the fix, and neither is removing the row.
+
+**`prefetch-cache` did not run, naming a manifest that is not in the bucket.** Either the
+commit was never published, or the app repository published it with a different hex-docs pin
+and so under a different AST major. The key carries this kit's major, so compare the two
+submodule pins before re-running the app workflow, which at the old pin recompiles to the same
+major and skips.
+
 **`hexdocs check` reports nothing at all and exits 3 with one `NOT RUN` row.** The tree is
 not in a git repository, or has no commits. That is a refusal rather than a fallback on
 purpose: supplying a synthetic commit would make every page read `current`.
