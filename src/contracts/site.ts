@@ -146,6 +146,18 @@ export interface DocsSiteConfig {
 	 * rather than writing an empty array so an ordinary config carries no noise.
 	 */
 	hidden?: string[];
+
+	/**
+	 * Retired slugs to the slug that replaced them, for the default version. Written by
+	 * `hexdocs sync` from the manifest's redirects, and omitted when there are none.
+	 *
+	 * A build input for the same reason `pages` is: a redirect is an address, the route
+	 * table is built from this file, and a redirect the router has no row for is a 404.
+	 * `sync` removes a redirected slug from `pages`, so without this list an author who
+	 * renamed a page and wrote `redirectFrom` would break every inbound link while the
+	 * manifest said the redirect existed.
+	 */
+	redirects?: Record<string, string>;
 }
 
 /**
@@ -196,4 +208,16 @@ export interface DocsSeo {
 	 * just wasting a crawl.
 	 */
 	indexable: boolean;
+
+	/**
+	 * Every locale this page is indexable in, in `LOCALES` order.
+	 *
+	 * What a host names in the page's `hreflang` set and lists in its sitemap. Derived from
+	 * the manifest's effective state, so it agrees with `indexable` by construction: a
+	 * locale is here exactly when a request for the page in that locale is served with
+	 * `indexable: true`. A locale with a record whose effective state is `scaffolded` or
+	 * `missing` is served as a fallback with `noindex`, and naming it as an alternate would
+	 * point search engines at a page that refuses to be indexed.
+	 */
+	languages: Locale[];
 }

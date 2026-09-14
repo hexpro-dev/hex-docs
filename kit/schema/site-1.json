@@ -103,6 +103,19 @@
 				"minLength": 1,
 				"maxLength": 260
 			}
+		},
+		"redirects": {
+			"type": "object",
+			"propertyNames": {
+				"type": "string",
+				"minLength": 1,
+				"maxLength": 260
+			},
+			"additionalProperties": {
+				"type": "string",
+				"minLength": 1,
+				"maxLength": 260
+			}
 		}
 	},
 	"required": [

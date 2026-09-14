@@ -53,7 +53,10 @@ describe('the happy path', () => {
 		expect(result.data.sourceLocale).toBe('en');
 		expect(result.data.version).toEqual({ label: '1.1.0', pinned: false, latest: '1.1.0' });
 		expect(result.data.notice).toEqual({ state: 'current' });
-		expect(result.seo).toEqual({ indexable: true });
+		expect(result.seo).toEqual({
+			indexable: true,
+			languages: ['en', 'zh', 'ar', 'es', 'ja', 'fr', 'pt-BR'],
+		});
 		expect(result.data.navLabel).toBe(SITE.navLabel.en);
 	});
 
@@ -66,7 +69,7 @@ describe('the happy path', () => {
 		expect(result.data.page.locale).toBe('en');
 		expect(result.data.locale).toBe('fr');
 		expect(result.data.notice).toEqual({ state: 'fallback', requested: 'fr' });
-		expect(result.seo).toEqual({ indexable: false });
+		expect(result.seo).toEqual({ indexable: false, languages: ['en'] });
 	});
 
 	test('builds the edit link from the repository, the branch and the page source file', async () => {

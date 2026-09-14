@@ -243,13 +243,19 @@ const TOOL_GRAPH = (() => {
 
 describe('the registry decides which modules are writers', () => {
 	test('every command has a module, and every module is a command, in both directions', () => {
-		// `common.ts` is the shared parameter table and defines no command. It is named here
-		// rather than filtered by a pattern, so a second non-command file added to this
-		// directory fails until somebody says what it is.
+		// `common.ts` is the shared parameter table and defines no command, and
+		// `prefetch-params.ts` is prefetch's table held apart from its writer so a read-only
+		// check can bind a prebuild string against it. Both are named here rather than
+		// filtered by a pattern, so a third non-command file added to this directory fails
+		// until somebody says what it is.
 		const onDisk = readdirSync(COMMANDS_DIR)
 			.filter((name) => name.endsWith('.ts'))
 			.sort();
-		const expected = [...COMMANDS.map((command) => `${command.name}.ts`), 'common.ts'].sort();
+		const expected = [
+			...COMMANDS.map((command) => `${command.name}.ts`),
+			'common.ts',
+			'prefetch-params.ts',
+		].sort();
 		expect(onDisk).toEqual(expected);
 	});
 

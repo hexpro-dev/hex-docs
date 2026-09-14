@@ -75,6 +75,10 @@ export function translationNotice(page: CompiledPage, requested: Locale): DocsTr
  * language and the right result for a reader searching in it, which is not true of the
  * other two.
  */
-export function seoFor(notice: DocsTranslationNotice, pinned: boolean): DocsSeo {
-	return { indexable: !pinned && notice.state !== 'fallback' };
+export function seoFor(
+	notice: DocsTranslationNotice,
+	pinned: boolean,
+	languages: Locale[],
+): DocsSeo {
+	return { indexable: !pinned && notice.state !== 'fallback', languages };
 }

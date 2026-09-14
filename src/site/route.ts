@@ -24,8 +24,8 @@
  */
 
 import { AST_VERSION, type Block, type Heading } from '../contracts/ast.js';
-import { isLocale, type Locale } from '../contracts/locales.js';
-import type { BundleManifest, PageLocaleRecord } from '../contracts/manifest.js';
+import { isLocale, LOCALES, type Locale } from '../contracts/locales.js';
+import type { BundleManifest, PageLocaleRecord, PageRecord } from '../contracts/manifest.js';
 import type { CompiledPage } from '../contracts/page.js';
 import type {
 	DocsRouteVersion,
@@ -159,6 +159,25 @@ export function pageSkew(
 		inBundleOnly: [...bundle].filter((slug) => !config.has(slug)).sort(),
 		inConfigOnly: [...config].filter((slug) => !bundle.has(slug)).sort(),
 	};
+}
+
+/**
+ * The locales a page is indexable in, in `LOCALES` order.
+ *
+ * Read from the manifest's effective state, which is the state the served payload's
+ * notice is derived from, so a locale is here exactly when `seoFor` says `indexable` for a
+ * request in it. `scaffolded` and `missing` fold to a fallback notice and `noindex`, so
+ * they are the two states that take a locale out. The order is the contract's, not the
+ * record's key order, because a host renders these as a list of alternates and a sitemap
+ * group, and two orders is a diff on every build that changes nothing.
+ */
+export function indexableLanguages(record: PageRecord): Locale[] {
+	return LOCALES.filter((locale) => {
+		const entry = record.locales[locale];
+		if (entry === undefined) return false;
+		const state = entry.effective ?? entry.state;
+		return state !== 'scaffolded' && state !== 'missing';
+	});
 }
 
 /** Every heading in a body, depth first, so aliases can be collected without a second walk. */
@@ -382,5 +401,5 @@ export async function docsRoute(input: DocsRouteInput): Promise<DocsRouteResult>
 				}),
 	};
 
-	return { ok: true, seo: seoFor(notice, pinned), data };
+	return { ok: true, seo: seoFor(notice, pinned, indexableLanguages(record)), data };
 }

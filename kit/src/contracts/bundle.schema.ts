@@ -137,6 +137,7 @@ export const pageLocaleRecordSchema = z.strictObject({
 	description: z.string().min(1),
 	updatedAt: utcTimestampSchema,
 	state: z.enum(TRANSLATION_STATES),
+	effective: z.enum(TRANSLATION_STATES).optional(),
 	words: countSchema,
 	headings: z.array(headingRecordSchema),
 });

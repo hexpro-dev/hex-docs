@@ -163,6 +163,22 @@ export interface PageLocaleRecord {
 	 * differently. `TranslationRecord.state` in `frontmatter.ts` is the other half.
 	 */
 	state: TranslationState;
+	/**
+	 * The effective state, when it differs from `state`, and omitted when it does not.
+	 *
+	 * The worst of the page and every snippet it transcludes, which is what the compiled
+	 * page's notice already shows the reader. It is stored here as well because two
+	 * decisions a consuming site makes without loading any payload depend on it: which
+	 * languages a page's `hreflang` set names, and which addresses its sitemap lists. Both
+	 * have to agree with the `noindex` the page itself will carry, and that is decided from
+	 * the effective state. A page current in Japanese that includes a scaffolded snippet is
+	 * served with a fallback notice and `noindex`, while `state` still says `current`;
+	 * reading `state` alone would name that address as an indexable alternate.
+	 *
+	 * Omitted when equal, which is the wire formats' convention for absence and keeps the
+	 * ordinary manifest free of a second copy of every state.
+	 */
+	effective?: TranslationState;
 	words: number;
 	/**
 	 * Every heading, in document order.
@@ -615,6 +631,41 @@ export function bundlePrefix(project: string, commit: string, ast: number = AST_
 }
 
 export const MANIFEST_KEY = 'manifest.json';
+
+/**
+ * The two directories a consuming site holds prefetched bundles in, named once.
+ *
+ * `hexdocs prefetch` writes them, the site's `.gitignore` lists them, the site's server
+ * module globs the first, and `bundleBase` addresses the second. Four spellings of one
+ * directory is how a site ends up with a glob that matches nothing and a gitignore that
+ * misses the tree it was written for, which is the three-spellings defect step 7 closed
+ * for the build output directory.
+ *
+ * `BUNDLE_TREE` sits under the site's `app/docs/`, where a lazy glob turns each page into
+ * a code-split chunk. `PUBLIC_TREE` sits under `public/`, the only tree Vite copies into
+ * the client build, because the search index is fetched at runtime and an image is an
+ * `<img src>`.
+ */
+export const BUNDLE_TREE = '_bundles';
+export const PUBLIC_TREE = '_docs';
+
+/**
+ * The link destinations raw markdown carries in the bundle, resolved when it is served.
+ *
+ * Raw markdown is the author's source with includes expanded, and an author writes links
+ * relative to the file and images relative to the source tree. Neither survives being
+ * served: an image's source path is not an address, and a relative link inside
+ * `llms-full.txt` resolves against a different directory from the page it came from. The
+ * compiler already resolves every destination to a slug or an asset digest, so it writes
+ * them as these prefixes and the site substitutes an absolute path, which needs the locale
+ * prefix, the mount and the version label that only the site knows.
+ *
+ * A page link is `hexdocs:page/<wire slug>.md` with an optional `#anchor`, and an image is
+ * `hexdocs:asset/<sha256>.<ext>`. The substitution is on `](` followed by the prefix, so
+ * prose that mentions the scheme is left alone.
+ */
+export const RAW_PAGE_LINK = 'hexdocs:page/';
+export const RAW_ASSET_LINK = 'hexdocs:asset/';
 
 export function pageKey(locale: Locale, slug: string): string {
 	return `pages/${locale}/${slug}.json.gz`;

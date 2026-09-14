@@ -405,6 +405,7 @@ export const docsSiteConfigSchema = z
 		versions: z.array(versionEntrySchema).min(1),
 		pages: z.array(slugSchema),
 		hidden: z.array(slugSchema).optional(),
+		redirects: z.record(slugSchema, slugSchema).optional(),
 	})
 	// A hidden page that is not published is a page with no canonical and no address, so
 	// the hiding would be indistinguishable from a deletion. The relationship is between

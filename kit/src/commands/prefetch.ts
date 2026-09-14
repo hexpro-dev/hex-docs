@@ -70,7 +70,8 @@ import { docsSiteConfigSchema } from '../contracts/config.schema.js';
 import { defineCommand, type Ctx, type Writer } from '../registry/command.js';
 import { checkFindings, s3Client, type S3Client } from '../s3/client.js';
 
-import { BUCKET, bucketOf, PROFILE, REGION, regionOf, ROOT, rootOf, SITE } from './common.js';
+import { bucketOf, regionOf, rootOf } from './common.js';
+import { PREFETCH_PARAMS, PREFETCH_POSITIONALS } from './prefetch-params.js';
 
 /** Where `<project>.docs.json` lives, relative to the consuming site directory. */
 const DOCS_DIR = ['app', 'docs'];
@@ -106,22 +107,8 @@ export const prefetch = defineCommand({
 	summary: 'Download every labelled bundle a site declares and write it into the site.',
 	detail:
 		'Reads every <project>.docs.json under the site, caches each labelled commit under a commit-addressed cache directory, verifies both the stored and the uncompressed digest of every file, and writes the page payloads into the app source and the search index and the assets into public/. A warm cache makes no network call and needs no AWS credentials, which is what makes this safe to run from a prebuild hook on a laptop and in a container. Run it before every build of a site that mounts documentation.',
-	params: {
-		root: ROOT,
-		site: SITE,
-		bucket: BUCKET,
-		region: REGION,
-		profile: PROFILE,
-		cache: {
-			help: 'where downloaded bundles are cached; defaults to $XDG_CACHE_HOME/hexdocs, or ~/.cache/hexdocs',
-			type: 'string',
-		},
-		offline: {
-			help: 'make no network call at all; a bundle missing from the cache then fails rather than downloading',
-			type: 'boolean',
-		},
-	},
-	positionals: ['root'],
+	params: PREFETCH_PARAMS,
+	positionals: PREFETCH_POSITIONALS,
 	taughtBy: ['docs-install-site'],
 	// `async` because `Command.run` is. Nothing awaits: `Exec` is synchronous.
 	async run(input, ctx) {

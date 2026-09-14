@@ -76,25 +76,37 @@ describe('the notice a reader sees', () => {
 
 describe('whether the page may be indexed', () => {
 	test('a current page at the default version is indexable', () => {
-		expect(seoFor({ state: 'current' }, false)).toEqual({ indexable: true });
+		expect(seoFor({ state: 'current' }, false, ['en'])).toEqual({
+			indexable: true,
+			languages: ['en'],
+		});
 	});
 
 	test('a stale translation stays indexable, because it is still that language', () => {
 		// The design pass asserted the opposite and `site.ts` names only two causes. A
 		// stale Japanese page is the right result for somebody searching in Japanese; an
 		// English page at a Japanese address is not.
-		expect(seoFor({ state: 'stale', sourceUpdated: '2026-02-05T00:00:00Z' }, false)).toEqual({
-			indexable: true,
-		});
+		expect(
+			seoFor({ state: 'stale', sourceUpdated: '2026-02-05T00:00:00Z' }, false, ['en', 'ja']),
+		).toEqual({ indexable: true, languages: ['en', 'ja'] });
 	});
 
 	test('a fallback is not indexable, whatever the version', () => {
-		expect(seoFor({ state: 'fallback', requested: 'ja' }, false)).toEqual({ indexable: false });
-		expect(seoFor({ state: 'fallback', requested: 'ja' }, true)).toEqual({ indexable: false });
+		expect(seoFor({ state: 'fallback', requested: 'ja' }, false, [])).toEqual({
+			indexable: false,
+			languages: [],
+		});
+		expect(seoFor({ state: 'fallback', requested: 'ja' }, true, [])).toEqual({
+			indexable: false,
+			languages: [],
+		});
 	});
 
 	test('a pinned version is not indexable, whatever the notice', () => {
-		expect(seoFor({ state: 'current' }, true)).toEqual({ indexable: false });
+		expect(seoFor({ state: 'current' }, true, ['en'])).toEqual({
+			indexable: false,
+			languages: ['en'],
+		});
 	});
 
 	test('both causes are reachable and neither alone explains the other', () => {
@@ -111,7 +123,7 @@ describe('whether the page may be indexed', () => {
 			const notice = fallback
 				? ({ state: 'fallback', requested: 'ja' } as const)
 				: ({ state: 'current' } as const);
-			expect(seoFor(notice, pinned).indexable).toBe(indexable);
+			expect(seoFor(notice, pinned, []).indexable).toBe(indexable);
 		}
 	});
 });
