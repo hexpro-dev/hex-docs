@@ -695,7 +695,25 @@ describe('the typecheck step measures rather than asserts', () => {
 		return found;
 	};
 
-	test('every configuration compiles the roots its own include names', () => {
+	/**
+	 * The one include entry that leaves part of its own root out on purpose, as a directory
+	 * rather than a count, so a file added under it is left out with it and a file added
+	 * anywhere else is not.
+	 *
+	 * Written here and not read out of the configuration's `exclude`, because reading it
+	 * would exempt whatever somebody next adds to that list, which is the hole this exists
+	 * to close.
+	 */
+	const LEFT_OUT: Record<string, Record<string, { dir: string; why: string }>> = {
+		'kit/tsconfig.json': {
+			'../src': {
+				dir: 'src/render',
+				why: 'The renderer is browser code and the toolchain program has no DOM types; the root tsconfig compiles it.',
+			},
+		},
+	};
+
+	test('every configuration compiles every file under the roots its own include names', () => {
 		// The hole the row above cannot see, and it was open for four steps. `extends`
 		// replaces `exclude` wholesale rather than merging it, so `tsconfig.test.json` set
 		// only `include` and took the root's list, which names `test`. Every file under
@@ -703,6 +721,16 @@ describe('the typecheck step measures rather than asserts', () => {
 		// files compiled, not one of them a test, and the row counted the configuration as
 		// one of three and passed. A count of configurations cannot tell a full program
 		// from an empty one. Comparing each include root against the disk can.
+		//
+		// File by file, and not "at least one", because at least one cannot tell a full
+		// program from a partial one: `test/site` added to `exclude` took every test under it
+		// out of the typecheck with this test green. The comparison runs one way, disk to
+		// program, because `allowJs` puts `.mjs` helpers in the program that `sourcesUnder`
+		// does not list. `fileNames` holds the root files rather than every file the program
+		// reaches, so an excluded file that another file imports is reported here although
+		// tsc still compiles it. That fails closed, and the exclude line naming it would be
+		// misleading anyway.
+		const used = new Set<string>();
 		for (const name of onDisk) {
 			const file = join(REPO, name);
 			const read = ts.readConfigFile(file, ts.sys.readFile);
@@ -712,20 +740,38 @@ describe('the typecheck step measures rather than asserts', () => {
 
 			const include = (read.config as { include?: string[] }).include ?? [];
 			expect(include.length, `${name} names no include roots`).toBeGreaterThan(0);
+			const compiled = new Set(parsed.fileNames);
 			for (const entry of include) {
 				const root = resolve(dirname(file), entry);
+				const sources = sourcesUnder(root);
 				// A root holding no TypeScript at all is not a gap. `kit/bin` holds one shell
 				// script and the entry is there for the day it holds a `.ts` beside it.
-				if (sourcesUnder(root).length === 0) continue;
-				const compiled = parsed.fileNames.filter(
-					(candidate) => candidate === root || candidate.startsWith(`${root}/`),
-				);
+				if (sources.length === 0) continue;
+				const left = LEFT_OUT[name]?.[entry];
+				const expected = left === undefined ? [] : sourcesUnder(join(REPO, left.dir)).sort();
+				if (left !== undefined) {
+					used.add(`${name} ${entry}`);
+					// An exemption covering nothing is one nobody is using, and the next directory
+					// to take its name would be left out without anybody deciding it.
+					expect(expected.length, `${name}: ${left.dir} holds no TypeScript`).toBeGreaterThan(0);
+					for (const path of expected) expect(path.startsWith(`${root}/`)).toBe(true);
+				}
 				expect(
-					compiled.length,
-					`${name} includes ${entry}, which holds TypeScript, and compiles none of it`,
-				).toBeGreaterThan(0);
+					sources.filter((path) => !compiled.has(path)).sort(),
+					`${name} includes ${entry}, and these files under it are in no program` +
+						(left === undefined
+							? ''
+							: ` beyond ${left.dir}, which is left out because: ${left.why}`),
+				).toEqual(expected);
 			}
 		}
+		// Every exemption was met, so one whose configuration or include entry was renamed
+		// fails here instead of standing ready for whatever takes the old name.
+		expect([...used].sort()).toEqual(
+			Object.entries(LEFT_OUT)
+				.flatMap(([name, entries]) => Object.keys(entries).map((entry) => `${name} ${entry}`))
+				.sort(),
+		);
 	});
 });
 

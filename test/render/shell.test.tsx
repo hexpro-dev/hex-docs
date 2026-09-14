@@ -231,9 +231,14 @@ describe('the notices', () => {
 		expect(fallback).toContain('fran');
 	});
 
-	test('a scaffolded page shows the fallback notice, because the words are English', async () => {
+	test('a scaffolded page is the source page under the fallback notice', async () => {
+		// The Spanish file exists and is not a translation, so the route serves the English
+		// page and the notice says why. The corpus's scaffolded file happens to be a copy of
+		// the English one; what `hexdocs scaffold` writes is a page of TODO markers, which is
+		// the case `test/site/divergence.test.ts` serves.
 		const { html, data } = await shell('es', 'reference/chip-support');
-		expect(data.page.translation.state).toBe('scaffolded');
+		expect(MANIFEST.pages['reference/chip-support']?.locales.es?.state).toBe('scaffolded');
+		expect([data.page.locale, data.page.translation.state]).toEqual(['en', 'source']);
 		expect(data.notice).toEqual({ state: 'fallback', requested: 'es' });
 		expect(html).toContain('data-banner="fallback"');
 	});

@@ -16,11 +16,13 @@
  * because a missing translation is what makes the served payload English in the first
  * place, and that is caught by the locale comparison rather than by the state.
  *
- * `scaffolded` is the one worth stating. It is source text under a translation's name, so
- * the reader is looking at English at a Spanish address, which is the same thing a
- * fallback is from their point of view even though the URL and the file both exist. It
- * folds to `fallback`, which is the same fold `kit/src/compile/search.ts` already applies
- * for the same reason.
+ * `scaffolded` is the one worth stating. A file in that state is not a translation, whether
+ * it is the TODO stub `hexdocs scaffold` writes or a copy of the source, so `servedLocale`
+ * in `route.ts` never serves one: the reader gets the source page at the translation's
+ * address, and the locale comparison below makes that a fallback. What still reaches this
+ * function as `scaffolded` is a page translated in its own right that transcludes a
+ * scaffolded snippet, so untranslated text sits inside the reader's language. That folds to
+ * `fallback` as well, which is the fold `kit/src/compile/search.ts` applies to the state.
  *
  * A fourth notice member was considered and rejected. `site.ts` gives the reason where
  * the union is declared: three states, three notices, three answers to whether the page

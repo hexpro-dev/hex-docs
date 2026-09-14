@@ -43,10 +43,11 @@ describe('the notice a reader sees', () => {
 		);
 	});
 
-	test('a scaffolded page folds to fallback, because the reader is looking at English', () => {
-		// Two independent things set `scaffolded` and the corpus carries both. The file
-		// exists, the URL exists and the words are still English, which is the same thing
-		// a fallback is to a reader. `kit/src/compile/search.ts` folds it the same way.
+	test('a scaffolded payload folds to fallback, because the words are not a translation', () => {
+		// The route never serves a file whose own state is scaffolded, so this payload is not
+		// what a reader of this address gets. The notice arm is still reached by a translation
+		// whose effective state is scaffolded because a snippet it includes is, and this is
+		// the corpus payload that carries the state. `kit/src/compile/search.ts` folds it too.
 		const scaffolded = goldenPage('es', 'reference/chip-support').page;
 		expect(scaffolded.translation.state).toBe('scaffolded');
 		expect(translationNotice(scaffolded, 'es')).toEqual({ state: 'fallback', requested: 'es' });

@@ -5,9 +5,13 @@
  * the test that would have caught step 5's `*.md` rows. This file pins the set in both
  * directions, so a row that stops being emitted, or one nobody expected, fails naming it.
  *
- * Every row is static now. There is no dynamic pattern left to tie with a static one, so
- * there is no ordering rule to test, and the step 5 tests that asserted one were deleted
- * rather than rewritten: a rule that can never fire is a green row over nothing.
+ * There is no ordering rule to test here, and the step 5 tests that asserted one were deleted
+ * rather than rewritten, but not because every row is static: half the machine rows carry a
+ * `:lang` segment, which the pattern test below allows and nothing else. What the order
+ * cannot change is what a URL reaches, and `docsRouteRows`'s comment gives the reason: a
+ * `:lang` row and a static row that both match one URL never tie on score. That is a
+ * property of the router, so `router.test.ts` holds it by matching against the rows in both
+ * orders.
  */
 
 import { readFileSync } from 'node:fs';

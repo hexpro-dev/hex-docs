@@ -89,15 +89,17 @@ export function docsRawHref(address: { basePath: string; locale: Locale; slug: s
 /**
  * A URL for one object in a prefetched bundle.
  *
- * The key comes from the manifest's own `assetKey`, `searchKey` and `rawKey`, so the
- * publisher and the renderer cannot grow two spellings of the same object path. One base
- * rather than one per kind, for the same reason: two bases is two things to get right per
- * install, and one of them is always the one that is wrong.
+ * The key comes from the manifest's own `assetKey` and `searchKey`, so the publisher and
+ * the renderer cannot grow two spellings of the same object path. Those are the two kinds
+ * `hexdocs prefetch` writes into the site's own `public/`. Raw markdown and `llms.txt` are
+ * not addressable here: prefetch writes them into `app/docs/_bundles`, where the server
+ * module reads them, and they are served at `docsRawHref` and the `llms.txt` rows. One base
+ * rather than one per kind, for the same reason as the shared key: two bases is two things
+ * to get right per install, and one of them is always the one that is wrong.
  *
- * The `.gz` suffix is dropped. Objects are stored gzipped in the bundle and `hexdocs
- * prefetch` writes them decompressed into the site's own `public/`, because a static file
- * server hands a `.gz` file to the browser with no `Content-Encoding` and the browser
- * shows a page of binary.
+ * The `.gz` suffix is dropped. A search index is stored gzipped in the bundle and written
+ * decompressed, because a static file server hands a `.gz` file to the browser with no
+ * `Content-Encoding` and the browser shows a page of binary.
  */
 export function bundleUrl(bundleBase: string, key: string): string {
 	const base = bundleBase.endsWith('/') ? bundleBase.slice(0, -1) : bundleBase;
@@ -145,11 +147,21 @@ function machineRow(path: string): DocsRouteRow {
 /**
  * Every route row for a set of docs configs.
  *
- * Every row is a static path, so no two rows can tie in React Router's ranking and the
- * declaration order decides nothing. That was not true in step 5, whose `search.json` and
- * `*.md` rows were a tie and a pattern that matched only its own literal spelling; the
- * order is kept stable anyway, machine rows first, so a diff of the table is a diff of the
- * page set.
+ * The declaration order decides nothing, and the reason is not that every row is static:
+ * half the machine rows carry a `:lang` segment, and most rows tie with another on React
+ * Router's score. Every path a row puts in the table, a page row under the host's `:lang`
+ * parent included, is either fully static or a single leading `:lang` followed by static
+ * segments, and no page path can end in `.md` or `.txt`, because a slug segment may not
+ * contain a dot. So two distinct rows match one URL only when one is the `:lang` form and
+ * the other is static, as `/:lang/docs` and `/docs/docs` both match `/docs/docs` for a mount
+ * at `/docs` with a page at `docs/index`. A static segment outscores a dynamic one, so the
+ * static row wins whichever is declared first, and rows that tie on score cannot both match
+ * a URL, so that tie is never consulted. `test/site/router.test.ts` matches its whole table,
+ * and that overlap, against the rows in both orders.
+ *
+ * That was not true in step 5, whose `search.json` and `*.md` rows were a tie and a pattern
+ * that matched only its own literal spelling. The order is kept stable anyway, machine rows
+ * first, so a diff of the table is a diff of the page set.
  *
  * Raw markdown is one static row per page per mount rather than a pattern. Measured
  * against the installed router: a splat swallows every mistyped page URL into the machine

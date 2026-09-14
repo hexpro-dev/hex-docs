@@ -5,7 +5,7 @@ import { describe, expect, test } from 'vitest';
 
 import { CONSUMER_ROOT } from '../../fixtures/index.js';
 import { LOCALES } from '../../src/contracts/locales.js';
-import { assetKey, rawKey, searchKey } from '../../src/contracts/manifest.js';
+import { assetKey, searchKey } from '../../src/contracts/manifest.js';
 import type { DocsSiteConfig } from '../../src/contracts/site.js';
 import { bundleUrl, docsHref, docsRawHref } from '../../src/site/address.js';
 
@@ -118,14 +118,12 @@ describe('the raw markdown address', () => {
 
 describe('bundle object URLs', () => {
 	test('reuse the manifest key vocabulary and drop the gzip suffix', () => {
-		// `prefetch` writes these decompressed into the site's own public directory: a
-		// static server hands a .gz file over with no Content-Encoding and the browser
-		// renders binary.
+		// `prefetch` writes a search index decompressed into the site's own public directory:
+		// a static server hands a .gz file over with no Content-Encoding and the browser
+		// renders binary. Raw markdown is not a bundle URL at all. It goes to the app tree the
+		// server module reads, and is served at `docsRawHref`.
 		expect(bundleUrl('/_docs/fixture-app/1.1.0', searchKey('ja'))).toBe(
 			'/_docs/fixture-app/1.1.0/search/ja.idx.json',
-		);
-		expect(bundleUrl('/_docs/fixture-app/1.1.0', rawKey('en', 'guide/first-tag'))).toBe(
-			'/_docs/fixture-app/1.1.0/raw/en/guide/first-tag.md',
 		);
 	});
 

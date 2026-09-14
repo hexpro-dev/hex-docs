@@ -33,7 +33,9 @@ import type { DocsAddress } from '../site/address.js';
  * true. React Router's `Link` is a `ForwardRefExoticComponent`, whose call signature
  * returns `ReactNode` under React 19's types, so against `ReactElement` passing it directly
  * is a TS2322 in the consumer and every template needs a wrapper component to get past it.
- * `test/render/link-type.test.tsx` holds the assignment that fails if this narrows again.
+ * `test/types/consumer.ts` holds the assignment that fails if this narrows again. `pnpm
+ * typecheck` compiles it, and `test/render/consumer-types.test.ts` compiles it beside a link
+ * component that has to be refused, so a clean result is not a checker that saw nothing.
  */
 export type DocsLinkComponent = (props: {
 	to: string;

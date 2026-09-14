@@ -179,6 +179,32 @@ export function indexableLanguages(record: PageRecord): Locale[] {
 	});
 }
 
+/**
+ * The locale a page is served in, as a page and as raw markdown.
+ *
+ * The requested locale when the page has a record there whose own state is not
+ * `scaffolded`, and the source locale otherwise. A scaffolded file is not a translation.
+ * `hexdocs scaffold` writes the source's headings with a TODO under each, and a copy of the
+ * source body is the other thing that sets the state. Serving it put a page of TODO markers
+ * under a notice telling the reader the page has not been translated, while the markdown
+ * at the same address already answered with the source. The source page carries the words
+ * that notice promises, and `translationNotice` still folds it to a fallback because its
+ * locale is not the reader's.
+ *
+ * The page's own state and not its effective one. A page translated in its own right that
+ * transcludes a scaffolded snippet is still served in the requested language, because the
+ * file is that language: the payload's notice reads the effective state, and
+ * `Content-Language` on the markdown describes the file.
+ *
+ * One function for the page route and the markdown route, because two copies of this
+ * decision are how they came to disagree. `test/site/divergence.test.ts` serves a page
+ * `hexdocs scaffold` wrote, and `test/site/serve.test.ts` holds the own-state choice.
+ */
+export function servedLocale(record: PageRecord, requested: Locale, source: Locale): Locale {
+	const own = record.locales[requested];
+	return own !== undefined && own.state !== 'scaffolded' ? requested : source;
+}
+
 /** Every heading in a body, depth first, so aliases can be collected without a second walk. */
 function headings(blocks: readonly Block[]): Heading[] {
 	const found: Heading[] = [];
@@ -358,7 +384,7 @@ export async function docsRoute(input: DocsRouteInput): Promise<DocsRouteResult>
 	}
 
 	const source = input.manifest.sourceLocale;
-	const served = record.locales[input.locale] !== undefined ? input.locale : source;
+	const served = servedLocale(record, input.locale, source);
 	if (record.locales[served] === undefined) return { ok: false, reason: 'no-such-page' };
 
 	const payload = await input.load(served, input.slug);
