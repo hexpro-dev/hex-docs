@@ -127,20 +127,35 @@ export const headingRecordSchema = z.strictObject({
 	depth: headingDepthSchema,
 });
 
-export const pageLocaleRecordSchema = z.strictObject({
-	digest: sha256Schema,
-	bytes: positiveIntSchema,
-	rawDigest: sha256Schema,
-	rawBytes: positiveIntSchema,
-	title: z.string().min(1),
-	navTitle: z.string().min(1).optional(),
-	description: z.string().min(1),
-	updatedAt: utcTimestampSchema,
-	state: z.enum(TRANSLATION_STATES),
-	effective: z.enum(TRANSLATION_STATES).optional(),
-	words: countSchema,
-	headings: z.array(headingRecordSchema),
-});
+export const pageLocaleRecordSchema = z
+	.strictObject({
+		digest: sha256Schema,
+		bytes: positiveIntSchema,
+		rawDigest: sha256Schema,
+		rawBytes: positiveIntSchema,
+		title: z.string().min(1),
+		navTitle: z.string().min(1).optional(),
+		description: z.string().min(1),
+		updatedAt: utcTimestampSchema,
+		state: z.enum(TRANSLATION_STATES),
+		effective: z.enum(TRANSLATION_STATES).optional(),
+		words: countSchema,
+		headings: z.array(headingRecordSchema),
+	})
+	// The omission is the contract, so a present `effective` equal to `state` is refused
+	// rather than tolerated. A reader folding the two with `effective ?? state` gets the
+	// same answer either way, so what this protects is not a reader. It is the property
+	// that a manifest has one spelling for one set of facts: without the refusal a writer
+	// that stamps `effective` on every record validates, every page in every locale grows
+	// a second copy of its state, and two builds of the same facts can differ in bytes,
+	// which is exactly what a commit-addressed, write-once manifest cannot afford. A
+	// refinement changes no inferred type, so `drift.ts` cannot see this; the constraint
+	// sweep holds it.
+	.refine((record) => record.effective !== record.state, {
+		message:
+			'effective is only written when it differs from state. Omit it when the page and everything it transcludes are in the same state.',
+		path: ['effective'],
+	});
 
 export const pageRecordSchema = z.strictObject({
 	audience: z.enum(AUDIENCES),

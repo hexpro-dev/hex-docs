@@ -214,6 +214,19 @@ describe('a scaffolded snippet', () => {
 		// that is already done.
 		expect(result.manifest.pages['reference/chip-support']?.locales.zh?.state).toBe('current');
 		expect(result.manifest.coverage.zh?.scaffolded).toBe(0);
+
+		// And the manifest says so beside it, which is the case the field exists for. The
+		// served page carries a fallback notice and `noindex` in Chinese, and a consuming
+		// site choosing this page's hreflang set and sitemap rows reads the manifest and
+		// nothing else. With only `state` it would name this address as an indexable
+		// alternate. The corpus's own divergence is a stale snippet, and stale stays
+		// indexable, so this perturbation is the only place the difference is visible.
+		expect(result.manifest.pages['reference/chip-support']?.locales.zh?.effective).toBe(
+			'scaffolded',
+		);
+		expect(result.manifest.pages['reference/chip-support']?.locales.en).not.toHaveProperty(
+			'effective',
+		);
 	});
 
 	test('and the source locale is still the source', () => {

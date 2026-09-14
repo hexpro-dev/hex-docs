@@ -31,6 +31,7 @@ import type { TranslationState } from '../../../src/contracts/frontmatter.js';
 import { LOCALES, SOURCE_LOCALE, type Locale } from '../../../src/contracts/locales.js';
 import { probeAsset } from '../../src/compile/assets.js';
 import { buildBundle, type BuildResult } from '../../src/compile/build.js';
+import { bundleManifestSchema } from '../../src/contracts/bundle.schema.js';
 
 const GENERATOR = '@hex-pro/docs-kit@0.1.0';
 
@@ -131,6 +132,32 @@ describe('translation state, derived from the declarations', () => {
 			expect(page?.translation.state).toBe(effective);
 		},
 	);
+
+	test('the manifest carries the effective state exactly where it differs from the state of the page itself', () => {
+		// Swept over every record rather than read at the one page the corpus built for it,
+		// because the failure worth catching is in either direction: a record missing the
+		// field makes a consuming site name a `noindex` address as an indexable alternate,
+		// and a record carrying it when the two agree is a second spelling of the same fact
+		// in a manifest whose bytes are its identity.
+		let differing = 0;
+		for (const [slug, page] of Object.entries(result.manifest.pages)) {
+			for (const [locale, record] of Object.entries(page.locales)) {
+				const effective = result.pages.get(slug)?.get(locale as Locale)?.page.translation.state;
+				expect(effective, `${slug}/${locale}`).toBeDefined();
+				if (effective === record?.state) {
+					expect(record, `${slug}/${locale}`).not.toHaveProperty('effective');
+				} else {
+					differing += 1;
+					expect(record?.effective, `${slug}/${locale}`).toBe(effective);
+				}
+			}
+		}
+		// The corpus's one divergence, `index` in all six translations, so a sweep that
+		// found nothing to compare is a failure rather than a pass.
+		expect(differing).toBe(6);
+		expect(result.manifest.pages['index']?.locales['zh']?.effective).toBe('stale');
+		expect(bundleManifestSchema.safeParse(result.manifest).success).toBe(true);
+	});
 
 	test('a page can be effectively stale while its own timestamps say current', () => {
 		// This is the pair the corpus was built for, and it is the one case where the two

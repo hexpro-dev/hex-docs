@@ -446,6 +446,15 @@ export function buildBundle(appRoot: string, options: BuildOptions): BuildResult
 				);
 			}
 
+			const own = pageStates.get(slug)?.get(locale) ?? 'current';
+			// The effective state rides beside the page's own, and only when the two differ.
+			// A consuming site decides a page's hreflang set and its sitemap rows from the
+			// manifest alone, and both have to agree with the `noindex` the served payload
+			// carries, which is read from the effective state. Without it a page current in
+			// its own right and transcluding a scaffolded snippet is named as an indexable
+			// alternate while the address itself answers `noindex`. Omitted when equal, which
+			// `pageLocaleRecordSchema` enforces, so there is one spelling of "no difference".
+			const effective = output.page.translation.state;
 			const localeRecord: PageLocaleRecord = {
 				digest: sha256Hex(json),
 				bytes: Buffer.byteLength(json),
@@ -458,7 +467,8 @@ export function buildBundle(appRoot: string, options: BuildOptions): BuildResult
 				description: output.page.description.normalize('NFC'),
 				updatedAt:
 					output.page.translation.translationUpdated ?? output.page.translation.sourceUpdated,
-				state: pageStates.get(slug)?.get(locale) ?? 'current',
+				state: own,
+				...(effective === own ? {} : { effective }),
 				words: output.page.reading.words,
 				headings: output.headings,
 			};

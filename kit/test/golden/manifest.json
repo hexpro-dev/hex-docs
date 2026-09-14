@@ -628,6 +628,7 @@
 					"description": "\u5728iPhone\u4e0a\u8bfb\u53d6\u5e76\u91cd\u5199NFC\u6807\u7b7e\u4e0a\u7684NDEF\u8bb0\u5f55\uff0c\u6240\u6709\u6570\u636e\u90fd\u4e0d\u4f1a\u79bb\u5f00\u8bbe\u5907\u3002",
 					"updatedAt": "2026-02-10T11:30:00Z",
 					"state": "current",
+					"effective": "stale",
 					"words": 686,
 					"headings": [
 						{
@@ -654,6 +655,7 @@
 					"description": "\u0627\u0642\u0631\u0623 \u0633\u062c\u0644\u0627\u062a NDEF \u0639\u0644\u0649 \u0628\u0637\u0627\u0642\u0629 NFC \u0648\u0623\u0639\u062f \u0643\u062a\u0627\u0628\u062a\u0647\u0627 \u0645\u0646 iPhone\u060c \u062f\u0648\u0646 \u0623\u0646 \u064a\u063a\u0627\u062f\u0631 \u0627\u0644\u062c\u0647\u0627\u0632 \u0623\u064a \u0634\u064a\u0621.",
 					"updatedAt": "2026-02-10T11:30:00Z",
 					"state": "current",
+					"effective": "stale",
 					"words": 361,
 					"headings": [
 						{
@@ -680,6 +682,7 @@
 					"description": "Lee y reescribe los registros NDEF de una etiqueta NFC desde un iPhone, sin que nada salga del dispositivo.",
 					"updatedAt": "2026-02-10T11:30:00Z",
 					"state": "current",
+					"effective": "stale",
 					"words": 468,
 					"headings": [
 						{
@@ -706,6 +709,7 @@
 					"description": "iPhone \u304b\u3089 NFC \u30bf\u30b0\u306e NDEF \u30ec\u30b3\u30fc\u30c9\u3092\u8aad\u307f\u66f8\u304d\u3057\u307e\u3059\u3002\u30c7\u30fc\u30bf\u304c\u7aef\u672b\u306e\u5916\u306b\u51fa\u308b\u3053\u3068\u306f\u3042\u308a\u307e\u305b\u3093\u3002",
 					"updatedAt": "2026-02-10T11:30:00Z",
 					"state": "current",
+					"effective": "stale",
 					"words": 996,
 					"headings": [
 						{
@@ -732,6 +736,7 @@
 					"description": "Lisez et r\u00e9\u00e9crivez les enregistrements NDEF d'un badge NFC depuis un iPhone, sans qu'aucune donn\u00e9e ne quitte l'appareil.",
 					"updatedAt": "2026-02-10T11:30:00Z",
 					"state": "current",
+					"effective": "stale",
 					"words": 482,
 					"headings": [
 						{
@@ -758,6 +763,7 @@
 					"description": "Leia e regrave os registros NDEF de uma etiqueta NFC a partir de um iPhone, sem que nada saia do dispositivo.",
 					"updatedAt": "2026-02-10T11:30:00Z",
 					"state": "current",
+					"effective": "stale",
 					"words": 462,
 					"headings": [
 						{

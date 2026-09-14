@@ -175,6 +175,27 @@ describe('the manifest', () => {
 		).toBe(false);
 	});
 
+	test('an effective state is carried only when it differs from the state of the page itself', () => {
+		const record = MANIFEST.pages.index.locales.en;
+		const withLocale = (entry: object) => ({
+			...MANIFEST,
+			locales: ['en', 'zh'],
+			pages: { index: { ...MANIFEST.pages.index, locales: { en: record, zh: entry } } },
+		});
+		const current = { ...record, state: 'current' };
+		expect(bundleManifestSchema.safeParse(withLocale(current)).success).toBe(true);
+		expect(
+			bundleManifestSchema.safeParse(withLocale({ ...current, effective: 'scaffolded' })).success,
+		).toBe(true);
+		const same = bundleManifestSchema.safeParse(withLocale({ ...current, effective: 'current' }));
+		expect(same.success).toBe(false);
+		// Named at the field, so the refusal says which record rather than that the manifest
+		// is wrong somewhere.
+		expect(same.success ? [] : same.error.issues.map((issue) => issue.path.join('.'))).toEqual([
+			'pages.index.locales.zh.effective',
+		]);
+	});
+
 	test('an English-only bundle needs no padding for the other six languages', () => {
 		expect(bundleManifestSchema.safeParse(MANIFEST).success).toBe(true);
 	});
