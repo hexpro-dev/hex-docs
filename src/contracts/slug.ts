@@ -29,7 +29,7 @@ export const MAX_SLUG_DEPTH = 4;
 /** Longest a single segment may be, so an address stays quotable in a support reply. */
 export const MAX_SEGMENT_LENGTH = 64;
 
-/** The filename that makes a directory addressable. `guide/index.md` serves `guide/`. */
+/** The filename that makes a directory addressable. `guide/index.md` serves `guide`. */
 export const INDEX_SEGMENT = 'index';
 
 /**
@@ -193,15 +193,17 @@ export function formatSlug(slug: ParsedSlug): string {
  * The address path, relative to the docs mount and without a trailing slash: `''`
  * for the home, `'guide'` for a section root, `'guide/first-tag'` for a page.
  *
- * Section roots are served at a trailing-slash address. That slash is added by the
- * address builder, not here, so that this function's output can be joined, compared
- * and sorted without a special case at every use.
+ * No address carries a trailing slash, a section root included, so the address builder
+ * joins this to the mount and adds nothing. `src/site/address.ts` says why.
  */
 export function slugToPath(slug: ParsedSlug): string {
 	return slug.kind === 'index' ? slug.section.join('/') : [...slug.section, slug.name].join('/');
 }
 
-/** True when the slug addresses a directory, and therefore wants a trailing slash. */
+/**
+ * True when the slug addresses a directory. The sidebar nests under it and the sitemap
+ * weights it above a leaf; its address is spelled exactly like a leaf's.
+ */
 export function isSectionRoot(slug: ParsedSlug): boolean {
 	return slug.kind === 'index';
 }

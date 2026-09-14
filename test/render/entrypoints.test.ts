@@ -98,6 +98,15 @@ describe('the two entry points', () => {
 		expect(BARREL).toContain('src/ui/strings.ts');
 	});
 
+	test('the docs server and the root read are reachable from the barrel', () => {
+		// The two modules a consuming site imports from a server module and from `root.tsx`.
+		// Both have to be in the graph the assertions above hold to, because a route config
+		// that reaches a stylesheet fails to load before any route renders.
+		expect(BARREL).toContain('src/site/serve.ts');
+		expect(BARREL).toContain('src/site/seo.ts');
+		expect(BARREL).toContain('src/site/route.ts');
+	});
+
 	test('the renderer entry point does reach the stylesheet and the components', () => {
 		// The other direction, and the reason the split is not simply "no CSS anywhere":
 		// the package does ship a stylesheet, and it is imported by the entry point that a
@@ -112,6 +121,22 @@ describe('the two entry points', () => {
 		// fork.
 		expect(RENDERER).toContain('src/site/address.ts');
 		expect(RENDERER).toContain('src/ui/strings.ts');
+	});
+
+	test('package.json declares the stylesheets as the only side effects, and nothing else', () => {
+		// Without the declaration a consumer's bundler has to assume every module has a side
+		// effect, and keeps modules a page never calls because of their top-level statements:
+		// measured on kcalc, the docs slice of a client chunk went from 3,061 to 1,692 bytes
+		// gzipped with it. The two ways to get it wrong are both silent. `false` lets a
+		// bundler drop `import './docs.css'`, which ships the shell unstyled, and a pattern
+		// that matched `.ts` files would keep everything and save nothing.
+		const manifest = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as {
+			sideEffects?: unknown;
+		};
+		expect(manifest.sideEffects).toEqual(['**/*.css']);
+		// And the one module imported for its effect alone is a file that pattern keeps.
+		const reachable = [...new Set([...BARREL, ...RENDERER])];
+		expect(reachable.filter((file) => file.endsWith('.css'))).toEqual(['src/render/docs.css']);
 	});
 
 	test('every relative import in the package resolves to a file that exists', () => {

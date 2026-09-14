@@ -266,7 +266,10 @@ describe('the version banner', () => {
 			(match) => match[1] as string,
 		);
 		expect(treeLinks.length).toBeGreaterThan(3);
-		for (const href of treeLinks) expect(href).toContain('/v/1.0.0/');
+		// The pin as a whole segment, which the docs home ends on now that no address carries
+		// a trailing slash.
+		for (const href of treeLinks) expect(href).toMatch(/^\/fixture-app\/docs\/v\/1\.0\.0(\/|$)/);
+		expect(treeLinks).toContain('/fixture-app/docs/v/1.0.0');
 	});
 });
 

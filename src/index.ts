@@ -25,16 +25,23 @@ export * from './ui/status.js';
 export * from './ui/strings.js';
 
 /**
- * The address, notice and direction rules the consuming site needs outside a React tree.
+ * The address, notice and direction rules, and the server a consuming site's docs routes
+ * call, all of which the site needs outside a React tree.
  *
- * Deliberately here and not in the renderer entry point. `hex-web` derives its
- * `LOCALISED_PATHS` array and its sitemap from `docsLocalisedPaths`, and both of those run
- * under bare node in a hand-run `.mjs` with no bundler. The renderer imports a stylesheet,
- * so a module that reached it from this barrel would make every one of those importers
- * throw on a `.css` specifier. `test/guards.test.ts` asserts the separation rather than
- * leaving it to be remembered.
+ * Deliberately here and not in the renderer entry point. The toolchain imports these
+ * modules under plain node, where a `.css` specifier throws before anything else happens,
+ * and a consuming site's route config imports `app/lib/docs.server.ts`, which reaches this
+ * barrel before a single route has rendered. A stylesheet or a component reachable from
+ * here breaks both. `test/render/entrypoints.test.ts` walks the import graph and asserts
+ * the separation rather than leaving it to be remembered.
+ *
+ * `docsRoute` is not exported. `docsServer` is the consumer API and calls it; what a
+ * component or a loader's type needs from that module is exported as types alone.
  */
 export * from './site/address.js';
 export * from './site/direction.js';
 export * from './site/ids.js';
 export * from './site/notice.js';
+export * from './site/seo.js';
+export * from './site/serve.js';
+export type { DocsCrumb, DocsNavNode, DocsPageData, DocsPager } from './site/route.js';

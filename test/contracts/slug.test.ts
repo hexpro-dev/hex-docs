@@ -121,7 +121,7 @@ describe('addresses', () => {
 		expect(parsed.ok && slugToPath(parsed.slug)).toBe(path);
 	});
 
-	test('only section roots want a trailing slash', () => {
+	test('only an index slug is a section root', () => {
 		expect(isSectionRoot(requireSlug('guide/index', 'x'))).toBe(true);
 		expect(isSectionRoot(requireSlug('guide/first-tag', 'x'))).toBe(false);
 	});

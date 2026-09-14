@@ -5,10 +5,10 @@
  * governs the content; this lives in the web repository and says where the content is
  * mounted, which commits are labelled and what the sidebar entry is called.
  *
- * It is the sole build input from which routes, `LOCALISED_PATHS`, the hreflang set,
+ * It is the sole build input from which the route rows, the lookup that answers a request,
  * the sitemap and the theme class are all derived. Nothing about a docs mount is
  * maintained by hand anywhere else in the consuming site, which is what makes
- * installing a second documentation site one file plus one spread.
+ * installing a second documentation site one file.
  *
  * The schema is strict, and that is load-bearing rather than tidy. An earlier design
  * had this object carrying an origin URL, a CDN host, cache TTLs and a disk cache
@@ -111,17 +111,14 @@ export interface DocsSiteConfig {
 	 * Every page slug in the default version, written by `hexdocs sync`. Not
 	 * hand-maintained.
 	 *
-	 * It has to be a build input because `root.tsx` renders the canonical link and all
-	 * eight hreflang alternates as plain JSX above `<Meta />`, gated on
-	 * `isLocalisedPath`, and React Router's `meta()` can append tags but never delete
-	 * them. A slug list that only existed at runtime would put a self-referential
-	 * canonical plus eight alternates pointing at eight 404s on every mistyped docs
-	 * URL.
+	 * It has to be a build input because the route table is: React Router loads the route
+	 * config before any bundle is read, and one static row per page is what leaves a
+	 * mistyped docs URL unmatched, so it gets the site's own 404 with `noindex` rather than
+	 * a docs page that has to decide at runtime whether it exists.
 	 *
-	 * Per-locale presence is not here. It is in the manifest, where the sitemap
-	 * generator and the fallback-implies-noindex rule read it. This list answers "is
-	 * this path ours", which is a question about the route table, not about
-	 * translation.
+	 * Per-locale presence is not here. It is in the manifest, where the sitemap rows and
+	 * the fallback-implies-noindex rule read it. This list answers "is this path ours",
+	 * which is a question about the route table, not about translation.
 	 */
 	pages: string[];
 
@@ -131,11 +128,8 @@ export interface DocsSiteConfig {
 	 * A hidden page is published, indexable and addressable, and stays out of the
 	 * sidebar, out of prev and next, and out of the sitemap. Two of those three are
 	 * decided by the renderer from the manifest, which carries `hidden` on its nav
-	 * nodes. The sitemap is the one that is not: this file is the sole build input from
-	 * which the consuming site derives its routes, `LOCALISED_PATHS`, the hreflang set
-	 * and the sitemap, and with only `pages` it could not tell the two apart. The
-	 * consumer would then have had to reach into the manifest for one field, which is a
-	 * second build input for one boolean.
+	 * nodes. The sitemap is the one that is not: the sitemap rows start from this file's
+	 * page list, and with only `pages` they could not tell the two apart.
 	 *
 	 * So a slug in `pages` and absent here is sitemapped, and a slug in both is not.
 	 * Every entry must also be in `pages`, which the schema enforces: a hidden page that

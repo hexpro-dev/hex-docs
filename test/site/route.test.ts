@@ -157,9 +157,8 @@ describe('what the route refuses', () => {
 	});
 
 	test('a slug the bundle carries and the site config does not list', async () => {
-		// The skew. `site.pages` is the sole input to the consumer's `LOCALISED_PATHS`, so
-		// serving a page it does not list ships that page with no canonical, no alternates
-		// and no noindex, and it renders perfectly.
+		// The skew. `site.pages` is the sole input to the route rows and the sitemap, so
+		// serving a page it does not list serves an address nothing routes to or lists.
 		const behind = { ...SITE, pages: SITE.pages.filter((slug) => slug !== 'guide/first-tag') };
 		expect(await route({ site: behind })).toEqual({ ok: false, reason: 'no-such-page' });
 	});
@@ -289,7 +288,7 @@ describe('the sidebar', () => {
 describe('previous and next', () => {
 	test('are the neighbours in reading order', () => {
 		const pager = pagerFor(MANIFEST, 'en', 'guide/first-tag', address);
-		expect(pager.previous?.href).toBe('/fixture-app/docs/guide/');
+		expect(pager.previous?.href).toBe('/fixture-app/docs/guide');
 		expect(pager.next?.href).toBe('/fixture-app/docs/guide/troubleshooting');
 	});
 
@@ -319,8 +318,8 @@ describe('breadcrumbs', () => {
 			address,
 		);
 		expect(crumbs.map((crumb) => crumb.href)).toEqual([
-			'/fixture-app/docs/',
-			'/fixture-app/docs/guide/',
+			'/fixture-app/docs',
+			'/fixture-app/docs/guide',
 		]);
 	});
 
