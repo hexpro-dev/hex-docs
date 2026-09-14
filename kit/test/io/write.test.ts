@@ -17,11 +17,14 @@
 
 import {
 	chmodSync,
+	existsSync,
+	lstatSync,
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
 	rmSync,
 	statSync,
+	symlinkSync,
 	utimesSync,
 	writeFileSync,
 } from 'node:fs';
@@ -174,6 +177,73 @@ describe('fileWriter', () => {
 		expect(writer.read(directory)).toBeUndefined();
 	});
 
+	test('remove takes one file and says so, and a second remove finds nothing', () => {
+		const directory = scratch();
+		const writer = fileWriter();
+		const path = join(directory, 'gone.txt');
+		writeFileSync(path, 'bytes\n');
+
+		expect(writer.remove(path)).toBe(true);
+		expect(existsSync(path)).toBe(false);
+		expect(writer.remove(path)).toBe(false);
+		expect(writer.remove(join(directory, 'never.txt'))).toBe(false);
+		expect(writer.removed).toEqual([path]);
+		expect(writer.written).toEqual([]);
+	});
+
+	test('remove unlinks a symbolic link and leaves what it points at', () => {
+		// The property a prune depends on. A link planted inside a tree the prune owns, and
+		// pointing at a directory somewhere else, has to go without anything behind it going:
+		// `rmdir` or a recursive remove would follow it.
+		const directory = scratch();
+		const outside = join(directory, 'outside');
+		mkdirSync(outside);
+		writeFileSync(join(outside, 'precious.txt'), 'keep me\n');
+		const fileTarget = join(directory, 'target.txt');
+		writeFileSync(fileTarget, 'also keep me\n');
+		const toDirectory = join(directory, 'to-directory');
+		const toFile = join(directory, 'to-file');
+		symlinkSync(outside, toDirectory);
+		symlinkSync(fileTarget, toFile);
+
+		const writer = fileWriter();
+		expect(writer.remove(toDirectory)).toBe(true);
+		expect(writer.remove(toFile)).toBe(true);
+
+		expect(() => lstatSync(toDirectory)).toThrow();
+		expect(() => lstatSync(toFile)).toThrow();
+		expect(readFileSync(join(outside, 'precious.txt'), 'utf8')).toBe('keep me\n');
+		expect(readFileSync(fileTarget, 'utf8')).toBe('also keep me\n');
+		expect(writer.removed).toEqual([toDirectory, toFile]);
+	});
+
+	test('remove takes an empty directory and refuses one that still holds anything', () => {
+		// Never recursive. A directory with something left in it is a throw naming the path,
+		// which is loud, rather than a subtree that is quietly gone.
+		const directory = scratch();
+		const empty = join(directory, 'empty');
+		const full = join(directory, 'full');
+		mkdirSync(empty);
+		mkdirSync(full);
+		writeFileSync(join(full, 'inside.txt'), 'x');
+
+		const writer = fileWriter();
+		expect(writer.remove(empty)).toBe(true);
+		expect(existsSync(empty)).toBe(false);
+		expect(() => writer.remove(full)).toThrow(/ENOTEMPTY|EEXIST/);
+		expect(readFileSync(join(full, 'inside.txt'), 'utf8')).toBe('x');
+		expect(writer.removed).toEqual([empty]);
+	});
+
+	test('a remove that cannot look is a throw rather than an answer of nothing there', () => {
+		// Only ENOENT means absent. A path whose parent is a file answers ENOTDIR, and
+		// reading that as "already gone" would let a prune report a clean tree it never saw.
+		const directory = scratch();
+		const file = join(directory, 'plain.txt');
+		writeFileSync(file, 'x');
+		expect(() => fileWriter().remove(join(file, 'child'))).toThrow(/ENOTDIR/);
+	});
+
 	test('two writers over one tree keep separate lists, which is what a per-run count needs', () => {
 		// `written` is per writer and every command is handed a fresh one, so a second run in
 		// the same process reports its own writes rather than the total since start.
@@ -206,6 +276,7 @@ function script(
 ): {
 	answers: boolean[];
 	written: readonly string[];
+	removed: readonly string[];
 	reads: (string | undefined)[];
 	exists: boolean[];
 } {
@@ -217,16 +288,26 @@ function script(
 		writer.write(at('nested/two.txt'), 'a'),
 		writer.write(at('three.txt'), ''),
 		writer.write(at('three.txt'), ''),
+		writer.write(at('four.txt'), 'doomed'),
+		writer.remove(at('four.txt')),
+		writer.remove(at('four.txt')),
+		writer.write(at('four.txt'), 'back'),
 	];
 	return {
 		answers,
 		written: writer.written,
+		removed: writer.removed,
 		reads: [
 			writer.read(at('one.txt')),
 			writer.read(at('missing.txt')),
 			writer.read(at('three.txt')),
+			writer.read(at('four.txt')),
 		],
-		exists: [writer.exists(at('one.txt')), writer.exists(at('missing.txt'))],
+		exists: [
+			writer.exists(at('one.txt')),
+			writer.exists(at('missing.txt')),
+			writer.exists(at('four.txt')),
+		],
 	};
 }
 
@@ -238,6 +319,8 @@ describe('recordingWriter behaves identically to fileWriter', () => {
 
 		expect(recorded.answers).toEqual(real.answers);
 		expect(recorded.written).toEqual(real.written);
+		expect(recorded.removed).toEqual(real.removed);
+		expect(real.removed).toHaveLength(1);
 		expect(recorded.reads).toEqual(real.reads);
 		expect(recorded.exists).toEqual(real.exists);
 		// And the script really did exercise both answers, so an equality between two lists
@@ -257,7 +340,7 @@ describe('recordingWriter behaves identically to fileWriter', () => {
 			expect([path, readFileSync(path, 'utf8')]).toEqual([path, contents]);
 			compared += 1;
 		}
-		expect(compared).toBe(3);
+		expect(compared).toBe(4);
 	});
 
 	test('a seeded recording writer reports the seeded bytes as already there', () => {
@@ -293,5 +376,19 @@ describe('recordingWriter behaves identically to fileWriter', () => {
 
 		expect(fileWriter().write(path, 'a\uFFFDb')).toBe(true);
 		expect(recordingWriter({ [path]: 'a\uFFFDb' }).write(path, 'a\uFFFDb')).toBe(false);
+	});
+
+	test('the second: a remove of something nothing ever held', () => {
+		// `fileWriter` looks and finds nothing. `recordingWriter` has no disk to look at, so
+		// it records the removal: its only caller walks a real tree and removes what that walk
+		// found, and a dry run of that walk has to report those paths rather than an empty
+		// list. A removal nobody found first is the case the two answer differently.
+		const directory = scratch();
+		const path = join(directory, 'nothing-here.txt');
+		expect(fileWriter().remove(path)).toBe(false);
+		const recording = recordingWriter();
+		expect(recording.remove(path)).toBe(true);
+		expect(recording.removed).toEqual([path]);
+		expect(recording.remove(path)).toBe(false);
 	});
 });

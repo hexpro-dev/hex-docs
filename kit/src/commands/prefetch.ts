@@ -37,11 +37,28 @@
  * search and asset records cover the **uncompressed** bytes, which is what lands in the
  * site. Checking only the first would let a corrupt decompression through; checking only
  * the second would leave the cache unverified.
+ *
+ * **The two trees hold exactly what the configs name, and nothing else.** A relabel, a
+ * removed version or a removed project leaves directories behind, and a glob over the
+ * bundle tree builds every one of them into the server while Vite copies every stale
+ * `public/_docs/<label>` into the client build, where it is served. So after every bundle
+ * is in the cache, and before anything is extracted, every file under either tree that no
+ * planned extraction writes is removed. Pruning first is also what makes a relabel by case
+ * alone work on a case-insensitive filesystem: the old-cased directory is emptied and
+ * removed, and extraction then creates it again in the configured case.
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import {
+	existsSync,
+	lstatSync,
+	mkdirSync,
+	readFileSync,
+	readdirSync,
+	statSync,
+	writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 
 import { AST_VERSION } from '../../../src/contracts/ast.js';
 import {
@@ -51,7 +68,9 @@ import {
 	type CheckRow,
 } from '../../../src/contracts/diagnostics.js';
 import {
+	BUNDLE_TREE,
 	MANIFEST_KEY,
+	PUBLIC_TREE,
 	assetKey,
 	bundlePrefix,
 	isGzipped,
@@ -66,7 +85,7 @@ import { pageSkew } from '../../../src/site/route.js';
 import { gunzipMember, sha256Hex, utf8Bytes, type JsonValue } from '../compile/serialise.js';
 import { raw, type RawFinding } from '../compile/types.js';
 import { bundleManifestSchema } from '../contracts/bundle.schema.js';
-import { docsSiteConfigSchema } from '../contracts/config.schema.js';
+import { docsSiteConfigSchema, versionTableProblems } from '../contracts/config.schema.js';
 import { defineCommand, type Ctx, type Writer } from '../registry/command.js';
 import { checkFindings, s3Client, type S3Client } from '../s3/client.js';
 
@@ -77,16 +96,23 @@ import { PREFETCH_PARAMS, PREFETCH_POSITIONALS } from './prefetch-params.js';
 const DOCS_DIR = ['app', 'docs'];
 
 /** Where page payloads, raw markdown, `llms.txt` and the manifest land. */
-const BUNDLE_DIR = [...DOCS_DIR, '_bundles'];
+const BUNDLE_DIR = [...DOCS_DIR, BUNDLE_TREE];
 
 /** Where the search index and the assets land: the only tree the browser can reach. */
-const PUBLIC_DIR = ['public', '_docs'];
+const PUBLIC_DIR = ['public', PUBLIC_TREE];
 
-/** The two lines `prefetch` adds to the site's `.gitignore`, and nothing else. */
-const IGNORE_ENTRIES = ['app/docs/_bundles/', 'public/_docs/'];
-
-const IGNORE_HEADER =
-	'# Written by hexdocs prefetch. Downloaded bundles, rebuilt from the cache on every build.';
+/**
+ * The sentence a credentials refusal carries, and the one thing it has to steer away from.
+ *
+ * The AWS CLI's own message ends by telling the reader to run `aws configure`. In this
+ * estate the default profile holds no credentials on purpose, so that an unpinned command
+ * fails rather than acting on whichever account a shell last signed in to, and following
+ * the CLI's advice undoes exactly that. Every cold build of a consuming site needs this
+ * account's credentials, which no build of one needed before documentation was mounted in
+ * it, so the message a build log shows is the one place to say which knob is the right one.
+ */
+const CREDENTIALS_ADVICE =
+	'Set AWS_PROFILE, or pass --profile, to a profile for the AWS account that owns the bundle store, rather than running aws configure or signing in to another account.';
 
 /**
  * A client that answers every call with the same refusal.
@@ -106,7 +132,7 @@ export const prefetch = defineCommand({
 	writes: 'files',
 	summary: 'Download every labelled bundle a site declares and write it into the site.',
 	detail:
-		'Reads every <project>.docs.json under the site, caches each labelled commit under a commit-addressed cache directory, verifies both the stored and the uncompressed digest of every file, and writes the page payloads into the app source and the search index and the assets into public/. A warm cache makes no network call and needs no AWS credentials, which is what makes this safe to run from a prebuild hook on a laptop and in a container. Run it before every build of a site that mounts documentation.',
+		'Reads every <project>.docs.json under the site, caches each labelled commit under a commit-addressed cache directory, verifies both the stored and the uncompressed digest of every file, and writes the page payloads into the app source and the search index and the assets into public/. Anything under those two trees that no configured version writes is removed first, so a relabelled or removed version leaves nothing behind to be built. A warm cache makes no network call and needs no AWS credentials, which is what makes this safe to run from a prebuild hook on a laptop and in a container. Run it before every build of a site that mounts documentation.',
 	params: PREFETCH_PARAMS,
 	positionals: PREFETCH_POSITIONALS,
 	taughtBy: ['docs-install-site'],
@@ -157,21 +183,67 @@ export const prefetch = defineCommand({
 
 		const configs: DocsSiteConfig[] = [];
 		const configProblems: string[] = [];
+		const projects = new Map<string, string>();
+		let read = 0;
 		for (const name of readdirSync(docsDirectory).sort()) {
 			if (!name.endsWith('.docs.json')) continue;
 			const path = join(docsDirectory, name);
 			if (!statSync(path).isFile()) continue;
+			read += 1;
 			const parsed = readSiteConfig(path);
-			if ('why' in parsed) configProblems.push(`${name}: ${parsed.why}`);
-			else configs.push(parsed.config);
+			if ('why' in parsed) {
+				configProblems.push(`${name}: ${parsed.why}`);
+				continue;
+			}
+			// Before anything is fetched, extracted or pruned, because each of these is a
+			// table with no single answer. Two defaults leave the skew row nothing to compare,
+			// and two labels that fold to one name extract two bundles into one directory on a
+			// case-insensitive filesystem. `sync` already refused these; a config written or
+			// edited by hand reached this command with nothing in the way.
+			const table = versionTableProblems(parsed.config);
+			if (table.length > 0) {
+				configProblems.push(`${name}: ${table.join(' ')}`);
+				continue;
+			}
+			// Two configs naming one project extract into one `<tree>/<project>/` directory,
+			// and each prune would remove what the other one wrote. Compared exactly, because
+			// `PROJECT_ID_PATTERN` admits only lower case, so exact equality already is the
+			// case-folded comparison; a pattern that ever admits upper case has to fold here.
+			const earlier = projects.get(parsed.config.project);
+			if (earlier !== undefined) {
+				configProblems.push(
+					`${name} and ${earlier} both declare the project "${parsed.config.project}". Each version extracts into ${[...BUNDLE_DIR, parsed.config.project].join('/')}/, so the two would overwrite each other and each prune would delete the other one's files. Keep one config per project.`,
+				);
+				continue;
+			}
+			projects.set(parsed.config.project, name);
+			configs.push(parsed.config);
 		}
 
 		const configRow: CheckRow =
 			configProblems.length > 0
-				? failedRow('prefetch-configs', configs.length, 'site configs', configProblems.join(' '))
+				? failedRow('prefetch-configs', read, 'site configs', configProblems.join(' '))
 				: checkRow('prefetch-configs', configs.length, 'site configs', []);
 		if (configRow.status !== 'pass') {
 			return output([configRow], { site: siteDirectory, prefetched: false }, []);
+		}
+
+		// ---- the shape of the two trees ----------------------------------------
+
+		// Before the cache is touched, so a tree this command will not write into costs no
+		// network call and leaves the cache as it was.
+		const shape = treeShape(siteDirectory);
+		const treeRow: CheckRow =
+			shape.problems.length > 0
+				? failedRow(
+						'prefetch-trees',
+						shape.examined,
+						'entries',
+						`${shape.problems.join(' ')} Nothing was downloaded, pruned or written. ${TREE_SHAPE_REASON}`,
+					)
+				: checkRow('prefetch-trees', shape.examined, 'entries', []);
+		if (treeRow.status !== 'pass') {
+			return output([configRow, treeRow], { site: siteDirectory, prefetched: false }, []);
 		}
 
 		// ---- fill the cache --------------------------------------------------
@@ -203,12 +275,7 @@ export const prefetch = defineCommand({
 				}
 				cacheProblems.push(...filled.problems);
 				if (filled.problems.length === 0) {
-					bundles.push({
-						project: config.project,
-						entry,
-						manifest: filled.manifest,
-						cacheDirectory,
-					});
+					bundles.push({ config, entry, manifest: filled.manifest, cacheDirectory });
 				}
 			}
 			if (stopped !== null) break;
@@ -216,7 +283,7 @@ export const prefetch = defineCommand({
 
 		if (stopped !== null) {
 			return output(
-				[configRow, notRunRow('prefetch-cache', 'bundles', stopped)],
+				[configRow, treeRow, notRunRow('prefetch-cache', 'bundles', stopped)],
 				{ site: siteDirectory, prefetched: false, why: stopped },
 				[stopped],
 			);
@@ -230,27 +297,47 @@ export const prefetch = defineCommand({
 			`${client.calls} AWS call(s).`,
 		);
 		if (cacheRow.status !== 'pass') {
-			return output([configRow, cacheRow], { site: siteDirectory, prefetched: false }, []);
+			return output([configRow, treeRow, cacheRow], { site: siteDirectory, prefetched: false }, []);
 		}
 
-		// ---- extract into the site -------------------------------------------
+		// ---- prune, then extract into the site ----------------------------------
 
-		const extracted = extract(bundles, siteDirectory, writer);
-		const extractRow = checkRow(
-			'prefetch-extract',
-			extracted.files,
-			'files',
-			checkFindings(extracted.problems, ctx.kitVersion),
-			`${extracted.written} written, ${extracted.unchanged} already current.`,
-		);
+		const plans = bundles.map((bundle) => planFor(bundle, siteDirectory));
+		const planProblems = plans.flatMap((plan) => plan.problems);
+		let extractRow: CheckRow;
+		let extracted = { files: 0, written: 0, unchanged: 0 };
+		let removed = 0;
+		if (planProblems.length > 0) {
+			// A bundle whose key sets disagree is not extracted, nothing else is either, and
+			// nothing is pruned. The prune's keep set is the plan, so pruning against a plan
+			// known to be wrong could delete a file the corrected bundle will need, and
+			// extracting the bundles that did line up would leave a site that builds and is
+			// missing a version, which is the failure this command exists to make impossible.
+			extractRow = checkRow(
+				'prefetch-extract',
+				plans.reduce((total, plan) => total + plan.entries.length, 0),
+				'files',
+				checkFindings(planProblems, ctx.kitVersion),
+				'Nothing was pruned or written.',
+			);
+		} else {
+			removed = prune(
+				siteDirectory,
+				new Set(plans.flatMap((plan) => plan.entries.map((entry) => entry.destination))),
+				writer,
+			);
+			const done = extract(plans, writer);
+			extracted = done;
+			extractRow = checkRow(
+				'prefetch-extract',
+				done.files,
+				'files',
+				checkFindings(done.problems, ctx.kitVersion),
+				`${done.written} written, ${done.unchanged} already current, ${removed} removed.`,
+			);
+		}
 
-		const rows = [
-			configRow,
-			cacheRow,
-			extractRow,
-			skew(configs, bundles),
-			ignore(writer, siteDirectory),
-		];
+		const rows = [configRow, treeRow, cacheRow, extractRow, skew(bundles)];
 		return output(
 			rows,
 			{
@@ -260,11 +347,12 @@ export const prefetch = defineCommand({
 				files: extracted.files,
 				written: extracted.written,
 				unchanged: extracted.unchanged,
+				removed,
 				calls: client.calls,
 			},
 			[
 				`${bundles.length} bundle(s), ${extracted.files} file(s): ${extracted.written} written, ` +
-					`${extracted.unchanged} already current, ${client.calls} AWS call(s).`,
+					`${extracted.unchanged} already current, ${removed} removed, ${client.calls} AWS call(s).`,
 			],
 		);
 	},
@@ -302,7 +390,7 @@ function localPath(directory: string, key: string): string {
 
 /** One version of one project, resolved far enough to extract. */
 interface Bundle {
-	project: string;
+	config: DocsSiteConfig;
 	entry: VersionEntry;
 	manifest: BundleManifest;
 	cacheDirectory: string;
@@ -353,7 +441,9 @@ function clientFor(
 ): MaybeClient {
 	const resolved = bucketOf(bucket);
 	if ('why' in resolved) {
-		const refused = { kind: 'refused' as const, why: resolved.why, credentials: true };
+		// `credentials: false`: the reason is the bucket, and a sentence about which profile
+		// to sign with would send somebody to fix a step they have not reached yet.
+		const refused = { kind: 'refused' as const, why: resolved.why, credentials: false };
 		return {
 			why: resolved.why,
 			head: () => refused,
@@ -416,7 +506,7 @@ function fill(
 				why: `${prefix}/${key} is not in the bucket. Version "${entry.label}" points at a commit whose bundle was never published, so every page of it would 404.`,
 			};
 		}
-		return { why: result.why };
+		return { why: result.credentials ? `${result.why} ${CREDENTIALS_ADVICE}` : result.why };
 	};
 
 	let loaded = readCachedManifest(join(cacheDirectory, MANIFEST_KEY));
@@ -678,9 +768,28 @@ function writeBytes(path: string, bytes: Buffer): boolean {
 	return true;
 }
 
+/** A bundle and every file it lands in the site, planned before anything is touched. */
+interface Plan {
+	bundle: Bundle;
+	entries: Extraction[];
+	problems: RawFinding[];
+}
+
+function planFor(bundle: Bundle, siteDirectory: string): Plan {
+	const project = bundle.config.project;
+	const label = bundle.entry.label;
+	const manifestBytes = readFileSync(join(bundle.cacheDirectory, MANIFEST_KEY));
+	const plan = planExtraction(
+		bundle.manifest,
+		join(siteDirectory, ...BUNDLE_DIR, project, label),
+		join(siteDirectory, ...PUBLIC_DIR, project, label),
+		sha256Hex(manifestBytes),
+	);
+	return { bundle, ...plan };
+}
+
 function extract(
-	bundles: readonly Bundle[],
-	siteDirectory: string,
+	plans: readonly Plan[],
 	writer: Writer,
 ): { files: number; written: number; unchanged: number; problems: RawFinding[] } {
 	let files = 0;
@@ -688,23 +797,8 @@ function extract(
 	let unchanged = 0;
 	const problems: RawFinding[] = [];
 
-	for (const bundle of bundles) {
-		const bundleDirectory = join(siteDirectory, ...BUNDLE_DIR, bundle.project, bundle.entry.label);
-		const publicDirectory = join(siteDirectory, ...PUBLIC_DIR, bundle.project, bundle.entry.label);
-		const manifestBytes = readFileSync(join(bundle.cacheDirectory, MANIFEST_KEY));
-		const plan = planExtraction(
-			bundle.manifest,
-			bundleDirectory,
-			publicDirectory,
-			sha256Hex(manifestBytes),
-		);
-		problems.push(...plan.problems);
-		// A bundle whose key sets disagree is not extracted at all. Copying the part that
-		// does line up would leave a site that builds and is missing files, which is the
-		// failure this whole command exists to make impossible.
-		if (plan.problems.length > 0) continue;
-
-		for (const entry of plan.entries) {
+	for (const { bundle, entries } of plans) {
+		for (const entry of entries) {
 			files += 1;
 			const stored = readFileSync(localPath(bundle.cacheDirectory, entry.key));
 			const bytes = isGzipped(entry.key) ? gunzipMember(stored) : stored;
@@ -751,43 +845,176 @@ function uncompressedMismatch(key: string, expected: string, found: string): Raw
 }
 
 // ---------------------------------------------------------------------------
-// What the site will route, and what git should ignore
+// The two trees: their shape, and what is left in them
+// ---------------------------------------------------------------------------
+
+/** Said once on the row rather than once per entry, because every entry has the same fix. */
+const TREE_SHAPE_REASON =
+	'Everything between the site directory and a label directory has to be a real directory. A symbolic link there would carry every write and every prune somewhere outside the site, and prefetch creates nothing but directories at those levels, so anything else there was put there by hand (a Finder .DS_Store counts), and it is not for this command to overwrite or delete. Move it out of the tree, or remove it.';
+
+/**
+ * Every entry from the site directory down to the label directories, measured with `lstat`.
+ *
+ * A symbolic link anywhere on that path is refused rather than followed or removed.
+ * Measured in the step 8 critique: with `_bundles/<project>/<label>` a link to a directory outside the site,
+ * `mkdirSync(..., { recursive: true })` and a write under it landed in the target, so
+ * extraction writes through a link and a prune that skipped links would leave exactly that
+ * in place. Removing the link instead would be a delete of something this command did not
+ * create, at a level where nothing it writes is a link.
+ *
+ * A non-directory at the project or label level is refused for the same reason from the
+ * other side. Nothing prefetch writes is a file at those depths, so a file there is a
+ * person's, and below a label directory is where prefetch's own territory starts.
+ *
+ * An entry that cannot be looked at, a directory with no search or read permission, is a
+ * problem on the same row rather than a throw. A throw reaches the CLI as a stack trace
+ * under a sentence calling it a bug in hexdocs, and a mode on a site's own directory is not
+ * one.
+ *
+ * `examined` counts every entry that was there to look at. The site's `app/docs` always
+ * is, because the configs were read out of it, so a clean site examines at least two.
+ */
+function treeShape(siteDirectory: string): { examined: number; problems: string[] } {
+	let examined = 0;
+	const problems: string[] = [];
+	const shown = (path: string): string => relative(siteDirectory, path).split(sep).join('/');
+
+	const unreadable = (path: string, error: unknown): false => {
+		problems.push(`${shown(path)} could not be read (${(error as NodeJS.ErrnoException).code}).`);
+		return false;
+	};
+
+	/** `true` when the entry is a real directory worth descending into. */
+	const directory = (path: string): boolean => {
+		let stats;
+		try {
+			stats = lstatSync(path);
+		} catch (error) {
+			return (error as NodeJS.ErrnoException).code === 'ENOENT' ? false : unreadable(path, error);
+		}
+		examined += 1;
+		if (stats.isSymbolicLink()) {
+			problems.push(`${shown(path)} is a symbolic link.`);
+			return false;
+		}
+		if (!stats.isDirectory()) {
+			problems.push(`${shown(path)} is not a directory.`);
+			return false;
+		}
+		return true;
+	};
+
+	const entries = (path: string): string[] => {
+		try {
+			return readdirSync(path).sort();
+		} catch (error) {
+			unreadable(path, error);
+			return [];
+		}
+	};
+
+	for (const tree of [BUNDLE_DIR, PUBLIC_DIR]) {
+		let path = siteDirectory;
+		let real = true;
+		for (const segment of tree) {
+			path = join(path, segment);
+			real = directory(path);
+			if (!real) break;
+		}
+		if (!real) continue;
+		for (const project of entries(path)) {
+			const projectPath = join(path, project);
+			if (!directory(projectPath)) continue;
+			for (const label of entries(projectPath)) directory(join(projectPath, label));
+		}
+	}
+
+	return { examined, problems };
+}
+
+/**
+ * Removes everything under the two trees that no planned extraction writes, and returns
+ * how many entries went.
+ *
+ * What is kept is exactly the set of destinations the plans produced, compared as paths
+ * built by the same `join` from the same site directory, so the keep set and the files
+ * extraction writes cannot drift into disagreeing and oscillating between runs. A regular
+ * file at a kept path stays; anything else goes: a file no plan names, a symbolic link at
+ * any depth (unlinked, never followed, so what it points at survives), and then every
+ * directory the walk left empty. The two tree roots themselves are never removed.
+ *
+ * It runs only once every earlier row has passed, which is what keeps a laptop without
+ * credentials, or a config that stopped validating, from losing an extracted tree it can
+ * no longer rebuild. The shape check has already refused a link or a file at the levels
+ * above a label directory; the root is looked at again here rather than trusted, because
+ * the cache fill in between can take as long as a download.
+ */
+function prune(siteDirectory: string, keep: ReadonlySet<string>, writer: Writer): number {
+	const before = writer.removed.length;
+
+	/** Returns whether the directory was left holding nothing. */
+	const walk = (directory: string): boolean => {
+		let remaining = 0;
+		for (const entry of readdirSync(directory, { withFileTypes: true })) {
+			const path = join(directory, entry.name);
+			// `withFileTypes` answers from the directory entry itself, as `lstat` does, so a
+			// link to a directory reports as a link here and is never descended into.
+			if (entry.isDirectory()) {
+				if (walk(path)) writer.remove(path);
+				else remaining += 1;
+			} else if (entry.isFile() && keep.has(path)) {
+				remaining += 1;
+			} else {
+				writer.remove(path);
+			}
+		}
+		return remaining === 0;
+	};
+
+	for (const tree of [BUNDLE_DIR, PUBLIC_DIR]) {
+		const root = join(siteDirectory, ...tree);
+		let real = false;
+		try {
+			real = lstatSync(root).isDirectory();
+		} catch {
+			// Absent, which is every first run: there is nothing to prune.
+		}
+		if (real) walk(root);
+	}
+
+	// The writer's own list rather than a count kept here, so the number on the row is the
+	// number of paths the writer says went.
+	return writer.removed.length - before;
+}
+
+// ---------------------------------------------------------------------------
+// What the site will route
 // ---------------------------------------------------------------------------
 
 /**
  * The bundle's page set against the one the host will route.
  *
- * `route.ts` names the consequence: a slug the bundle carries and the config does not
- * renders, links from the sidebar and appears in prev and next, while the host's
- * `isLocalisedPath` returns false for it, so the page ships with no canonical, no
- * alternates and no `noindex`. The reverse is eight hreflang alternates pointing at eight
- * 404s. Both directions fail here, at build time, where somebody is watching.
+ * The consumer's route rows and its sitemap are derived from `pages`, not from the bundle.
+ * So a slug the bundle carries and the config does not is a page the sidebar and prev and
+ * next link to with no route behind it, and a slug the config lists and the bundle does not
+ * is a routed, sitemapped address with nothing to serve. Both directions fail here, at build
+ * time, where somebody is watching.
  *
  * Only the default version is compared, because `site.pages` describes the default
- * version and nothing else: a pinned version lives at `/v/<label>/`, which
- * `isLocalisedPath` deliberately does not cover.
+ * version and nothing else: a pinned version lives at `/v/<label>/`.
+ *
+ * Every config contributes exactly one default bundle by the time this runs:
+ * `versionTableProblems` refused a table without exactly one default on the configs row,
+ * and the cache row refused a run in which any version failed to fill. So the count is one
+ * per config, and a run that somehow compared none would still fail on a zero.
  */
-function skew(configs: readonly DocsSiteConfig[], bundles: readonly Bundle[]): CheckRow {
+function skew(bundles: readonly Bundle[]): CheckRow {
 	const problems: string[] = [];
 	let compared = 0;
 
-	for (const config of configs) {
-		const entry = config.versions.find((version) => version.default === true);
-		if (entry === undefined) {
-			// `versionTableProblems` is what reports this properly and it is not this
-			// command's job. Saying nothing would leave the row counting one fewer config
-			// than it read, which is the shape of a check that quietly stopped covering
-			// something.
-			problems.push(`${config.project} has no default version, so no page set could be compared.`);
-			continue;
-		}
-		const bundle = bundles.find(
-			(candidate) => candidate.project === config.project && candidate.entry.label === entry.label,
-		);
-		if (bundle === undefined) {
-			problems.push(`${config.project} has no materialised bundle for its default version.`);
-			continue;
-		}
+	for (const bundle of bundles) {
+		if (bundle.entry.default !== true) continue;
+		const { config } = bundle;
 		compared += 1;
 		const { inBundleOnly, inConfigOnly } = pageSkew(bundle.manifest, config);
 		if (inBundleOnly.length > 0) {
@@ -805,32 +1032,6 @@ function skew(configs: readonly DocsSiteConfig[], bundles: readonly Bundle[]): C
 	return problems.length > 0
 		? failedRow('prefetch-skew', compared, 'page sets', problems.join(' '))
 		: checkRow('prefetch-skew', compared, 'page sets', []);
-}
-
-/**
- * Both destination trees, in the site's own `.gitignore`.
- *
- * Neither consumer has an entry today and `apps/front` has no `.gitignore` at all, so
- * this creates one. The entries are relative to the site directory, which is where the
- * file lives, so neither can match anything outside it. Written through the `Writer`, so
- * a second run with the lines already present writes nothing.
- */
-function ignore(writer: Writer, siteDirectory: string): CheckRow {
-	const path = join(siteDirectory, '.gitignore');
-	const existing = writer.read(path);
-	const present = new Set((existing ?? '').split('\n').map((line) => line.trim()));
-	const missing = IGNORE_ENTRIES.filter((entry) => !present.has(entry));
-	if (missing.length === 0) {
-		return checkRow('prefetch-gitignore', IGNORE_ENTRIES.length, 'ignore entries', []);
-	}
-
-	const block = present.has(IGNORE_HEADER) ? missing : [IGNORE_HEADER, ...missing];
-	const body =
-		existing === undefined || existing.trim() === ''
-			? `${block.join('\n')}\n`
-			: `${existing.replace(/\n+$/, '')}\n\n${block.join('\n')}\n`;
-	writer.write(path, body);
-	return checkRow('prefetch-gitignore', IGNORE_ENTRIES.length, 'ignore entries', []);
 }
 
 /** The one shape every return takes, so a field cannot be forgotten on one path. */

@@ -121,14 +121,17 @@
 				"kind"
 			],
 			"flags": [
+				"commit",
 				"locale",
 				"product-name",
 				"project",
+				"released",
 				"repo",
 				"root",
 				"site",
 				"slug",
-				"title"
+				"title",
+				"version"
 			],
 			"taughtBy": [
 				"docs-init-source",

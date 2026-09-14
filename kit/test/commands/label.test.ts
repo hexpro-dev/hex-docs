@@ -291,6 +291,33 @@ describe('label-shape', () => {
 		expect(note).not.toContain('is not a version label');
 	});
 
+	test('a label the table carries in another case is the same assertion, with its own sentence', async () => {
+		// Compared case-folded, which is what `versionTableProblems` does. An exact compare
+		// here would return a patch whose result `prefetch` then refuses, at the next build
+		// rather than at the command somebody ran to ask whether the label was safe.
+		// The fixture's labels are digits and dots, which have no case, so this table carries
+		// one with letters in it.
+		const root = webRepo();
+		const path = join(root, 'apps', 'front', 'app', 'docs', `${PROJECT}.docs.json`);
+		writeFileSync(
+			path,
+			readFileSync(path, 'utf8').replace('"label": "1.1.0"', '"label": "1.1.0-rc"'),
+			'utf8',
+		);
+
+		const folded = (await runLabel({ root, version: '1.1.0-RC' })).row('label-shape');
+		expect(folded?.status).toBe('fail');
+		expect(folded?.examined).toBe(5);
+		expect(folded?.note).toContain(
+			'"1.1.0-RC" differs from the existing label "1.1.0-rc" only in case',
+		);
+		expect(folded?.note).not.toContain('already labels');
+
+		const exact = (await runLabel({ root, version: '1.1.0-rc' })).row('label-shape');
+		expect(exact?.note).toContain('already labels');
+		expect(exact?.note).not.toContain('only in case');
+	});
+
 	test('the release date defaults to today in UTC, not to the local date', async () => {
 		const { output } = await runLabel();
 		const data = output.data as { entry: { released: string } };

@@ -104,8 +104,21 @@ raw markdown inside the app tree where a lazy glob and the resource routes reach
 the search indexes and images under `public/`, which is where a same-origin fetch can
 reach them at all.
 
-`sync` writes `pages`, the hidden list and the per-version digests back into the config,
-and nothing else. It is byte-idempotent: run it twice and the file does not change.
+Before it extracts anything it removes whatever under those two trees no configured
+version writes, so a relabelled or removed version leaves nothing behind for the build to
+pick up. It prunes only when the configs, the trees and the cache have all passed, so a
+machine without credentials keeps the tree it already has. A symbolic link, or a file
+where a project or label directory belongs, stops the run with nothing touched: move it
+out of the tree.
+
+A cold cache needs the bucket and credentials for the account that owns the store. If the
+row says the CLI could not find credentials, set `AWS_PROFILE` (or pass `--profile`) to
+that account's profile. Do not run `aws configure` or sign in to a different account.
+
+`sync` writes `pages`, the hidden list, the redirects and the per-version digests back
+into the config, and nothing else. It is byte-idempotent: run it twice and the file does
+not change. It refuses to write a config in which a redirect source shares an address with
+a page, or points at a page that is not there.
 
 ### 6. Confirm, then deploy
 

@@ -61,13 +61,16 @@ import { afterAll, describe, expect, test } from 'vitest';
 
 import { LOCALES } from '../../../src/contracts/locales.js';
 import { DENY_LIST_RELATIVE, SITE_ROOT_RELATIVE } from '../../../src/contracts/project.js';
+import type { DocsSiteConfig } from '../../../src/contracts/site.js';
 import { UI_STRINGS } from '../../../src/ui/strings.js';
+import { label } from '../../src/commands/label.js';
 import { scaffold } from '../../src/commands/scaffold.js';
 import {
 	denyListSchema,
 	docsProjectConfigSchema,
 	docsSiteConfigSchema,
 	navTreeSchema,
+	versionTableProblems,
 } from '../../src/contracts/config.schema.js';
 import { NO_EXEC } from '../../src/exec/run.js';
 import { exitCodeFor, invoke, type Ctx } from '../../src/registry/command.js';
@@ -89,6 +92,9 @@ const PRODUCT = 'Fixture App';
 const REPO = 'hexpro-dev/fixture-app';
 const SITE = 'apps/front';
 const SITE_CONFIG = `${SITE}/app/docs/${PROJECT}.docs.json`;
+/** The first version a site config is scaffolded with: a real sha shape and a label. */
+const COMMIT = '67a7f22c66619693ab861f82cd1cc5fb2f1788a6';
+const VERSION = '1.0.0';
 
 /** This checkout, so the measured-mount case can be built from where the toolchain is. */
 const HEX_DOCS_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
@@ -256,7 +262,11 @@ const KINDS: readonly { kind: string; args: Record<string, unknown>; first: stri
 		args: { slug: 'guide/first-tag' },
 		first: `${SITE_ROOT_RELATIVE}/content/en/guide/first-tag.md`,
 	},
-	{ kind: 'site', args: { project: PROJECT, site: SITE }, first: SITE_CONFIG },
+	{
+		kind: 'site',
+		args: { project: PROJECT, site: SITE, commit: COMMIT, version: VERSION },
+		first: SITE_CONFIG,
+	},
 	{ kind: 'workflow', args: {}, first: PUBLISH_WORKFLOW_PATH },
 ];
 
@@ -327,7 +337,15 @@ describe('every kind', () => {
  * `undefined` in it.
  */
 /** Every conditional flag, so the both-directions check below has a set to subtract from. */
-const FLAGS = ['--project', '--product-name', '--repo', '--slug', '--site'] as const;
+const FLAGS = [
+	'--project',
+	'--product-name',
+	'--repo',
+	'--slug',
+	'--site',
+	'--commit',
+	'--version',
+] as const;
 
 const REQUIRED: readonly { kind: string; args: Record<string, unknown>; missing: string[] }[] = [
 	{
@@ -340,8 +358,12 @@ const REQUIRED: readonly { kind: string; args: Record<string, unknown>; missing:
 		args: { project: PROJECT, repo: REPO },
 		missing: ['--product-name'],
 	},
-	{ kind: 'site', args: {}, missing: ['--project', '--site'] },
-	{ kind: 'site', args: { site: SITE }, missing: ['--project'] },
+	{ kind: 'site', args: {}, missing: ['--project', '--site', '--commit', '--version'] },
+	{ kind: 'site', args: { site: SITE, commit: COMMIT, version: VERSION }, missing: ['--project'] },
+	// The case that used to return a file the schema refuses. Without the first version
+	// there is nothing valid to return, so it is a not-run row rather than that file.
+	{ kind: 'site', args: { project: PROJECT, site: SITE }, missing: ['--commit', '--version'] },
+	{ kind: 'site', args: { project: PROJECT, site: SITE, commit: COMMIT }, missing: ['--version'] },
 	{ kind: 'page', args: {}, missing: ['--slug'] },
 ];
 
@@ -398,7 +420,13 @@ describe('a kind that was not told what it needs', () => {
 		expect(repo.exit).toBe(3);
 		expect(repo.data.notes[0]).toContain('owner/name');
 
-		const site = await run(root, { kind: 'site', project: 'Fixture_App', site: SITE });
+		const site = await run(root, {
+			kind: 'site',
+			project: 'Fixture_App',
+			site: SITE,
+			commit: COMMIT,
+			version: VERSION,
+		});
 		expect(site.exit).toBe(3);
 		expect(site.data.files).toEqual([]);
 
@@ -738,7 +766,14 @@ describe('scaffold source', () => {
 describe('scaffold site', () => {
 	async function siteRun(args: Record<string, unknown> = {}) {
 		const root = repository();
-		return run(root, { kind: 'site', project: PROJECT, site: SITE, ...args });
+		return run(root, {
+			kind: 'site',
+			project: PROJECT,
+			site: SITE,
+			commit: COMMIT,
+			version: VERSION,
+			...args,
+		});
 	}
 
 	test('writes one file, where verify-install and prefetch both look for it', async () => {
@@ -751,26 +786,64 @@ describe('scaffold site', () => {
 		expect(tidy.data.files.map((file) => file.path)).toEqual([SITE_CONFIG]);
 	});
 
-	test('the config validates apart from versions, which only hexdocs label can fill in', async () => {
-		const { data } = await siteRun();
+	test('the config validates, with the one version it was given as the default', async () => {
+		// The inversion of the test that pinned `versions: []` as intended. That file was
+		// refused by the schema, by `label`'s patch anchor and by `prefetch` and `sync`.
+		const { data, exit } = await siteRun({ released: '2026-04-08' });
+		expect(exit).toBe(0);
 		const value = parseJson(fileAt(data, SITE_CONFIG).contents) as Record<string, unknown>;
 
 		const parsed = docsSiteConfigSchema.safeParse(value);
-		expect(parsed.success).toBe(false);
-		// Exactly one reason. The schema needs a real 40-character commit sha, which a
-		// scaffolder cannot know, and writing a plausible one would put a fabricated commit
-		// into the file the version picker reads.
-		expect((parsed.error?.issues ?? []).map((issue) => issue.path.join('.'))).toEqual(['versions']);
-		expect(
-			docsSiteConfigSchema.safeParse({
-				...value,
-				versions: [{ label: '1.0', commit: 'a'.repeat(40), released: '2026-01-01', default: true }],
-			}).success,
-		).toBe(true);
-
+		expect(parsed.error?.issues ?? []).toEqual([]);
+		expect(versionTableProblems(parsed.data as DocsSiteConfig)).toEqual([]);
+		expect(value['versions']).toEqual([
+			{ label: VERSION, commit: COMMIT, released: '2026-04-08', default: true },
+		]);
 		expect(value['project']).toBe(PROJECT);
 		expect(value['basePath']).toBe(`/${PROJECT}/docs`);
+		expect(data.notes.join('\n')).toContain('marked default');
+		expect(data.notes.join('\n')).toContain('hexdocs label');
 	});
+
+	test('--released defaults to today in UTC, the way label defaults it', async () => {
+		// The context's clock, not the machine's, and the same helper `label` uses, so the
+		// two commands cannot stamp one instant with two dates.
+		const { data } = await siteRun();
+		const value = parseJson(fileAt(data, SITE_CONFIG).contents) as {
+			versions: { released: string }[];
+		};
+		expect(value.versions[0]?.released).toBe('2026-06-01');
+	});
+
+	test('the three version flags are the parameters label declares, not a second spelling', () => {
+		// One help text per flag across both commands. Only the requiredness differs, because
+		// `scaffold` holds one table for four kinds.
+		for (const name of ['commit', 'version', 'released'] as const) {
+			expect([name, scaffold.params[name]?.help]).toEqual([name, label.params[name]?.help]);
+		}
+		expect(label.params['commit']?.required).toBe(true);
+		expect('required' in scaffold.params.commit).toBe(false);
+	});
+
+	const BAD_SHAPES: readonly { name: string; args: Record<string, unknown>; says: string }[] = [
+		{ name: 'an abbreviated sha', args: { commit: '67a7f22' }, says: 'is not a commit sha' },
+		{ name: 'a label with a slash', args: { version: 'v1/beta' }, says: 'is not a version label' },
+		{
+			name: 'a date that is not a date',
+			args: { released: '8 April' },
+			says: 'is not a release date',
+		},
+	];
+
+	for (const entry of BAD_SHAPES) {
+		test(`${entry.name} is a not-run row naming it, never a file the schema refuses`, async () => {
+			const { data, exit, output } = await siteRun(entry.args);
+			expect(exit).toBe(3);
+			expect(output.rows.map((row) => row.status)).toEqual(['not-run']);
+			expect(data.files).toEqual([]);
+			expect(data.notes[0]).toContain(entry.says);
+		});
+	}
 
 	test('the sidebar label is this package own table, in all seven languages', async () => {
 		const { data } = await siteRun();
@@ -793,28 +866,20 @@ describe('scaffold site', () => {
 		const note = data.notes.find((line) => line.startsWith('pages stays empty'));
 		expect(note).toBeDefined();
 		expect(note).toContain('hexdocs sync');
-		expect(data.notes.join('\n')).toContain('hexdocs label');
 		expect(data.notes.join('\n')).toContain('themeClass');
 	});
 
-	test('a project id that is also a language code is named rather than quietly emitted', async () => {
-		const { data } = await siteRun({ project: 'es' });
-		const note = data.notes.find((line) => line.includes('language code'));
-		expect(note).toBeDefined();
-
-		// And the note is true: the schema really does refuse that basePath, because the
-		// locale prefix is added per request and a basePath carrying one would have to exist
-		// seven times.
-		const value = parseJson(fileAt(data, `${SITE}/app/docs/es.docs.json`).contents) as Record<
-			string,
-			unknown
-		>;
-		const parsed = docsSiteConfigSchema.safeParse({
-			...value,
-			versions: [{ label: '1.0', commit: 'b'.repeat(40), released: '2026-01-01', default: true }],
-		});
-		expect(parsed.success).toBe(false);
-		expect((parsed.error?.issues ?? []).map((issue) => issue.path.join('.'))).toContain('basePath');
+	test('a project id that is also a language code is refused, naming why, rather than emitted', async () => {
+		// It used to come back as a file and a note saying the schema refuses it. A config the
+		// schema refuses is the dead end this kind exists not to produce, so the schema is
+		// asked before anything is returned, and its reason is the refusal.
+		const { data, exit, output } = await siteRun({ project: 'es' });
+		expect(exit).toBe(3);
+		expect(output.rows.map((row) => row.status)).toEqual(['not-run']);
+		expect(data.files).toEqual([]);
+		expect(data.notes[0]).toContain('would not validate');
+		expect(data.notes[0]).toContain('basePath must not start with a locale segment');
+		expect(data.notes[0]).toContain('by hand');
 	});
 });
 
@@ -870,7 +935,13 @@ describe('the mount', () => {
 		// relative path climbing out of the repository would be worse than the default,
 		// because it would be silently wrong on the machine that later reads the file.
 		const root = repository();
-		const { data } = await run(root, { kind: 'site', project: PROJECT, site: SITE });
+		const { data } = await run(root, {
+			kind: 'site',
+			project: PROJECT,
+			site: SITE,
+			commit: COMMIT,
+			version: VERSION,
+		});
 		const note = data.notes.find((line) => line.includes('assumes it is mounted at'));
 		expect(note).toBeDefined();
 		expect(note).toContain(`${DEFAULT_KIT_MOUNT}/`);
@@ -897,6 +968,8 @@ describe('the mount', () => {
 			kind: 'site',
 			project: PROJECT,
 			site: 'hexdocs-scaffold-probe',
+			commit: COMMIT,
+			version: VERSION,
 		});
 		expect(existsSync(join(root, 'hexdocs-scaffold-probe'))).toBe(false);
 

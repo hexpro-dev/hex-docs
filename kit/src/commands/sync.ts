@@ -1,10 +1,11 @@
 /**
  * `hexdocs sync`: write what the bundle says back into `<project>.docs.json`.
  *
- * Three fields, and no others: `pages`, `hidden` and `versions[].digest`. Their contracts
- * in `src/contracts/site.ts` all name this command as their writer, and everything else
- * in that file is a human decision. `navLabel` in particular exists so that installing
- * docs needs no locale-file edit, and a command that rewrote it would take that with it.
+ * Four fields, and no others: `pages`, `hidden`, `redirects` and `versions[].digest`.
+ * Their contracts in `src/contracts/site.ts` all name this command as their writer, and
+ * everything else in that file is a human decision. `navLabel` in particular exists so
+ * that installing docs needs no locale-file edit, and a command that rewrote it would take
+ * that with it.
  *
  * It is a surgical edit, not a reserialise. Nothing here parses the file and writes it
  * back out: the fields this command does not own keep their bytes, their key order and
@@ -63,6 +64,26 @@ function columnsOf(text: string): number {
 	let columns = 0;
 	for (const character of text) columns += character === '\t' ? TAB_COLUMNS : 1;
 	return columns;
+}
+
+/**
+ * A JSON object of strings, always expanded, one member a line.
+ *
+ * Always expanded rather than packed when it fits, because that is the one shape prettier
+ * leaves alone either way: it keeps an object multi-line when the source has a newline
+ * after the opening brace, and it would expand a packed object that grew past the print
+ * width. `navLabel` in the checked-in example is the same shape for the same reason.
+ */
+function renderObject(
+	entries: readonly (readonly [string, string])[],
+	indent: string,
+	unit: string,
+	newline: string,
+): string {
+	const body = entries
+		.map(([key, value]) => `${indent}${unit}${JSON.stringify(key)}: ${JSON.stringify(value)}`)
+		.join(`,${newline}`);
+	return `{${newline}${body}${newline}${indent}}`;
 }
 
 /**
@@ -144,6 +165,24 @@ function sameStrings(a: readonly string[], b: readonly string[]): boolean {
 	return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
+/**
+ * The same map, whatever order its keys were written in.
+ *
+ * Order-blind on purpose. A config whose redirects are the manifest's in a different order
+ * says the same thing, and rewriting it to the manifest's order would be the spurious diff
+ * this command exists not to produce.
+ */
+function sameMap(
+	a: Readonly<Record<string, string>>,
+	b: Readonly<Record<string, string>>,
+): boolean {
+	const keys = Object.keys(a);
+	return (
+		keys.length === Object.keys(b).length &&
+		keys.every((key) => Object.hasOwn(b, key) && a[key] === b[key])
+	);
+}
+
 function commandOutput(
 	data: Record<string, JsonValue | undefined>,
 	lines: readonly string[],
@@ -173,7 +212,7 @@ export const sync = defineCommand({
 	writes: 'files',
 	summary: 'Write the page list and the bundle digests back into a site config.',
 	detail:
-		'Reads the manifest of every labelled version out of the prefetch cache and updates <site>/app/docs/<project>.docs.json in place: `pages` and `hidden` from the default version, `versions[].digest` from each fetched manifest. Nothing else in the file is touched and its formatting is preserved. `pages` is written in the manifest nav order, so running it twice produces the same bytes. A slug that has disappeared and has no redirect behind it fails the run, because that is a 404 at an address somebody linked to.',
+		'Reads the manifest of every labelled version out of the prefetch cache and updates <site>/app/docs/<project>.docs.json in place: `pages`, `hidden` and `redirects` from the default version, `versions[].digest` from each fetched manifest. Nothing else in the file is touched and its formatting is preserved. `pages` is written in the manifest nav order, so running it twice produces the same bytes. A slug that has disappeared and has no redirect behind it fails the run, because that is a 404 at an address somebody linked to.',
 	params: {
 		root: ROOT,
 		site: SITE,
@@ -208,7 +247,7 @@ export const sync = defineCommand({
 		} catch {
 			return refused(
 				configPath,
-				`${configPath} does not exist. \`hexdocs install\` creates it; sync only maintains the three fields it owns.`,
+				`${configPath} does not exist. \`hexdocs install\` creates it; sync only maintains the four fields it owns.`,
 			);
 		}
 
@@ -319,6 +358,40 @@ export const sync = defineCommand({
 			})
 			.map((entry) => entry.label);
 
+		// The default version's redirects, in the manifest's own key order, which is sorted.
+		// A build input for the reason `pages` is one: the route table is derived from this
+		// file, a retired slug leaves `pages` above, and a redirect with no row behind it is a
+		// 404 at every address somebody linked to before the rename.
+		const redirects = Object.entries(manifest.redirects);
+
+		// ---- what the edit has to produce, checked before any of it happens ------
+
+		const expectedVersions: VersionEntry[] = config.versions.map((entry, index) => {
+			const digest = fetched[index]?.found?.digest;
+			return digest === undefined ? entry : { ...entry, digest };
+		});
+		const expected: DocsSiteConfig = {
+			...config,
+			versions: expectedVersions,
+			pages: slugs,
+			hidden: hidden.length > 0 ? hidden : undefined,
+			redirects: redirects.length > 0 ? Object.fromEntries(redirects) : undefined,
+		};
+		// Through the schema every other reader of this file applies, so the file sync writes
+		// is one `prefetch` and `label` will read. It is what refuses a redirect source that
+		// shares an address with a page, which the compiler lets through when the two slugs
+		// differ and the addresses do not (`guide` beside `guide/index`); writing it would give
+		// that address two answers in the consumer's route table.
+		const valid = docsSiteConfigSchema.safeParse(expected);
+		if (!valid.success) {
+			return refused(
+				configPath,
+				`The config sync would write from ${defaultFetch.found.path} does not validate, so nothing was written to ${configPath}: ${valid.error.issues
+					.map((issue) => issue.message)
+					.join(' ')}`,
+			);
+		}
+
 		// ---- the edit ---------------------------------------------------------
 
 		const newline = text.includes('\r\n') ? '\r\n' : '\n';
@@ -370,6 +443,27 @@ export const sync = defineCommand({
 			next = edited;
 		}
 
+		if (!sameMap(config.redirects ?? {}, Object.fromEntries(redirects))) {
+			const span = rootSpan(next);
+			const edited =
+				span === null
+					? null
+					: redirects.length === 0
+						? removeMember(next, span, 'redirects')
+						: // Above `pages`, beside `hidden`, so the long list stays last and the two
+							// short statements about it read together.
+							setMember(
+								next,
+								span,
+								'redirects',
+								renderObject(redirects, memberIndent, unit, newline),
+								{ before: 'pages' },
+							);
+			if (edited === null)
+				return refused(configPath, `Could not write \`redirects\` into ${configPath}.`);
+			next = edited;
+		}
+
 		for (const [index, entry] of config.versions.entries()) {
 			const digest = fetched[index]?.found?.digest;
 			if (digest === undefined || entry.digest === digest) continue;
@@ -413,16 +507,6 @@ export const sync = defineCommand({
 		// through `canonicalJson`, which sorts keys and drops undefined properties, so this
 		// asserts the values and says nothing about the formatting, which is the half that is
 		// meant to be left alone.
-		const expectedVersions: VersionEntry[] = config.versions.map((entry, index) => {
-			const digest = fetched[index]?.found?.digest;
-			return digest === undefined ? entry : { ...entry, digest };
-		});
-		const expected: DocsSiteConfig = {
-			...config,
-			versions: expectedVersions,
-			pages: slugs,
-			hidden: hidden.length > 0 ? hidden : undefined,
-		};
 		let actual: unknown;
 		try {
 			actual = JSON.parse(next) as unknown;
@@ -464,7 +548,7 @@ export const sync = defineCommand({
 
 		const lines = [
 			`${config.project} ${defaultEntry.label} (${defaultEntry.commit.slice(0, 12)}): ` +
-				`${slugs.length} page(s), ${hidden.length} hidden, ` +
+				`${slugs.length} page(s), ${hidden.length} hidden, ${redirects.length} redirect(s), ` +
 				`${config.versions.length - missing.length} of ${config.versions.length} version(s) digested.`,
 			changed ? `Wrote ${configPath}.` : `${configPath} was already up to date.`,
 			...(added.length > 0 ? [`Added: ${added.join(', ')}.`] : []),
@@ -498,6 +582,7 @@ export const sync = defineCommand({
 				written: changed,
 				pages: { total: slugs.length, added, removed, redirected, dropped, orphans },
 				hidden,
+				redirects: Object.fromEntries(redirects),
 				repinned,
 				versions: fetched.map((entry) => ({
 					label: entry.label,

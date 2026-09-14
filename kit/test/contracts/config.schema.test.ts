@@ -434,6 +434,38 @@ describe('<project>.docs.json, the consumer config', () => {
 		expect(problems.some((p) => p.includes('Two versions are labelled "1.0.0"'))).toBe(true);
 	});
 
+	test('two labels that differ only in case are one address, and are named as such', () => {
+		// React Router matches `/v/<label>` without regard to case, and `prefetch` extracts
+		// each label into a directory of that name, which a case-insensitive filesystem stores
+		// once. Exactly equal labels keep their own message, so the two are told apart.
+		const clash = {
+			...SITE,
+			versions: [
+				{ ...SITE.versions[0], label: '1.0.0-RC' },
+				{ label: '1.0.0-rc', commit: 'b'.repeat(40), released: '2026-10-01' },
+			],
+		};
+		const problems = versionTableProblems(clash as unknown as DocsSiteConfig);
+		expect(problems).toEqual([
+			'Versions "1.0.0-RC" and "1.0.0-rc" differ only in case. The route matches /v/<label>/ without regard to case and a case-insensitive filesystem stores both in one directory, so they are one address.',
+		]);
+
+		const three = {
+			...SITE,
+			versions: [
+				{ ...SITE.versions[0], label: 'Beta' },
+				{ label: 'beta', commit: 'b'.repeat(40), released: '2026-10-01' },
+				{ label: 'Beta', commit: 'c'.repeat(40), released: '2026-10-02' },
+			],
+		};
+		// Each later entry is compared with the first spelling seen, so a third entry that
+		// repeats the first exactly is named as a repeat rather than as a case difference.
+		expect(versionTableProblems(three as unknown as DocsSiteConfig)).toEqual([
+			'Versions "Beta" and "beta" differ only in case. The route matches /v/<label>/ without regard to case and a case-insensitive filesystem stores both in one directory, so they are one address.',
+			'Two versions are labelled "Beta". A label is a URL segment and must be unique.',
+		]);
+	});
+
 	test('two labels on one commit are named, because it is nearly always a copy-paste', () => {
 		const clash = {
 			...SITE,
@@ -469,5 +501,53 @@ describe('<project>.docs.json, the consumer config', () => {
 		expect(
 			docsSiteConfigSchema.safeParse({ ...SITE, pages: ['index', 'Guide/First'] }).success,
 		).toBe(false);
+	});
+
+	describe('redirects', () => {
+		const PAGES = ['index', 'guide/index', 'guide/first-tag'];
+		const messages = (redirects: Record<string, string>): string[] => {
+			const parsed = docsSiteConfigSchema.safeParse({ ...SITE, pages: PAGES, redirects });
+			return parsed.success ? [] : parsed.error.issues.map((issue) => issue.message);
+		};
+
+		test('a retired slug pointing at a page validates, and so does no redirects at all', () => {
+			expect(messages({ 'first-tag': 'guide/first-tag', 'old/home': 'index' })).toEqual([]);
+			expect(messages({})).toEqual([]);
+			expect(docsSiteConfigSchema.safeParse({ ...SITE, pages: PAGES }).success).toBe(true);
+		});
+
+		test('a source that is also a page is refused, naming both', () => {
+			expect(messages({ 'guide/first-tag': 'index' })).toEqual([
+				'The redirect source "guide/first-tag" has the same address as the page "guide/first-tag". An address has one answer: remove one of them.',
+			]);
+		});
+
+		test('a leaf source at a section root address is the same collision, and is refused', () => {
+			// `guide` and `guide/index` are one address once addresses carry no trailing slash.
+			// A comparison of slugs would pass this, which is why the comparison is by address.
+			expect(messages({ guide: 'index' })).toEqual([
+				'The redirect source "guide" has the same address as the page "guide/index". An address has one answer: remove one of them.',
+			]);
+			// And the home, whose address is empty.
+			expect(messages({ 'guide/first-tag': 'index', index: 'guide/index' })[1]).toContain(
+				'the page "index"',
+			);
+		});
+
+		test('two sources at one address are refused, naming the first', () => {
+			expect(
+				messages({ 'old/index': 'guide/first-tag', old: 'index' }).filter((message) =>
+					message.includes('same address'),
+				),
+			).toEqual([
+				'The redirect source "old" has the same address as the redirect source "old/index". An address has one answer: remove one of them.',
+			]);
+		});
+
+		test('a target that is not a page is refused, because the redirect would answer 404', () => {
+			expect(messages({ 'first-tag': 'guide/renamed' })).toEqual([
+				'"first-tag" redirects to "guide/renamed", which is not in `pages`, so the redirect would answer with a 404.',
+			]);
+		});
 	});
 });

@@ -44,18 +44,22 @@ import { LOCALES } from '../../../src/contracts/locales.js';
 import { MANIFEST_KEY, bundlePrefix } from '../../../src/contracts/manifest.js';
 import { DEFAULT_BUDGETS, PLAIN_CODE_LANGUAGE } from '../../../src/contracts/project.js';
 import type { DocsProjectConfig } from '../../../src/contracts/project.js';
-import {
-	COMMIT_SHA_PATTERN,
-	RELEASE_DATE_PATTERN,
-	VERSION_LABEL_PATTERN,
-	type DocsSiteConfig,
-} from '../../../src/contracts/site.js';
+import type { DocsSiteConfig } from '../../../src/contracts/site.js';
 import { runLint } from '../compile/lint/run.js';
 import { raw, type RawFinding } from '../compile/types.js';
 import { docsProjectConfigSchema, docsSiteConfigSchema } from '../contracts/config.schema.js';
 import { defineCommand, type Ctx } from '../registry/command.js';
 
-import { ROOT, bucketOf, rootOf } from './common.js';
+import {
+	COMMIT,
+	RELEASED,
+	ROOT,
+	VERSION,
+	bucketOf,
+	entryShapeProblems,
+	isoDate,
+	rootOf,
+} from './common.js';
 
 /**
  * The config `runLint` needs, and how much of it is real.
@@ -224,15 +228,6 @@ function headManifest(ctx: Ctx, bucket: string, key: string, cwd: string): Arm {
 function firstLine(text: string): string {
 	const line = text.trim().split('\n')[0] ?? '';
 	return line.length > 200 ? `${line.slice(0, 200)}...` : line;
-}
-
-/** `YYYY-MM-DD` in UTC. */
-function isoDate(now: Date): string {
-	// UTC rather than the local date, because `RELEASE_DATE_PATTERN` is a date with no
-	// zone in it: rendering the local date would make the same command produce two
-	// different `released` values for one instant on two machines, and the file would then
-	// disagree with itself about when a version shipped depending on who ran it.
-	return now.toISOString().slice(0, 10);
 }
 
 /**
@@ -406,7 +401,8 @@ export function patchFor(
 		`${field}"commit": ${JSON.stringify(entry.commit)},`,
 		`${field}"released": ${JSON.stringify(entry.released)}`,
 		// The trailing comma is unconditional because the schema requires at least one
-		// existing entry, so this one is never the last line of the array.
+		// existing entry, so this one is never the last line of the array. `scaffold site`
+		// writes that first entry, which is what makes this true of a new config as well.
 		`${item}},`,
 	].join('\n');
 	return { anchor: match[0], insert };
@@ -426,20 +422,9 @@ export const label = defineCommand({
 			type: 'string',
 			required: true,
 		},
-		commit: {
-			help: 'the 40-character lower-case commit sha to label',
-			type: 'string',
-			required: true,
-		},
-		version: {
-			help: 'the version label; it becomes a URL segment under /v/<label>/',
-			type: 'string',
-			required: true,
-		},
-		released: {
-			help: 'the release date as YYYY-MM-DD; defaults to today in UTC',
-			type: 'string',
-		},
+		commit: { ...COMMIT, required: true },
+		version: { ...VERSION, required: true },
+		released: RELEASED,
 		'source-repo': {
 			help: 'a local clone of the app repository, used to name it and to answer ancestry offline',
 			type: 'string',
@@ -496,24 +481,23 @@ export const label = defineCommand({
 
 		// ---- label-shape ------------------------------------------------------
 
-		const problems: string[] = [];
-		if (!COMMIT_SHA_PATTERN.test(input.commit)) {
-			problems.push(
-				`"${input.commit}" is not a commit sha. It must be 40 lower-case hex characters; abbreviations are refused because they collide eventually.`,
-			);
-		}
-		if (!VERSION_LABEL_PATTERN.test(input.version)) {
-			problems.push(
-				`"${input.version}" is not a version label. It is a URL segment under /v/<label>/, so it starts with a letter or a digit and carries only letters, digits, dot, underscore and hyphen, up to 32 characters.`,
-			);
-		}
-		if (!RELEASE_DATE_PATTERN.test(released)) {
-			problems.push(`"${released}" is not a release date. The format is YYYY-MM-DD.`);
-		}
-		const sameLabel = config.versions.find((entry) => entry.label === input.version);
+		const problems = entryShapeProblems({
+			commit: input.commit,
+			version: input.version,
+			released,
+		});
+		// Compared case-folded, which is the comparison `versionTableProblems` makes. An exact
+		// compare here would hand back a patch whose result that function then refuses, and
+		// the refusal would arrive at the next prefetch rather than at the command somebody
+		// ran to ask whether the label was safe.
+		const sameLabel = config.versions.find(
+			(entry) => entry.label.toLowerCase() === input.version.toLowerCase(),
+		);
 		if (sameLabel !== undefined) {
 			problems.push(
-				`"${input.version}" already labels ${sameLabel.commit.slice(0, 8)} in ${where}. A label is a URL segment and two entries sharing one means two bundles at one address.`,
+				sameLabel.label === input.version
+					? `"${input.version}" already labels ${sameLabel.commit.slice(0, 8)} in ${where}. A label is a URL segment and two entries sharing one means two bundles at one address.`
+					: `"${input.version}" differs from the existing label "${sameLabel.label}" only in case, in ${where}. The route matches /v/<label>/ without regard to case and a case-insensitive filesystem stores both in one directory, so they are one address.`,
 			);
 		}
 		const sameCommit = config.versions.find((entry) => entry.commit === input.commit);

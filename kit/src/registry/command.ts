@@ -57,10 +57,23 @@ export interface Ctx {
 export interface Writer {
 	/** Creates parent directories. Returns false when the bytes were already there. */
 	write(path: string, contents: string): boolean;
+	/**
+	 * Removes one entry, never following it and never recursing: a file, a symbolic link,
+	 * or a directory that is already empty. Returns false when nothing was there.
+	 *
+	 * One entry per call is the property worth having. `prefetch` prunes a tree it shares
+	 * with a person's working copy, and a recursive remove is one wrong path away from a
+	 * directory it never wrote. Unlinking a symbolic link removes the link and leaves what
+	 * it points at, which is what keeps a planted link from turning a prune into a delete
+	 * somewhere outside the site.
+	 */
+	remove(path: string): boolean;
 	exists(path: string): boolean;
 	read(path: string): string | undefined;
 	/** Every path this writer actually changed, in call order. */
 	readonly written: readonly string[];
+	/** Every path this writer actually removed, in call order. */
+	readonly removed: readonly string[];
 }
 
 /**

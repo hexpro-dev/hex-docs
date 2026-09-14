@@ -35,7 +35,7 @@ import {
 } from '../../../src/contracts/project.js';
 import type { DenyList, DocsProjectConfig } from '../../../src/contracts/project.js';
 import { SITE_CONFIG_VERSION } from '../../../src/contracts/site.js';
-import type { DocsSiteConfig } from '../../../src/contracts/site.js';
+import type { DocsSiteConfig, VersionEntry } from '../../../src/contracts/site.js';
 import { UI_STRINGS } from '../../../src/ui/strings.js';
 
 import { MIRROR_SCRIPT_RELATIVE, siteRootLine } from '../source/allow-paths.js';
@@ -224,19 +224,22 @@ export interface SiteConfigOptions {
 	/** Leading slash, no trailing slash, no locale segment. */
 	basePath: string;
 	schemaRef: string | null;
+	/** The first version, which becomes the default. The caller supplies a real sha. */
+	version: Pick<VersionEntry, 'label' | 'commit' | 'released'>;
 }
 
 /**
  * `<project>.docs.json`: the docs mount, as the consuming website sees it.
  *
- * `versions` comes out empty and the file therefore does not validate, which is the one
- * hole this module leaves on purpose. The schema requires at least one version entry and
- * an entry requires a real 40-character commit sha; there is no sha a scaffolder could
- * know, and writing a plausible-looking one would put a fabricated commit into the file
- * the version picker reads. `hexdocs label` produces the first entry.
+ * It carries exactly one version, marked default, and the caller has to supply its
+ * commit. That is the difference between a file every other command can read and the
+ * dead end this used to emit: `versions: []`, which the schema refuses, which `label`
+ * could not anchor a patch on because its patch always adds a trailing comma, and which
+ * `prefetch` and `sync` then refused as well. A scaffolder still cannot know a sha, so the
+ * sha is an argument rather than a plausible-looking fabrication.
  *
- * `pages` is empty because `hexdocs sync` writes it, `hidden` is omitted rather than
- * written as an empty array, and `themeClass` is omitted because absent is a supported
+ * `pages` is empty because `hexdocs sync` writes it, `hidden` and `redirects` are omitted
+ * rather than written empty, and `themeClass` is omitted because absent is a supported
  * state: it means the documentation takes this package's own palette, which is the case
  * that has to work for the package to be reusable at all.
  */
@@ -247,7 +250,14 @@ export function siteConfig(options: SiteConfigOptions): string {
 		project: options.project,
 		basePath: options.basePath,
 		navLabel: navLabelFromUiStrings(),
-		versions: [],
+		versions: [
+			{
+				label: options.version.label,
+				commit: options.version.commit,
+				released: options.version.released,
+				default: true,
+			},
+		],
 		pages: [],
 	};
 	return json(config);
@@ -420,8 +430,8 @@ export function sourceScaffold(options: SourceScaffoldOptions): SourceScaffoldPl
 	// note rather than silence because the directory lands in the repository root as a full
 	// object tree, and the next `git add -A` commits it: on a repository with a public
 	// mirror that is a directory nobody reviewed against the allowlist. The consumer half
-	// treats the same class of thing as first class, with a gitignore edit of its own and a
-	// `prefetch-gitignore` row; this side had nothing at all.
+	// treats the same class of thing as first class, with a gitignore edit `install` writes
+	// and `verify-install` checks; this side had nothing at all.
 	notes.push(
 		`Add ${BUNDLE_OUT}/ to .gitignore. That is where the publish workflow compiles, and a build run by hand in a checkout puts the whole object tree in the repository root as untracked files.`,
 	);
