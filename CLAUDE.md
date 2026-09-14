@@ -1759,10 +1759,43 @@ turn and asserts exactly that probe fails. Two things worth knowing before touch
 meta then lays out at 980px; and hit testing cannot judge the skip link, because the header's logo
 paints over the misplaced link and `elementFromPoint` answers "the header" for exactly that defect.
 
-Seen and not fixed, because it is not a host condition: the current tree and table-of-contents
-link and the selected search result draw their bar with `box-shadow: inset 2px 0 0`, which is
-physical and stays on the left in Arabic. A marked code line uses the same shadow and is right,
-because a fence is always `dir="ltr"`.
+### Two direction defects the house rule and the layout probes both missed
+
+A pass over hex-web's Arabic chip matrix found them. The partial status mark was drawn with
+`linear-gradient(to inline-end, ...)`, and no engine has a logical gradient direction, so Chrome
+dropped the declaration and every partial mark computed `background-image: none`: an empty ring,
+the shape of "no", which undoes the reason a status is a shape as well as a colour. And the
+current tree and table of contents link and the selected search result drew their bar with
+`box-shadow: inset 2px 0 0`, which is physical and stayed on the left in Arabic.
+
+Both are a physical value now with a `:dir(rtl)` rule mirroring it, and the `:dir()` is on the
+element, never on the docs root: an Arabic page serving the English fallback carries `dir="ltr"`
+on its article, and a mark inside it reads left to right. The partial mark fills its inline-end
+half. A marked code line has the same mirror although a fence is always `dir="ltr"` and it matches
+nothing today, so the bar does not rest on that. The shadow stays a shadow because it takes no
+space, and marking a link current moves nothing.
+
+The house rule missed the shadow because it was a regular expression over side names,
+`text-align` and bare offsets. `kit/test/theme/stylesheet.test.ts` scans declarations now. A side
+in a property name, an asymmetric four-value box shorthand and a border radius whose corners differ
+across the inline axis have logical spellings and are never exempt. A shadow's horizontal offset, a
+linear-gradient angle or direction, a horizontal translation and any `left` or `right` keyword are
+accepted only beside the same selector with `:dir(rtl)` on its subject, in the same at-rule,
+declaring the mirrored value, and the mirror is computed and compared rather than assumed. What it
+cannot know is which of a pair is the right way round, and it does not read a horizontal position
+written as a length or a percentage, a conic gradient's angle, or a shadow offset inside a `var()`.
+
+`scripts/check-paint.mjs` gained the two probes that would have caught them the day they were
+written. `declarations` walks the stylesheet's text, because the CSSOM has already dropped what it
+could not parse, replaces each `var()` with its fallback, because `CSS.supports` answers true for
+any value holding one (measured: `2px solid var(--hx-edge, #2a262)` is supported, `2px solid
+#2a262` is not), and asks the browser about every declaration. Its parser is cross-checked against
+a semicolon count it shares no code with, and a run that validated nothing fails. Before the fix it
+named exactly one invalid declaration in 421, the gradient. `sides-rtl`, `sides-fallback` and
+`sides-ltr` read where the paint lands from one-pixel screenshots rather than from computed styles,
+so a correct fix drawn another way still passes, and the plain link beside the current one is the
+reference, so no probe has to know the ground colour. `test/paint.test.ts` breaks each of them
+with one mutation that exactly one probe can see.
 
 ### What step 8 deliberately does not do
 

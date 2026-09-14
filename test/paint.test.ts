@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { deflateSync } from 'node:zlib';
 
 import { Fragment, createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -18,7 +19,17 @@ import { PlainLink, renderBlocks } from '../src/render/nodes.js';
 // `tsconfig.test.json` sets `allowJs` so the compiler reads it, and leaves `checkJs` off
 // so nothing in it is held to the compiler. Turn that flag off and this import is an
 // implicit `any` and the row assertions below stop being checked against anything.
-import { FRAGMENTS, PROBES, findBrowser, run as runPaint } from '../scripts/check-paint.mjs';
+import {
+	FRAGMENTS,
+	PROBES,
+	declarationProblems,
+	declarationsOf,
+	findBrowser,
+	pixelOf,
+	run as runPaint,
+	terminatorsOf,
+	withFallbacks,
+} from '../scripts/check-paint.mjs';
 import type { CheckResult } from '../scripts/lib/report.mjs';
 import { REPO_ROOT, goldenManifest, goldenPages } from './support/golden.js';
 import { pageData, renderPage } from './support/render.js';
@@ -137,6 +148,21 @@ describe('the probe markup is the markup the renderer emits', () => {
 		).toBe(FRAGMENTS.figure);
 	});
 
+	test('a partial status mark in a sentence', () => {
+		expect(
+			blocks([
+				{
+					type: 'paragraph',
+					children: [
+						text('Writing an NTAG424 DNA is '),
+						{ type: 'status', value: 'partial' },
+						text(' on iOS 18.2.'),
+					],
+				},
+			]),
+		).toBe(FRAGMENTS.status);
+	});
+
 	test('the skip link, and every class any probe selects on, appear in rendered pages', async () => {
 		const site = JSON.parse(
 			readFileSync(join(CONSUMER_ROOT, 'fixture-app.docs.json'), 'utf8'),
@@ -149,11 +175,14 @@ describe('the probe markup is the markup the renderer emits', () => {
 			pages.get(`${locale}/${slug}`);
 		// The first scan guide carries the task list, the figures, the breadcrumb and the edit
 		// link; the French architecture page is an English fallback, which is what renders a
-		// banner, and it carries the fences.
+		// banner, and it carries the fences; the chip matrix carries the status marks.
 		const rendered = [
 			renderPage(await pageData({ manifest, site, locale: 'en', slug: 'guide/first-tag', load })),
 			renderPage(
 				await pageData({ manifest, site, locale: 'fr', slug: 'developer/architecture', load }),
+			),
+			renderPage(
+				await pageData({ manifest, site, locale: 'ar', slug: 'reference/chip-support', load }),
 			),
 		].join('\n');
 		expect(rendered).toContain(FRAGMENTS.skip);
@@ -192,6 +221,96 @@ describe('finding a browser', () => {
 		// Not an assertion that a browser exists: this suite runs on machines where none
 		// does, and that is the state the skip below is for.
 		expect(BROWSER === undefined || BROWSER.length > 0).toBe(true);
+	});
+});
+
+describe('the declarations probe, without a browser', () => {
+	// The parser and the substitution run in the page through their source text, so these are
+	// the same functions the probe calls, held to the inputs a stylesheet can throw at them.
+	const SHEET = [
+		'/* a comment carrying ; and { */',
+		".a,\n.b { color: red; content: ';{}'; }",
+		'@media (min-width: 1px) {',
+		'\t.c { background: url(data:image/png;base64,AAAA); transition-duration: 1ms !important }',
+		'}',
+	].join('\n');
+
+	test('finds every declaration, inside a media query and past a string, a comment and a data url', () => {
+		expect(declarationsOf(SHEET)).toEqual([
+			{ selector: '.a, .b', property: 'color', value: 'red' },
+			{ selector: '.a, .b', property: 'content', value: "';{}'" },
+			{ selector: '.c', property: 'background', value: 'url(data:image/png;base64,AAAA)' },
+			{ selector: '.c', property: 'transition-duration', value: '1ms' },
+		]);
+	});
+
+	test('counts terminators without the parser, and a last declaration with none adds to what it finds', () => {
+		expect(terminatorsOf(SHEET)).toBe(3);
+		expect(declarationsOf(SHEET).length).toBe(4);
+		expect(terminatorsOf(STYLESHEET())).toBe(declarationsOf(STYLESHEET()).length);
+	});
+
+	test('replaces each var() with its fallback, and gives up on one with none', () => {
+		expect(withFallbacks('inset 2px 0 0 var(--hx-accent, #0b76d9)')).toBe('inset 2px 0 0 #0b76d9');
+		expect(withFallbacks('var(--hx-font-body, var(--font-body, system-ui, sans-serif))')).toBe(
+			'system-ui, sans-serif',
+		);
+		expect(withFallbacks('calc(var(--a, 1px) + var(--b, var(--c, 2px)))')).toBe('calc(1px + 2px)');
+		expect(withFallbacks('color-mix(in srgb, var(--x, red) 12%, transparent)')).toBe(
+			'color-mix(in srgb, red 12%, transparent)',
+		);
+		expect(withFallbacks('1px solid var(--hx-edge)')).toBeUndefined();
+		expect(withFallbacks('calc(var(--a, var(--b)) * 2)')).toBeUndefined();
+	});
+
+	test('a parser that missed declarations fails, and so does one that validated none', () => {
+		const reading = (fields: object): string =>
+			JSON.stringify({
+				terminators: 3,
+				found: 3,
+				validated: 3,
+				skipped: [],
+				invalid: [],
+				...fields,
+			});
+		expect(declarationProblems(reading({}))).toEqual([]);
+		const missed = declarationProblems(reading({ terminators: 10 }));
+		expect(missed.length).toBe(1);
+		expect(missed[0]?.startsWith('The declaration parser found 3')).toBe(true);
+		const skipped = declarationProblems(reading({ validated: 0, skipped: [{}, {}, {}] }));
+		expect(skipped.length).toBe(1);
+		expect(skipped[0]?.startsWith('The declarations probe validated nothing: 3 of 3')).toBe(true);
+		expect(declarationProblems(undefined)[0]?.includes('not a measurement')).toBe(true);
+	});
+
+	test('reads the colour of a one-pixel PNG, and refuses anything else', () => {
+		// Built here rather than taken from a browser, so the decoder is held to the format and
+		// not only to what one encoder happened to write: the pixel data is split across two
+		// IDAT chunks, and the filter byte is Paeth.
+		const chunk = (type: string, body: Buffer): Buffer => {
+			const length = Buffer.alloc(4);
+			length.writeUInt32BE(body.length);
+			return Buffer.concat([length, Buffer.from(type, 'latin1'), body, Buffer.alloc(4)]);
+		};
+		const png = (width: number, colourType: number, raw: number[]): string => {
+			const header = Buffer.alloc(13);
+			header.writeUInt32BE(width, 0);
+			header.writeUInt32BE(1, 4);
+			header[8] = 8;
+			header[9] = colourType;
+			const data = deflateSync(Buffer.from(raw));
+			const half = Math.floor(data.length / 2);
+			return Buffer.concat([
+				Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+				chunk('IHDR', header),
+				chunk('IDAT', data.subarray(0, half)),
+				chunk('IDAT', data.subarray(half)),
+				chunk('IEND', Buffer.alloc(0)),
+			]).toString('base64');
+		};
+		expect(pixelOf(png(1, 2, [4, 11, 118, 217]))).toEqual([11, 118, 217]);
+		expect(pixelOf(png(1, 6, [0, 240, 196, 122, 255]))).toEqual([240, 196, 122]);
+		expect(() => pixelOf(png(2, 2, [0, 1, 2, 3, 4, 5, 6]))).toThrow(/one-pixel/);
 	});
 });
 
@@ -244,8 +363,8 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 		expect(rows[0]?.state).toBe('PASS');
 		// A literal, so a deleted probe is a failure here rather than a smaller number on the
 		// ladder, which does not fail.
-		expect(rows[0]?.examined).toBe(16);
-		expect(PROBES.length).toBe(16);
+		expect(rows[0]?.examined).toBe(20);
+		expect(PROBES.length).toBe(20);
 		expect(rows[0]?.unit).toBe('probes');
 	}, 60_000);
 
@@ -342,7 +461,102 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 		},
 	];
 
-	test.each(LAYOUT_BREAKS)(
+	/**
+	 * The declarations probe and the direction probes, failed on purpose.
+	 *
+	 * One mutation per rule, each chosen so exactly one probe can see it, and then the defect
+	 * as it shipped, which four probes see at once. The fallback typo is the case that proves
+	 * the substitution is real: `CSS.supports` answers true for any value holding a `var()`,
+	 * so a probe that passed values through unchanged would accept `#2a262` and every other
+	 * typo inside a token chain.
+	 */
+	const DIRECTION_BREAKS: { name: string; edit: (css: string) => string; expect: string[] }[] = [
+		{
+			name: 'a logical keyword a property does not have',
+			edit: (css) =>
+				once(
+					css,
+					'\ttext-align: end;\n\tuser-select: none;',
+					'\ttext-align: inline-end;\n\tuser-select: none;',
+				),
+			expect: [
+				'A declaration the browser does not accept: `.hx-root .hx-line-number` declares `text-align: inline-end`.',
+			],
+		},
+		{
+			name: 'a typo inside a token fallback',
+			edit: (css) =>
+				once(
+					css,
+					'.hx-root .hx-step {\n\tborder-inline-start: 2px solid var(--hx-edge, #2a2621);',
+					'.hx-root .hx-step {\n\tborder-inline-start: 2px solid var(--hx-edge, #2a262);',
+				),
+			expect: [
+				'A declaration the browser does not accept: `.hx-root .hx-step` declares `border-inline-start: 2px solid var(--hx-edge, #2a262)`, tested as `2px solid #2a262`',
+			],
+		},
+		{
+			name: 'a partial mark with no right-to-left mirror',
+			edit: (css) =>
+				once(
+					css,
+					'.hx-root .hx-status-half:dir(rtl) { background: linear-gradient(to left, transparent 50%, currentColor 50%); }\n',
+					'',
+				),
+			expect: [
+				'The partial status mark in the sides-rtl probe is filled on the right half, where its inline-end half is the left.',
+			],
+		},
+		{
+			name: 'a partial mark mirrored on the docs root rather than on the mark',
+			edit: (css) =>
+				once(css, '.hx-root .hx-status-half:dir(rtl) {', '.hx-root:dir(rtl) .hx-status-half {'),
+			expect: [
+				'The partial status mark in the sides-fallback probe is filled on the left half, where its inline-end half is the right.',
+			],
+		},
+		{
+			name: 'a current-item bar with no right-to-left mirror',
+			edit: (css) =>
+				once(
+					css,
+					".hx-root [aria-current='page']:dir(rtl),\n.hx-root [aria-current='true']:dir(rtl) {\n\tbox-shadow: inset -2px 0 0 var(--hx-accent, #0b76d9);\n}\n",
+					'',
+				),
+			expect: [
+				'The current-item bar in the sides-rtl probe belongs on the right edge, and it is on the left edge of the tree link and the left edge of the table of contents link.',
+			],
+		},
+		{
+			name: 'a current-item bar on the right in both directions',
+			edit: (css) =>
+				once(
+					css,
+					'\tcolor: var(--hx-accent-link, #5ba3f5);\n\tbox-shadow: inset 2px 0 0',
+					'\tcolor: var(--hx-accent-link, #5ba3f5);\n\tbox-shadow: inset -2px 0 0',
+				),
+			expect: [
+				'The current-item bar in the sides-ltr probe belongs on the left edge, and it is on the right edge of the tree link and the right edge of the table of contents link.',
+			],
+		},
+		{
+			name: 'the partial mark as it shipped, with a gradient direction no engine parses',
+			edit: (css) =>
+				once(
+					css,
+					'.hx-root .hx-status-half { background: linear-gradient(to right, transparent 50%, currentColor 50%); }\n.hx-root .hx-status-half:dir(rtl) { background: linear-gradient(to left, transparent 50%, currentColor 50%); }',
+					'.hx-root .hx-status-half { background: linear-gradient(to inline-end, currentColor 50%, transparent 50%); }',
+				),
+			expect: [
+				'A declaration the browser does not accept: `.hx-root .hx-status-half` declares `background: linear-gradient(to inline-end, currentColor 50%, transparent 50%)`.',
+				'The partial status mark in the sides-rtl probe computes background-image none',
+				'The partial status mark in the sides-fallback probe computes background-image none',
+				'The partial status mark in the sides-ltr probe computes background-image none',
+			],
+		},
+	];
+
+	test.each([...LAYOUT_BREAKS, ...DIRECTION_BREAKS])(
 		'$name is caught, and only that probe fails',
 		async (entry) => {
 			const rows = await paintWith(entry.edit);

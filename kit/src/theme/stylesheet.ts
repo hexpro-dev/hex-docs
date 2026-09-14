@@ -18,7 +18,12 @@
  *
  * No physical properties. `margin-left`, `text-align: left` and `border-inline` written as
  * `border-left` all look right in six languages and wrong in Arabic, and the build that
- * shows it is the one nobody runs. `kit/test/theme/stylesheet.test.ts` scans for them.
+ * shows it is the one nobody runs. `kit/test/theme/stylesheet.test.ts` scans for them. A
+ * few physical forms have no logical spelling, a shadow's horizontal offset and a gradient's
+ * direction among them, and the scan accepts one of those only beside a rule for the same
+ * selector with `:dir(rtl)` that declares its mirror. Which of the pair is the right way
+ * round is not something a scan of the text can know, so the `sides-*` probes in
+ * `scripts/check-paint.mjs` measure where the paint lands in both directions.
  *
  * No `@layer`. Measured against both consumers: hex-web's `app.css` declares no layer and
  * has no bare-element selectors, and kcalc's `@layer base` restyles `p` and `h4`. Any
@@ -554,8 +559,26 @@ const PROSE = `/*
 }
 
 .hx-root .hx-status-disc { background: currentColor; }
-.hx-root .hx-status-half { background: linear-gradient(to inline-end, currentColor 50%, transparent 50%); }
 .hx-root .hx-status-ring { background: transparent; }
+
+/*
+ * A partial mark fills its inline-end half: the right half in a left-to-right line, the left
+ * half in Arabic.
+ *
+ * The gradient is physical and mirrored because there is no logical one. It was written
+ * \`to inline-end\`, which is in no engine's grammar, so the declaration was dropped without a
+ * word, every partial mark computed \`background-image: none\` and painted as an empty ring,
+ * which is the shape of "no", and a status stopped being a shape as well as a colour.
+ * \`scripts/check-paint.mjs\` asks the browser to parse every declaration in this file, which is
+ * the check that would have caught it the day it was written.
+ *
+ * \`:dir(rtl)\` is on the mark itself rather than on the docs root. An Arabic page serving
+ * the English fallback carries \`dir="ltr"\` on its article, and a mark inside it reads left
+ * to right; a selector on the root's direction fills the wrong half there.
+ */
+.hx-root .hx-status-half { background: linear-gradient(to right, transparent 50%, currentColor 50%); }
+.hx-root .hx-status-half:dir(rtl) { background: linear-gradient(to left, transparent 50%, currentColor 50%); }
+
 .hx-root .hx-status-bar {
 	border: 0;
 	border-radius: 0;
@@ -737,6 +760,17 @@ const CODE = `.hx-root .hx-fence {
 	box-shadow: inset 2px 0 0 ${t('accent')};
 }
 
+/*
+ * A fence is always \`dir="ltr"\` (\`CODE_DIRECTION\`), so this matches nothing today. It is
+ * here so the bar does not rest on that: a shadow offset is physical, and a fence that ever
+ * followed the content's direction would draw its bar on the trailing edge without it. The
+ * physical-property scan in \`kit/test/theme/stylesheet.test.ts\` accepts a physical offset
+ * only beside its mirror, and it would name this rule's absence.
+ */
+.hx-root .hx-line[data-marked='true']:dir(rtl) {
+	box-shadow: inset -2px 0 0 ${t('accent')};
+}
+
 .hx-root .hx-line-number {
 	display: inline-block;
 	inline-size: 2.5em;
@@ -803,6 +837,18 @@ const CHROME = `.hx-root .hx-tree-list {
 .hx-root [aria-current='true'] {
 	color: ${t('accent-link')};
 	box-shadow: inset 2px 0 0 ${t('accent')};
+}
+
+/*
+ * The current-item bar sits on the inline-start edge. A shadow's horizontal offset is
+ * physical and has no logical form, so without this the bar stayed on the left in Arabic,
+ * which is the trailing edge of a right-to-left list. A shadow rather than a logical border
+ * because it takes no space, so marking a link current moves nothing. \`:dir()\` rather than
+ * a selector on the root, so the element's own direction decides, whatever carries it.
+ */
+.hx-root [aria-current='page']:dir(rtl),
+.hx-root [aria-current='true']:dir(rtl) {
+	box-shadow: inset -2px 0 0 ${t('accent')};
 }
 
 .hx-root .hx-toc ol {
@@ -995,6 +1041,15 @@ const SEARCH = `.hx-root .hx-search-trigger {
 .hx-search .hx-search-result[aria-selected='true'] .hx-search-link {
 	background: ${t('raised')};
 	box-shadow: inset 2px 0 0 ${t('accent')};
+}
+
+/*
+ * The same bar, mirrored for the same reason. The dialog is drawn in the top layer and stays
+ * where it is in the document, inside the docs root, so \`:dir()\` reads the interface
+ * direction the root carries.
+ */
+.hx-search .hx-search-result[aria-selected='true'] .hx-search-link:dir(rtl) {
+	box-shadow: inset -2px 0 0 ${t('accent')};
 }
 
 .hx-search .hx-search-heading {

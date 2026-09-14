@@ -2,7 +2,7 @@
 /**
  * The stylesheet, checked in a real browser.
  *
- * Two kinds of property only a CSS engine has an opinion about, in one row.
+ * Three kinds of property only a CSS engine has an opinion about, in one row.
  *
  * The first is the token contract. `src/contracts/theme.ts` names the one check that
  * catches the defect it exists to prevent: render the shell under a theme class and assert
@@ -17,6 +17,14 @@
  * preflight, and a shell with no inline gutter inside a full-bleed `main`. So the layout
  * probes reproduce the host rather than the package: the docs root below a sticky header,
  * Tailwind's preflight in `@layer base`, and phone and desktop widths.
+ *
+ * The third is whether the engine accepts what the stylesheet says at all, and where paint
+ * that depends on direction lands. The partial status mark was written with a gradient
+ * direction no engine parses, so every partial mark painted as an empty ring, and the
+ * current-item bar used a physical shadow offset that stayed on the left in Arabic. Neither
+ * was visible to a probe that measured something else, so the `declarations` probe asks the
+ * browser about every declaration in the file, and the `sides-*` probes read the painted
+ * pixels of a mark and a bar in both directions and inside a fallback article.
  *
  * ## Why a browser rather than a DOM library
  *
@@ -60,6 +68,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { inflateSync } from 'node:zlib';
 
 import { check, renderAndExit, skipped } from './lib/report.mjs';
 
@@ -107,6 +116,9 @@ const page = (css, body, host) =>
  * @property {string} why
  * @property {string} [host]  A consuming site's stylesheet, loaded before the package's.
  * @property {number} [width]  The viewport width in CSS pixels. Defaults to `DESKTOP`.
+ * @property {boolean} [sample]  The expression returns JSON carrying a `samples` map of names
+ *   to viewport points, and the colour painted at each point is read back out of a screenshot
+ *   and attached to the measurement as `pixels`.
  */
 
 const DESKTOP = 1280;
@@ -176,6 +188,8 @@ export const FRAGMENTS = {
 		'<p>The Scan sheet shows <img class="hx-image" src="/_docs/fixture-app/1.1.0/assets/0000.png" alt="the radio badge" width="16" height="16" loading="lazy" decoding="async"/> in its top corner.</p>',
 	figure:
 		'<figure class="hx-figure"><img class="hx-image" src="/_docs/fixture-app/1.1.0/assets/0000.png" alt="The Scan sheet" width="320" height="180" loading="lazy" decoding="async"/><figcaption>The Scan sheet, open</figcaption></figure>',
+	status:
+		'<p>Writing an NTAG424 DNA is <span class="hx-status hx-status-half" data-status="partial" role="img" aria-label="Partial"></span> on iOS 18.2.</p>',
 };
 
 /**
@@ -183,10 +197,17 @@ export const FRAGMENTS = {
  * `hx-` class in any probe's markup is asserted present in a rendered page by
  * `test/paint.test.ts`, which is a check on the names and not on how they nest.
  *
- * @param {{ prose: string, head?: string, tree?: string }} parts
+ * `dir` is the interface direction the root carries, and `article` the attributes the
+ * article gains when the content served is in a different language from the interface,
+ * which is how an Arabic page serving the English fallback reads left to right inside a
+ * right-to-left shell. `current` adds a second tree link and a second table of contents
+ * link and marks the first of each current, so a probe can compare a current link with a
+ * plain one at the same place.
+ *
+ * @param {{ prose: string, head?: string, tree?: string, dir?: 'ltr' | 'rtl', article?: string, current?: boolean }} parts
  */
-const shell = ({ prose, head = '', tree = '' }) =>
-	`<div class="hx-root" dir="ltr">${FRAGMENTS.skip}<div class="hx-layout"><nav id="hx-tree" class="hx-tree" aria-label="Documentation"><button type="button" class="hx-search-trigger" disabled="">Search</button>${tree}<ol class="hx-tree-list"><li class="hx-tree-item"><a class="hx-tree-link" href="#first">First scan</a></li></ol></nav><article id="hx-content" class="hx-article" tabindex="-1">${head}<h1 id="hx-title" class="hx-title">Scan your first tag</h1><div class="hx-prose">${prose}</div></article><nav id="hx-toc" class="hx-toc" aria-label="On this page"><p class="hx-toc-heading">On this page</p><ol><li class="hx-toc-item" data-depth="2"><a href="#before" class="hx-toc-link">Before you start</a></li></ol></nav></div></div>`;
+const shell = ({ prose, head = '', tree = '', dir = 'ltr', article = '', current = false }) =>
+	`<div class="hx-root" dir="${dir}">${FRAGMENTS.skip}<div class="hx-layout"><nav id="hx-tree" class="hx-tree" aria-label="Documentation"><button type="button" class="hx-search-trigger" disabled="">Search</button>${tree}<ol class="hx-tree-list"><li class="hx-tree-item"><a class="hx-tree-link" href="#first"${current ? ' aria-current="page"' : ''}>First scan</a></li>${current ? '<li class="hx-tree-item"><a class="hx-tree-link" href="#write">Write a tag</a></li>' : ''}</ol></nav><article id="hx-content" class="hx-article" tabindex="-1"${article}>${head}<h1 id="hx-title" class="hx-title">Scan your first tag</h1><div class="hx-prose">${prose}</div></article><nav id="hx-toc" class="hx-toc" aria-label="On this page"><p class="hx-toc-heading">On this page</p><ol><li class="hx-toc-item" data-depth="2"><a href="#before" class="hx-toc-link"${current ? ' aria-current="true"' : ''}>Before you start</a></li>${current ? '<li class="hx-toc-item" data-depth="2"><a href="#hold" class="hx-toc-link">Hold the tag still</a></li>' : ''}</ol></nav></div></div>`;
 
 const PARAGRAPH =
 	'<p>A first read takes about ten seconds once the tag is in your hand. Most of that is finding the spot on the phone where the antenna sits, which is further up the back than people expect.</p>';
@@ -273,6 +294,236 @@ const BASE_PAGE = hosted(
 		'<h1 id="hx-title" class="hx-title">Scan your first tag</h1><p class="hx-meta"><span>4 min read</span><a class="hx-edit" href="https://github.com/hexpro-dev/fixture-app">Edit this page</a></p>',
 	),
 );
+
+/**
+ * Every declaration in a stylesheet, with the selector text of the rule it sits in.
+ *
+ * A character walker over the text rather than the CSSOM, and that is the whole point of it.
+ * The browser's own parser drops a declaration it cannot read before anything can ask about
+ * it, so a stylesheet read back through `cssRules` has already lost exactly the declarations
+ * the `declarations` probe exists to find. `linear-gradient(to inline-end, ...)` was one: no
+ * engine has a logical gradient direction, Chrome discarded the line, and every partial
+ * status mark painted as an empty ring for as long as nothing asked.
+ *
+ * It runs twice, in node where `test/paint.test.ts` holds it to a table of awkward inputs,
+ * and in the page, where the probe calls it through its source text. So it must reference
+ * nothing outside its own body, and the suite's coverage has to stay on v8: an instrumenting
+ * provider rewrites the source that `String(fn)` returns, and the in-page copy would then
+ * throw on a counter it cannot see.
+ *
+ * @param {string} css
+ * @returns {{ selector: string, property: string, value: string }[]}
+ */
+export function declarationsOf(css) {
+	/** @type {{ selector: string, property: string, value: string }[]} */
+	const found = [];
+	/** @type {string[]} */
+	const preludes = [];
+	let buffer = '';
+	let depth = 0;
+	for (let index = 0; index < css.length; index += 1) {
+		const char = css[index];
+		if (char === '/' && css[index + 1] === '*') {
+			const end = css.indexOf('*/', index + 2);
+			index = end === -1 ? css.length : end + 1;
+			continue;
+		}
+		if (char === '"' || char === "'") {
+			let end = index + 1;
+			while (end < css.length && css[end] !== char) end += css[end] === '\\' ? 2 : 1;
+			buffer += css.slice(index, end + 1);
+			index = end;
+			continue;
+		}
+		if (char === '(') depth += 1;
+		if (char === ')') depth -= 1;
+		if (depth === 0 && char === '{') {
+			preludes.push(buffer.trim().replace(/\s+/g, ' '));
+			buffer = '';
+			continue;
+		}
+		if (depth === 0 && (char === ';' || char === '}')) {
+			const text = buffer.trim();
+			const colon = text.indexOf(':');
+			if (colon > 0 && preludes.length > 0) {
+				found.push({
+					selector: preludes[preludes.length - 1],
+					property: text.slice(0, colon).trim().toLowerCase(),
+					// `!important` is not part of the value `CSS.supports` validates, and left on it
+					// every declaration in the reduced-motion block reads as invalid.
+					value: text
+						.slice(colon + 1)
+						.trim()
+						.replace(/\s*!\s*important$/i, ''),
+				});
+			}
+			buffer = '';
+			if (char === '}') preludes.pop();
+			continue;
+		}
+		buffer += char;
+	}
+	return found;
+}
+
+/**
+ * A value with every `var(--name, fallback)` replaced by its fallback, or `undefined` when a
+ * `var()` in it has none.
+ *
+ * `CSS.supports` answers true for any value containing a `var()`, because such a value is
+ * only checked once the variable is substituted, so a declaration passed through unchanged
+ * is valid by definition and the probe would check nothing in a stylesheet where every value
+ * is a token chain. Every chain the theme contract generates ends in a literal, which is what
+ * makes the fallback the value a page with no overrides actually paints. A `var()` with no
+ * fallback has nothing to substitute and is skipped, and the probe counts the skips so a
+ * substitution that returned `undefined` for everything cannot pass.
+ *
+ * Self-contained for the same reason as `declarationsOf`: the page runs its source text.
+ *
+ * @param {string} value
+ * @returns {string | undefined}
+ */
+export function withFallbacks(value) {
+	let result = '';
+	let index = 0;
+	for (;;) {
+		const start = value.indexOf('var(', index);
+		if (start === -1) return result + value.slice(index);
+		if (start > 0 && /[\w-]/.test(value[start - 1] ?? '')) {
+			result += value.slice(index, start + 4);
+			index = start + 4;
+			continue;
+		}
+		result += value.slice(index, start);
+		let depth = 0;
+		let comma = -1;
+		let end = start + 3;
+		for (; end < value.length; end += 1) {
+			if (value[end] === '(') depth += 1;
+			else if (value[end] === ')') {
+				depth -= 1;
+				if (depth === 0) break;
+			} else if (value[end] === ',' && depth === 1 && comma === -1) comma = end;
+		}
+		if (comma === -1) return undefined;
+		const fallback = withFallbacks(value.slice(comma + 1, end).trim());
+		if (fallback === undefined) return undefined;
+		result += fallback;
+		index = end + 1;
+	}
+}
+
+/**
+ * How many declarations a stylesheet terminates, counted without the parser.
+ *
+ * A semicolon outside a comment, a string and a pair of parentheses ends a declaration, and
+ * the generator ends every declaration with one. So a parser that returns fewer declarations
+ * than this has missed some, and the ones it missed were never validated: a walker that did
+ * not descend into `@media` would otherwise pass while ignoring the reduced-motion block.
+ * Deliberately a different mechanism from `declarationsOf`, because two copies of one
+ * mistake agree with each other.
+ *
+ * @param {string} css
+ * @returns {number}
+ */
+export function terminatorsOf(css) {
+	let text = css
+		.replace(/\/\*[\s\S]*?\*\//g, '')
+		.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '');
+	let previous = '';
+	while (previous !== text) {
+		previous = text;
+		text = text.replace(/\([^()]*\)/g, '');
+	}
+	return (text.match(/;/g) ?? []).length;
+}
+
+/**
+ * Validates every declaration in the page's stylesheet with the browser's own grammar.
+ *
+ * The probe page carries no host stylesheet, so the only `<style>` element is the package's.
+ */
+const DECLARATIONS = `(() => {
+	const declarationsOf = ${declarationsOf};
+	const withFallbacks = ${withFallbacks};
+	const terminatorsOf = ${terminatorsOf};
+	const css = document.querySelector('style').textContent;
+	const found = declarationsOf(css);
+	const skipped = [];
+	const invalid = [];
+	for (const declaration of found) {
+		const tested = withFallbacks(declaration.value);
+		if (tested === undefined) skipped.push(declaration);
+		else if (!CSS.supports(declaration.property, tested)) invalid.push({ ...declaration, tested });
+	}
+	return JSON.stringify({
+		terminators: terminatorsOf(css),
+		found: found.length,
+		validated: found.length - skipped.length,
+		skipped,
+		invalid,
+	});
+})()`;
+
+/**
+ * The colour painted on each side of a partial status mark and at both edges of a current
+ * and a plain link, as JSON, with the points the harness reads back from a screenshot.
+ *
+ * Pixels rather than computed styles, because what is being asked is where the paint lands.
+ * A computed `box-shadow` or `background-image` would need parsing in the one serialisation
+ * Chrome happens to use today, and would fail a correct fix that drew the bar another way,
+ * with a pseudo-element or a logical border. The mark's `background-image` is read as well,
+ * because `none` names the defect more precisely than two unfilled pixels do.
+ *
+ * The mark is sampled at 35% and 65% of its width, which on a 12px mark with a 2px ring is
+ * inside the ring and clear of the hard stop in the middle. Each link is sampled at its
+ * vertical middle, one pixel inside each edge, where the 2px bar is fully painted whatever
+ * the subpixel position of the box, and where the padding keeps the text away. The plain
+ * link beside it is the reference, so nothing here has to know what colour the ground is.
+ */
+const SIDES = `(() => {
+	const middle = (box) => Math.floor(box.top + box.height / 2);
+	const across = (element, fraction) => {
+		const box = element.getBoundingClientRect();
+		return [Math.floor(box.left + box.width * fraction), middle(box)];
+	};
+	const edges = (name, element) => {
+		const box = element.getBoundingClientRect();
+		return {
+			[name + ' left']: [Math.ceil(box.left), middle(box)],
+			[name + ' right']: [Math.floor(box.right) - 1, middle(box)],
+		};
+	};
+	const mark = document.querySelector('.hx-status-half');
+	const [treeCurrent, treePlain] = document.querySelectorAll('.hx-tree-link');
+	const [tocCurrent, tocPlain] = document.querySelectorAll('.hx-toc-link');
+	return JSON.stringify({
+		background: getComputedStyle(mark).backgroundImage,
+		fill: getComputedStyle(mark).color,
+		samples: {
+			'mark left': across(mark, 0.35),
+			'mark right': across(mark, 0.65),
+			...edges('tree current', treeCurrent),
+			...edges('tree plain', treePlain),
+			...edges('toc current', tocCurrent),
+			...edges('toc plain', tocPlain),
+		},
+	});
+})()`;
+
+/**
+ * Which half of a partial status mark each `sides-*` probe expects filled, and which edge of
+ * a current link it expects the bar on.
+ *
+ * The fallback probe states no bar, deliberately. Its tree and table of contents are in the
+ * interface direction, which is the Arabic probe's, so a bar expectation there would fail
+ * together with that probe's for every bar defect, and the two would never say anything apart.
+ */
+const SIDE_EXPECTATIONS = {
+	'sides-rtl': { mark: 'left', bar: 'right' },
+	'sides-fallback': { mark: 'right', bar: undefined },
+	'sides-ltr': { mark: 'right', bar: 'left' },
+};
 
 /**
  * `--color-accent` stands in for a consuming site's own token, and `.themed` for one of
@@ -423,9 +674,81 @@ export const PROBES = [
 		expression: BASE_STYLES,
 		why: 'The same page under a host base layer, which must measure the same.',
 	},
+	{
+		id: 'declarations',
+		body: '',
+		expression: DECLARATIONS,
+		why: 'A declaration the browser cannot parse is dropped without a word and the rule paints as if the line were never written. Every probe above measures a property somebody thought to measure, and this one asks about every declaration in the file.',
+	},
+	{
+		id: 'sides-rtl',
+		sample: true,
+		body: shell({ prose: FRAGMENTS.status, dir: 'rtl', current: true }),
+		expression: SIDES,
+		why: 'In Arabic the inline-end half of a partial mark is its left half, and the inline-start edge of a current link, where the bar goes, is its right edge.',
+	},
+	{
+		id: 'sides-fallback',
+		sample: true,
+		body: shell({
+			prose: FRAGMENTS.status,
+			dir: 'rtl',
+			article: ' lang="en" dir="ltr"',
+			current: true,
+		}),
+		expression: SIDES,
+		why: 'An Arabic page serving the English fallback carries dir="ltr" on its article, so a mark inside it reads left to right. A mirror keyed on the docs root rather than on the element itself fills the wrong half here and nowhere else.',
+	},
+	{
+		id: 'sides-ltr',
+		sample: true,
+		body: shell({ prose: FRAGMENTS.status, current: true }),
+		expression: SIDES,
+		why: 'The control for the Arabic probe. A stylesheet that put the fill or the bar on one side in both directions passes whichever of the two probes that side happens to suit, and fails the other.',
+	},
 ];
 
 const ORANGE = 'rgb(255, 102, 0)';
+
+/**
+ * The colour of a one-pixel PNG, as `[red, green, blue]`.
+ *
+ * No image library, because there is nothing here one would be for. A PNG is a signature and
+ * a run of chunks, the pixel data is one zlib stream across the IDAT chunks, and a one-pixel
+ * image inflates to one filter byte and one pixel. Every PNG filter predicts from the pixel to
+ * the left and the row above, both of which are zero for the only pixel of the only row, so
+ * the stored bytes are the pixel whichever filter the encoder chose. Anything other than an
+ * 8-bit RGB or RGBA image of exactly one pixel is refused rather than read wrongly.
+ *
+ * @param {string} base64
+ * @returns {number[]}
+ */
+export function pixelOf(base64) {
+	const png = Buffer.from(base64, 'base64');
+	/** @type {Buffer | undefined} */
+	let header;
+	/** @type {Buffer[]} */
+	const data = [];
+	for (let offset = 8; offset + 8 <= png.length;) {
+		const length = png.readUInt32BE(offset);
+		const type = png.toString('latin1', offset + 4, offset + 8);
+		const body = png.subarray(offset + 8, offset + 8 + length);
+		if (type === 'IHDR') header = body;
+		if (type === 'IDAT') data.push(body);
+		offset += 12 + length;
+	}
+	if (
+		header === undefined ||
+		header.readUInt32BE(0) !== 1 ||
+		header.readUInt32BE(4) !== 1 ||
+		header[8] !== 8 ||
+		(header[9] !== 2 && header[9] !== 6)
+	) {
+		throw new Error('Expected a one-pixel 8-bit RGB or RGBA PNG from the screenshot.');
+	}
+	const raw = inflateSync(Buffer.concat(data));
+	return [raw[1] ?? 0, raw[2] ?? 0, raw[3] ?? 0];
+}
 
 /**
  * @param {string} binary
@@ -556,6 +879,25 @@ async function measure(binary, probes, root) {
 				throw new Error(`${probe.id}: ${evaluated.exceptionDetails.text}`);
 			}
 			measured[probe.id] = String(evaluated.result.value);
+			if (probe.sample === true) {
+				const reading = JSON.parse(measured[probe.id]);
+				/** @type {Record<string, number[]>} */
+				const pixels = {};
+				for (const [name, [x, y]] of Object.entries(reading.samples)) {
+					// One CSS pixel at a device scale factor of 1, so the image is one pixel. The
+					// probe pages are shorter than the viewport and never scroll, which is what
+					// lets a viewport point stand for a page point here.
+					const shot = /** @type {any} */ (
+						await send(
+							'Page.captureScreenshot',
+							{ format: 'png', clip: { x, y, width: 1, height: 1, scale: 1 } },
+							session,
+						)
+					);
+					pixels[name] = pixelOf(shot.data);
+				}
+				measured[probe.id] = JSON.stringify({ ...reading, pixels });
+			}
 		}
 		socket.close();
 	} finally {
@@ -639,12 +981,136 @@ export async function run(root = ROOT) {
 	}
 
 	problems.push(...layoutProblems(measured));
+	problems.push(...declarationProblems(measured.declarations));
+	problems.push(...sideProblems(measured));
 
+	let counted = '';
+	try {
+		const reading = JSON.parse(measured.declarations ?? '');
+		counted = `, ${reading.validated} declarations valid, ${reading.skipped.length} skipped for a var() with no fallback`;
+	} catch {
+		// Already a problem above. The note is what a passing row prints, and this row is not
+		// passing.
+	}
 	return [
 		check('stylesheet in a browser', PROBES.length, 'probes', problems, {
-			note: binary.split('/').pop() ?? binary,
+			note: `${binary.split('/').pop() ?? binary}${counted}`,
 		}),
 	];
+}
+
+/**
+ * What the `declarations` probe measured, as problems. Exported so the two failures a real
+ * stylesheet cannot produce, a parser that missed declarations and one that validated none,
+ * can be driven without a browser.
+ *
+ * @param {string | undefined} raw
+ * @returns {string[]}
+ */
+export function declarationProblems(raw) {
+	/** @type {{ terminators: number, found: number, validated: number, skipped: unknown[], invalid: { selector: string, property: string, value: string, tested: string }[] }} */
+	let reading;
+	try {
+		reading = JSON.parse(raw ?? '');
+	} catch {
+		return [`The declarations probe returned something that is not a measurement: ${String(raw)}.`];
+	}
+	/** @type {string[]} */
+	const problems = reading.invalid.map(
+		(entry) =>
+			`A declaration the browser does not accept: \`${entry.selector}\` declares \`${entry.property}: ${entry.value}\`${entry.tested === entry.value ? '' : `, tested as \`${entry.tested}\` with each var() replaced by its fallback`}. It is dropped, so the rule paints as if the line were never written.`,
+	);
+	if (reading.found < reading.terminators) {
+		problems.push(
+			`The declaration parser found ${reading.found} declarations in a stylesheet with ${reading.terminators} semicolons outside comments, strings and parentheses, so the ones it missed were never validated.`,
+		);
+	}
+	if (reading.validated === 0) {
+		problems.push(
+			`The declarations probe validated nothing: ${reading.skipped.length} of ${reading.found} declarations were skipped for a var() with no fallback. A probe that skipped everything has checked nothing.`,
+		);
+	}
+	return problems;
+}
+
+/**
+ * What the `sides-*` probes measured, as problems: one for the partial mark and one for the
+ * current-item bar, per probe, so a defect names the direction it shows up in.
+ *
+ * Two samples are the same paint when no channel differs by more than 24. Measured on macOS,
+ * a screenshot of a flat colour comes back exact, and nobody has measured a Linux runner, so
+ * the margin is for a capture that turns out to be colour managed. The colours being told
+ * apart are at least 200 apart on some channel, so it cannot blur one into the other.
+ *
+ * @param {Record<string, string>} measured
+ * @returns {string[]}
+ */
+export function sideProblems(measured) {
+	/** @type {string[]} */
+	const problems = [];
+	/** @param {number[] | undefined} a @param {number[] | undefined} b */
+	const same = (a, b) =>
+		a !== undefined &&
+		b !== undefined &&
+		a.every((channel, index) => Math.abs(channel - (b[index] ?? -999)) <= 24);
+	/** @param {boolean} left @param {boolean} right @param {string} one @param {string} two */
+	const which = (left, right, one, two) =>
+		left && right
+			? `both ${two}`
+			: left
+				? `the left ${one}`
+				: right
+					? `the right ${one}`
+					: `neither ${one}`;
+	for (const [id, wanted] of Object.entries(SIDE_EXPECTATIONS)) {
+		const why = PROBES.find((probe) => probe.id === id)?.why ?? '';
+		/** @type {{ background: string, fill: string, pixels: Record<string, number[]> }} */
+		let reading;
+		try {
+			reading = JSON.parse(measured[id] ?? '');
+		} catch {
+			problems.push(
+				`The ${id} probe returned something that is not a measurement: ${String(measured[id])}.`,
+			);
+			continue;
+		}
+		const pixels = reading.pixels;
+		if (reading.background === 'none') {
+			problems.push(
+				`The partial status mark in the ${id} probe computes background-image none, so it paints as an empty ring, which is the shape of "no". ${why}`,
+			);
+		} else {
+			const fill = (reading.fill.match(/\d+/g) ?? []).slice(0, 3).map(Number);
+			const left = same(pixels['mark left'], fill);
+			const right = same(pixels['mark right'], fill);
+			if (left !== (wanted.mark === 'left') || right !== (wanted.mark === 'right')) {
+				problems.push(
+					`The partial status mark in the ${id} probe is filled on ${which(left, right, 'half', 'halves')}, where its inline-end half is the ${wanted.mark}. ${why}`,
+				);
+			}
+		}
+		if (wanted.bar !== undefined) {
+			const wrong = [
+				{ name: 'tree', label: 'tree link' },
+				{ name: 'toc', label: 'table of contents link' },
+			]
+				.map(({ name, label }) => {
+					const left = !same(pixels[`${name} current left`], pixels[`${name} plain left`]);
+					const right = !same(pixels[`${name} current right`], pixels[`${name} plain right`]);
+					return { label, left, right };
+				})
+				.filter(
+					(entry) =>
+						entry.left !== (wanted.bar === 'left') || entry.right !== (wanted.bar === 'right'),
+				);
+			if (wrong.length > 0) {
+				problems.push(
+					`The current-item bar in the ${id} probe belongs on the ${wanted.bar} edge, and it is on ${wrong.map((entry) => `${which(entry.left, entry.right, 'edge', 'edges')} of the ${entry.label}`).join(' and ')}. ${why}`,
+				);
+			}
+		}
+	}
+	return problems;
 }
 
 /**

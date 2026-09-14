@@ -135,21 +135,369 @@ describe('every declared value is used, and every used value is declared', () =>
 	});
 });
 
+/**
+ * The house rule "no physical properties", as a scan over declarations.
+ *
+ * It used to be one regular expression over the text, which knew a side in a margin,
+ * padding, border or inset name, `text-align`, and a bare offset property. Two defects went
+ * through it in the same stylesheet. The current tree link, the current table of contents
+ * link and the selected search result drew their bar with `box-shadow: inset 2px 0 0`, a
+ * physical offset that stays on the left in Arabic, and nothing in the pattern could see a
+ * shadow. The partial status mark used `linear-gradient(to inline-end, ...)`, which no engine
+ * parses, so it was dropped rather than wrong in one direction; that one is caught in the
+ * browser by the `declarations` probe in `scripts/check-paint.mjs`, not here.
+ */
+
+/**
+ * One declaration, with the one selector and the at-rule context it applies under, and its
+ * ordinal in the stylesheet.
+ *
+ * A rule with a selector list contributes one entry per selector, because a mirror has to
+ * exist for each of them: `.a, .b` mirrored by `.a:dir(rtl)` alone leaves `.b` wrong in
+ * Arabic. `at` is shared by those entries, so counting distinct values counts declarations.
+ */
+interface Declaration {
+	at: number;
+	context: string;
+	selector: string;
+	property: string;
+	value: string;
+}
+
+/** Splits on a separator character outside every pair of parentheses and brackets. */
+function splitTopLevel(text: string, separator: RegExp): string[] {
+	const parts: string[] = [];
+	let depth = 0;
+	let current = '';
+	for (const char of text) {
+		if (char === '(' || char === '[') depth += 1;
+		if (char === ')' || char === ']') depth -= 1;
+		if (depth === 0 && separator.test(char)) {
+			if (current.trim() !== '') parts.push(current.trim());
+			current = '';
+		} else current += char;
+	}
+	if (current.trim() !== '') parts.push(current.trim());
+	return parts;
+}
+
+/**
+ * Every declaration in a stylesheet. Strings are not special-cased, because the generator
+ * writes none containing a brace or a semicolon; `the physical-property scan reads every
+ * declaration` below is what would notice one that did.
+ */
+function declarationsOf(css: string): Declaration[] {
+	const text = css.replace(/\/\*[\s\S]*?\*\//g, '');
+	const found: Declaration[] = [];
+	const preludes: string[] = [];
+	let buffer = '';
+	let depth = 0;
+	let at = 0;
+	for (const char of text) {
+		if (char === '(') depth += 1;
+		if (char === ')') depth -= 1;
+		if (depth === 0 && char === '{') {
+			preludes.push(buffer.trim().replace(/\s+/g, ' '));
+			buffer = '';
+		} else if (depth === 0 && (char === ';' || char === '}')) {
+			const declaration = buffer.trim();
+			const colon = declaration.indexOf(':');
+			const prelude = preludes[preludes.length - 1];
+			if (colon > 0 && prelude !== undefined && !prelude.startsWith('@')) {
+				at += 1;
+				const context = preludes.filter((entry) => entry.startsWith('@')).join(' ');
+				for (const selector of splitTopLevel(prelude, /,/)) {
+					found.push({
+						at,
+						context,
+						selector,
+						property: declaration.slice(0, colon).trim(),
+						value: declaration.slice(colon + 1).trim(),
+					});
+				}
+			}
+			buffer = '';
+			if (char === '}') preludes.pop();
+		} else buffer += char;
+	}
+	return found;
+}
+
+const SIDE_IN_NAME = /(?:^|-)(?:left|right|top|bottom)(?:-|$)/;
+const SIDE_KEYWORD = /(?<![\w-])(?:left|right)(?![\w-])/g;
+const LENGTH = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[a-z]+|%)?$/i;
+const MATH = /^(?:calc|min|max|clamp)\(/i;
+const ZERO = /^[+-]?(?:0+\.?0*|\.0+)(?:[a-z]+|%)?$/i;
+const GRADIENT_ANGLE =
+	/(?<![\w-])((?:repeating-)?linear-gradient\(\s*)([+-]?(?:\d+\.?\d*|\.\d+))(deg|grad|rad|turn)/gi;
+const TRANSLATE = /(?<![\w-])(translate(?:X|3d)?\(\s*)([^,)\s]+)/gi;
+const BOX_SHORTHANDS = new Set([
+	'margin',
+	'padding',
+	'inset',
+	'border-width',
+	'border-style',
+	'border-color',
+	'scroll-margin',
+	'scroll-padding',
+]);
+const PER_TURN: Record<string, number> = { deg: 360, grad: 400, rad: 2 * Math.PI, turn: 1 };
+
+const tokensOf = (value: string): string[] => splitTopLevel(value, /\s/);
+const isOffset = (token: string): boolean => LENGTH.test(token) || MATH.test(token);
+const turnsOf = (number: string, unit: string): number =>
+	(((Number(number) / (PER_TURN[unit.toLowerCase()] ?? 1)) % 1) + 1) % 1;
+const negate = (token: string): string =>
+	ZERO.test(token)
+		? token
+		: MATH.test(token)
+			? `calc(-1 * ${token})`
+			: token.startsWith('-')
+				? token.slice(1)
+				: `-${token.replace(/^\+/, '')}`;
+
+/**
+ * The physical forms one declaration writes, in two kinds.
+ *
+ * `fixed` has a logical spelling and is never exempt: a side in a property name, a
+ * four-value box shorthand whose right and left differ, and a border radius whose corners
+ * differ across the inline axis. Its mirror would be a different property or a different
+ * token order rather than a different value, and the logical longhand is simpler than either.
+ *
+ * `mirrorable` has no logical spelling that works everywhere, and is exempt when the same
+ * selector with `:dir(rtl)` declares the mirrored value: a `left` or `right` keyword (a float,
+ * a clear, a text alignment, a gradient direction, a background or transform origin
+ * position), a linear-gradient angle with a horizontal component, a shadow with a non-zero
+ * horizontal offset, and a horizontal translation.
+ *
+ * What it does not read, so nobody trusts it for these: a horizontal position written as a
+ * percentage or a length, a conic gradient's angle, and a shadow offset held in a `var()`,
+ * which cannot be told from a colour without resolving it. Axis properties such as
+ * `overflow-x` and `translateY` are out of scope rather than missed: they do not change with
+ * direction, only with a vertical writing mode, which none of the seven languages uses.
+ */
+function physicalForms(property: string, value: string): { fixed: string[]; mirrorable: string[] } {
+	const fixed: string[] = [];
+	const mirrorable: string[] = [];
+	if (property.startsWith('--')) return { fixed, mirrorable };
+	const bare = value
+		.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, "''")
+		.replace(/url\([^)]*\)/gi, 'url()');
+	const tokens = tokensOf(bare);
+	if (SIDE_IN_NAME.test(property)) fixed.push('a side in the property name');
+	if (BOX_SHORTHANDS.has(property) && tokens.length === 4 && tokens[1] !== tokens[3]) {
+		fixed.push('a box shorthand whose right and left values differ');
+	}
+	if (property === 'border-radius') {
+		for (const axis of splitTopLevel(bare, /\//)) {
+			const [start, end = start, lower = start, lowerEnd = end] = tokensOf(axis);
+			if (start !== end || lower !== lowerEnd) {
+				fixed.push('a border radius whose corners differ across the inline axis');
+			}
+		}
+	}
+	if ([...bare.matchAll(SIDE_KEYWORD)].length > 0) mirrorable.push('a left or right keyword');
+	for (const [, , number = '0', unit = 'deg'] of bare.matchAll(GRADIENT_ANGLE)) {
+		const half = (turnsOf(number, unit) * 2) % 1;
+		if (half > 1e-9 && half < 1 - 1e-9) {
+			mirrorable.push('a gradient angle with a horizontal component');
+		}
+	}
+	if (property === 'box-shadow' || property === 'text-shadow') {
+		for (const layer of splitTopLevel(bare, /,/)) {
+			const offset = tokensOf(layer).find(isOffset);
+			if (offset !== undefined && !ZERO.test(offset)) {
+				mirrorable.push('a shadow with a horizontal offset');
+			}
+		}
+	}
+	for (const [, , x = '0'] of bare.matchAll(TRANSLATE)) {
+		if (!ZERO.test(x)) mirrorable.push('a horizontal translation');
+	}
+	if (property === 'translate' && tokens[0] !== undefined && !ZERO.test(tokens[0])) {
+		mirrorable.push('a horizontal translation');
+	}
+	return { fixed, mirrorable };
+}
+
+/** The value a right-to-left counterpart has to declare for this declaration's mirrorable forms. */
+function mirrorOf(property: string, value: string): string {
+	let result = value
+		.replace(SIDE_KEYWORD, (side) => (side === 'left' ? 'right' : 'left'))
+		.replace(
+			GRADIENT_ANGLE,
+			(_, head: string, number: string, unit: string) => `${head}${-Number(number)}${unit}`,
+		)
+		.replace(TRANSLATE, (_, head: string, x: string) => `${head}${negate(x)}`);
+	if (property === 'box-shadow' || property === 'text-shadow') {
+		result = splitTopLevel(result, /,/)
+			.map((layer) => {
+				const tokens = tokensOf(layer);
+				const offset = tokens.findIndex(isOffset);
+				if (offset !== -1) tokens[offset] = negate(tokens[offset] as string);
+				return tokens.join(' ');
+			})
+			.join(', ');
+	}
+	if (property === 'translate') {
+		const tokens = tokensOf(result);
+		if (tokens[0] !== undefined) tokens[0] = negate(tokens[0]);
+		result = tokens.join(' ');
+	}
+	return result;
+}
+
+/** Spacing normalised, and a gradient angle as a fraction of a turn, so `-90deg` and `270deg` agree. */
+const canonical = (value: string): string =>
+	value
+		.replace(
+			GRADIENT_ANGLE,
+			(_, head: string, number: string, unit: string) =>
+				`${head}${turnsOf(number, unit).toFixed(6)}turn`,
+		)
+		.replace(/\s+/g, ' ')
+		.replace(/\s*([(),])\s*/g, '$1')
+		.trim();
+
+const PSEUDO_ELEMENT = /::[\w-]+(?:\([^)]*\))?$/;
+const RTL = ':dir(rtl)';
+
+/**
+ * The selector's counterpart: `:dir(rtl)` added to its subject, or taken off it.
+ *
+ * On the subject and nowhere else. `.hx-root:dir(rtl) .hx-status-half` is not a counterpart
+ * of `.hx-root .hx-status-half`, because it reads the direction of the docs root, and an
+ * Arabic page serving the English fallback has a left-to-right article inside that root.
+ */
+function counterpartOf(selector: string): string {
+	const pseudo = PSEUDO_ELEMENT.exec(selector);
+	const subject = pseudo === null ? selector : selector.slice(0, pseudo.index);
+	const tail = pseudo === null ? '' : pseudo[0];
+	return subject.endsWith(RTL)
+		? `${subject.slice(0, -RTL.length)}${tail}`
+		: `${subject}${RTL}${tail}`;
+}
+
+/**
+ * Every physical form in a stylesheet that is not exempt, one line each.
+ *
+ * The exemption is checked, not assumed. The counterpart has to be the same selector with
+ * `:dir(rtl)` on its subject, inside the same at-rule, declaring the same property, and its
+ * value has to be the mirror of this one. A `:dir(rtl)` rule that repeats the value, mirrors
+ * it under a different property, sits in a different media query or keys on an ancestor
+ * exempts nothing. The pairing is looked up from both sides, so a right-to-left rule with no
+ * left-to-right one is reported too. What it cannot know is which of the pair is the right
+ * way round; `sides-ltr` and `sides-rtl` in the paint row measure that.
+ */
+function physicalIn(css: string): string[] {
+	const declarations = declarationsOf(css);
+	const key = (context: string, selector: string, property: string): string =>
+		JSON.stringify([context, selector, property]);
+	const values = new Map(
+		declarations.map((entry) => [key(entry.context, entry.selector, entry.property), entry.value]),
+	);
+	const reported: string[] = [];
+	for (const entry of declarations) {
+		const { fixed, mirrorable } = physicalForms(entry.property, entry.value);
+		if (fixed.length === 0 && mirrorable.length === 0) continue;
+		const partner = values.get(key(entry.context, counterpartOf(entry.selector), entry.property));
+		const mirrored =
+			fixed.length === 0 &&
+			partner !== undefined &&
+			canonical(mirrorOf(entry.property, entry.value)) === canonical(partner);
+		if (!mirrored) {
+			reported.push(
+				`${entry.selector} { ${entry.property}: ${entry.value} } has ${[...fixed, ...mirrorable].join(' and ')}`,
+			);
+		}
+	}
+	return reported;
+}
+
 describe('the rules a generator cannot enforce', () => {
-	test('no physical property, anywhere', () => {
+	test('no physical property, anywhere, unless its right-to-left mirror is beside it', () => {
 		// They look right in six languages and wrong in Arabic, and the build that shows it
 		// is the one nobody runs.
-		const physical =
-			/(?:^|[^-\w])(?:margin|padding|border|inset)-(?:left|right|top|bottom)\b|text-align:\s*(?:left|right)\b|(?:^|[^-\w])(?:left|right|top|bottom)\s*:/g;
-		const withoutComments = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
-		expect(withoutComments.match(physical) ?? []).toEqual([]);
+		expect(physicalIn(CSS)).toEqual([]);
 	});
 
-	test('the physical-property scan can see one', () => {
-		const physical =
-			/(?:^|[^-\w])(?:margin|padding|border|inset)-(?:left|right|top|bottom)\b|text-align:\s*(?:left|right)\b|(?:^|[^-\w])(?:left|right|top|bottom)\s*:/g;
-		expect('.x { margin-left: 1rem; }'.match(physical) ?? []).not.toEqual([]);
-		expect('.x { text-align: left; }'.match(physical) ?? []).not.toEqual([]);
+	test('the physical-property scan reads every declaration', () => {
+		// A scan that stopped at the first media query, or lost its place after a string,
+		// would report nothing for the declarations it never reached. The generator ends
+		// every declaration with a semicolon, so counting them is a second way to the same
+		// number that shares no code with the walker.
+		const semicolons = (
+			CSS.replace(/\/\*[\s\S]*?\*\//g, '')
+				.replace(/'[^']*'/g, '')
+				.replace(/\([^()]*(?:\([^()]*\)[^()]*)*\)/g, '')
+				.match(/;/g) ?? []
+		).length;
+		expect(semicolons).toBeGreaterThan(300);
+		expect(new Set(declarationsOf(CSS).map((entry) => entry.at)).size).toBe(semicolons);
+	});
+
+	// Each control names the selectors it must report, not only that it reports something. A
+	// scan that wrongly accepted `.r:dir(rtl) .x` as the counterpart of `.x` would still
+	// report the ancestor rule itself, and a bare "not empty" would pass it.
+	test.each<[string, string[]]>([
+		['.x { margin-left: 1rem; }', ['.x']],
+		['.x { text-align: left; }', ['.x']],
+		['.x { right: 0; }', ['.x']],
+		['.x { border-top-left-radius: 4px; }', ['.x']],
+		['.x { margin: 0 1rem 0 2rem; }', ['.x']],
+		['.x { border-radius: 4px 0 0 4px; }', ['.x']],
+		['.x { box-shadow: inset 2px 0 0 red; }', ['.x']],
+		['.x { box-shadow: 0 1px 2px black, -3px 0 0 var(--hx-accent, #0b76d9); }', ['.x']],
+		['.x { text-shadow: 1px 1px 0 black; }', ['.x']],
+		['.x { float: left; }', ['.x']],
+		['.x { clear: right; }', ['.x']],
+		['.x { background: linear-gradient(to right, red 50%, blue 50%); }', ['.x']],
+		['.x { background-image: linear-gradient(90deg, red, blue); }', ['.x']],
+		['.x { background-position: right 1rem center; }', ['.x']],
+		['.x { transform-origin: left top; }', ['.x']],
+		['.x { transform: translateX(-50%); }', ['.x']],
+		['.x { transform: translate(4px, 0); }', ['.x']],
+		['.x { translate: 4px 0; }', ['.x']],
+		// A counterpart that repeats the value rather than mirroring it.
+		[
+			'.x { box-shadow: inset 2px 0 0 red; }\n.x:dir(rtl) { box-shadow: inset 2px 0 0 red; }',
+			['.x', '.x:dir(rtl)'],
+		],
+		// A counterpart keyed on an ancestor, which reads the root's direction and not the element's.
+		['.x { float: left; }\n.r:dir(rtl) .x { float: right; }', ['.x', '.r:dir(rtl) .x']],
+		// A counterpart inside a media query the physical rule is not in.
+		[
+			'.x { float: left; }\n@media (min-width: 1px) { .x:dir(rtl) { float: right; } }',
+			['.x', '.x:dir(rtl)'],
+		],
+		// One selector of a list mirrored and the other not.
+		[
+			'.x, .y { transform: translateX(1px); }\n.x:dir(rtl) { transform: translateX(-1px); }',
+			['.y'],
+		],
+		// A right-to-left rule with nothing to mirror.
+		['.x:dir(rtl) { box-shadow: inset -2px 0 0 red; }', ['.x:dir(rtl)']],
+		// A logical spelling exists, so a mirror does not excuse it.
+		['.x { margin-left: 1rem; }\n.x:dir(rtl) { margin-right: 1rem; }', ['.x', '.x:dir(rtl)']],
+	])('the physical-property scan sees %s', (css, selectors) => {
+		expect(physicalIn(css).map((line) => line.slice(0, line.indexOf(' { ')))).toEqual(selectors);
+	});
+
+	test.each([
+		'.x { margin-inline-start: 1rem; inset-inline-end: 0; text-align: end; }',
+		'.x { margin: 0 1rem 2rem; padding: 0.5rem 1rem; border-radius: 6px; }',
+		'.x { box-shadow: inset 0 2px 0 red, 0 0 0 1px blue; }',
+		'.x { transform: translateY(-0.5rem); }',
+		'.x { background: linear-gradient(to bottom, red, blue), linear-gradient(180deg, red, blue); }',
+		'.x { overflow-x: auto; }',
+		".x { content: 'left'; }",
+		'.x { box-shadow: inset 2px 0 0 var(--hx-accent, #0b76d9); }\n.x:dir(rtl) { box-shadow: inset -2px 0 0 var(--hx-accent, #0b76d9); }',
+		'.x { background: linear-gradient(to right, transparent 50%, currentColor 50%); }\n.x:dir(rtl) { background: linear-gradient(to left, transparent 50%, currentColor 50%); }',
+		'.x { background: linear-gradient(90deg, red, blue); }\n.x:dir(rtl) { background: linear-gradient(270deg, red, blue); }',
+		'.x::before { transform: translateX(1px); }\n.x:dir(rtl)::before { transform: translateX(-1px); }',
+		'@media (min-width: 1px) { .x { float: left; } .x:dir(rtl) { float: right; } }',
+	])('the physical-property scan accepts %s', (css) => {
+		expect(physicalIn(css)).toEqual([]);
 	});
 
 	test('no cascade layer', () => {
