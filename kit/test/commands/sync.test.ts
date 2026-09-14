@@ -18,9 +18,10 @@
  *     and nothing else. `$schema`, `themeClass`, `navLabel` and the key order all survive,
  *     which is what "a surgical edit, not a reserialise" means.
  *
- * The bundle is built from the materialised corpus with the commit overridden to the shas
- * `fixtures/site/fixture-app.docs.json` names, because a version entry is keyed by a sha
- * and the corpus's real head is a different one on every run.
+ * The bundles are built from the materialised corpus with the commit set to the shas
+ * `fixtures/site/fixture-app.docs.json` names, because a version entry is keyed by a sha.
+ * The `1.1.0` sha is the corpus's own head, which is a function of the corpus alone, and
+ * `1.0.0` is a second commit the corpus never had, so its build overrides the sha.
  *
  * The fixture's `1.1.0` digest is deliberately not the digest of that manifest. That is
  * what gives the re-pin arm a case: sync writes the real one and says the same sha now
@@ -63,11 +64,15 @@ const SITE = 'apps/front';
 // that schema, so a made-up suffix here would refuse every bundle for the wrong reason.
 const KIT_VERSION = '@hex-pro/docs-kit@0.0.1';
 
-/** The two shas the checked-in site config names, and a distinct timestamp for each. */
+/**
+ * The two shas the checked-in site config names, and a distinct timestamp for each. The
+ * first is the commit the fixture corpus materialises to, so the checked-in config is what
+ * sync writes for that corpus.
+ */
 const VERSIONS = [
 	{
 		label: '1.1.0',
-		commit: '67a7f22c66619693ab861f82cd1cc5fb2f1788a6',
+		commit: 'fc2ef4dea95fb36e5201504e7d06fd2cd0c79b56',
 		at: '2026-04-08T09:00:00Z',
 	},
 	{
@@ -278,8 +283,9 @@ describe('the bytes', () => {
 		// Hand-authored: the fixture with exactly the edits this command owns applied to it,
 		// and nothing else. The `1.1.0` entry already carries a digest, so its value is
 		// replaced in place; the `1.0.0` entry carries none, so one is appended after
-		// `released` at that entry's own indent. The checked-in fixture predates `redirects`,
-		// and the bundle carries one, so the member arrives above `pages`, expanded.
+		// `released` at that entry's own indent. The fixture already carries the bundle's
+		// `redirects`, expanded above `pages` where sync writes the member, so that edit is
+		// a no-op here and `redirects` is not in the replacements.
 		const expected = fixtureText
 			.replace(
 				'"3f1c0a2b9d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8"',
@@ -288,27 +294,20 @@ describe('the bytes', () => {
 			.replace(
 				'"released": "2026-01-12"',
 				`"released": "2026-01-12",\n\t\t\t"digest": ${JSON.stringify(digests.get('1.0.0'))}`,
-			)
-			.replace(
-				'\t"pages": [',
-				'\t"redirects": {\n\t\t"first-tag": "guide/first-tag"\n\t},\n\t"pages": [',
 			);
 		expect(text).toBe(expected);
 
-		// Said again as a count, so the claim is not resting on one `toBe`. Four lines are
-		// added and five differ from anything in the original: the replaced `1.1.0` digest,
-		// the `1.0.0` released line that gains a comma, the appended `1.0.0` digest, and the
-		// opening and single member of `redirects`. Its closing `\t},` is a line the original
-		// already had, which is why it is not in the count. Every other line in the file is
-		// one the original already had, in its original order.
+		// Said again as a count, so the claim is not resting on one `toBe`. One line is
+		// added and three differ from anything in the original: the replaced `1.1.0` digest,
+		// the `1.0.0` released line that gains a comma, and the appended `1.0.0` digest.
+		// Every other line in the file is one the original already had, in its original
+		// order.
 		const before = fixtureText.split('\n');
 		const after = text.split('\n');
-		expect(after.length).toBe(before.length + 4);
+		expect(after.length).toBe(before.length + 1);
 		const changed = after.filter((line) => !before.includes(line));
-		expect(changed).toHaveLength(5);
-		expect(changed.every((line) => /"digest"|"released"|"redirects"|"first-tag"/.test(line))).toBe(
-			true,
-		);
+		expect(changed).toHaveLength(3);
+		expect(changed.every((line) => /"digest"|"released"/.test(line))).toBe(true);
 
 		// And the fields this command does not own kept their bytes, their key order and
 		// their packing.
@@ -317,12 +316,8 @@ describe('the bytes', () => {
 		}
 		expect(text).toContain('"zh": "文档"');
 		const keysBefore = Object.keys(JSON.parse(fixtureText) as object);
-		expect(Object.keys(JSON.parse(text) as object)).toEqual([
-			...keysBefore.slice(0, keysBefore.indexOf('pages')),
-			'redirects',
-			'pages',
-		]);
-		expect(keysBefore[keysBefore.length - 1]).toBe('pages');
+		expect(Object.keys(JSON.parse(text) as object)).toEqual(keysBefore);
+		expect(keysBefore.slice(-2)).toEqual(['redirects', 'pages']);
 	});
 });
 
@@ -407,8 +402,11 @@ describe('a slug that is no longer in the bundle', () => {
 		expect(Object.hasOwn(manifest.redirects, 'first-tag')).toBe(true);
 		expect(Object.hasOwn(manifest.redirects, 'ghost/page')).toBe(false);
 
+		// A config synced before the rename: it lists the old slug and has no redirect yet,
+		// which the checked-in fixture, synced after it, does.
 		const root = siteRepo((config) => {
 			config.pages = [...config.pages, 'first-tag', 'ghost/page'];
+			delete config.redirects;
 		});
 		const { data, exit, row, text } = await runSync(root, fullCache);
 
@@ -429,6 +427,7 @@ describe('a slug that is no longer in the bundle', () => {
 	test('a redirected slug alone is a clean run with a line naming where it went', async () => {
 		const root = siteRepo((config) => {
 			config.pages = [...config.pages, 'first-tag'];
+			delete config.redirects;
 		});
 		const { exit, row, output } = await runSync(root, fullCache);
 		expect(row('sync-pages')?.status).toBe('pass');
@@ -465,7 +464,13 @@ function cacheWithRedirects(redirects: Record<string, string>): string {
 describe('redirects', () => {
 	test('the bundle carries one, and the config gains it as an expanded member above pages', async () => {
 		expect(manifest.redirects).toEqual({ 'first-tag': 'guide/first-tag' });
-		const root = siteRepo();
+		// The checked-in fixture already carries the member, so it is taken out first: a byte
+		// copy would leave the insertion with nothing to do and this test green over an edit
+		// that never runs.
+		const root = siteRepo((config) => {
+			delete config.redirects;
+		});
+		expect(readFileSync(configPathOf(root), 'utf8')).not.toContain('"redirects"');
 		const { data, text, exit } = await runSync(root, fullCache);
 		const config = JSON.parse(text) as DocsSiteConfig;
 

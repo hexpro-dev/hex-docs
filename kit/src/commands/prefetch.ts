@@ -850,7 +850,7 @@ function uncompressedMismatch(key: string, expected: string, found: string): Raw
 
 /** Said once on the row rather than once per entry, because every entry has the same fix. */
 const TREE_SHAPE_REASON =
-	'Everything between the site directory and a label directory has to be a real directory. A symbolic link there would carry every write and every prune somewhere outside the site, and prefetch creates nothing but directories at those levels, so anything else there was put there by hand (a Finder .DS_Store counts), and it is not for this command to overwrite or delete. Move it out of the tree, or remove it.';
+	'Every directory from the site down to a label directory has to be a real one. A symbolic link there would carry every write and every prune somewhere outside the site, so it is refused rather than followed or removed. So is a file standing in for app, app/docs, public or either tree root, and anything inside the trees that is neither a directory nor a regular file, because prefetch made none of them and it is not for this command to delete them. Replace it with a real directory, or remove it. A stray regular file inside either tree, a Finder .DS_Store included, is not refused: it is removed with the other stale files.';
 
 /**
  * Every entry from the site directory down to the label directories, measured with `lstat`.
@@ -862,17 +862,30 @@ const TREE_SHAPE_REASON =
  * in place. Removing the link instead would be a delete of something this command did not
  * create, at a level where nothing it writes is a link.
  *
- * A non-directory at the project or label level is refused for the same reason from the
- * other side. Nothing prefetch writes is a file at those depths, so a file there is a
- * person's, and below a label directory is where prefetch's own territory starts.
+ * Above the trees, `app`, `app/docs`, `public` and the two tree roots have to be
+ * directories, and a file in place of one is refused: those are the site's own paths, and
+ * the only way past a file there is deleting it.
+ *
+ * Inside the trees, at the project and label levels, a regular file is not a problem here.
+ * It is not a planned destination, so `prune` removes it like any other stale file. That
+ * is the case this rule was changed for: Finder writes a `.DS_Store` into every directory
+ * it opens, the deploy host is a Mac, and refusing one failed the production prebuild over
+ * a file nobody would ever want built. Anything else at those levels, a named pipe, a
+ * socket or a device, is still refused on the row. Prefetch writes none of them, the
+ * change was made for the regular file Finder writes and not for these, and loosening the
+ * rule further than the case that needed it is a delete nobody decided on. A symbolic
+ * link at those levels is still refused, for the reason
+ * above. Below a label directory is where prefetch's own territory starts, and `prune`
+ * owns everything there, links included.
  *
  * An entry that cannot be looked at, a directory with no search or read permission, is a
  * problem on the same row rather than a throw. A throw reaches the CLI as a stack trace
  * under a sentence calling it a bug in hexdocs, and a mode on a site's own directory is not
  * one.
  *
- * `examined` counts every entry that was there to look at. The site's `app/docs` always
- * is, because the configs were read out of it, so a clean site examines at least two.
+ * `examined` counts every entry that was there to look at, a regular file left for the
+ * prune included. The site's `app/docs` always is, because the configs were read out of it,
+ * so a clean site examines at least two.
  */
 function treeShape(siteDirectory: string): { examined: number; problems: string[] } {
 	let examined = 0;
@@ -884,8 +897,13 @@ function treeShape(siteDirectory: string): { examined: number; problems: string[
 		return false;
 	};
 
-	/** `true` when the entry is a real directory worth descending into. */
-	const directory = (path: string): boolean => {
+	/**
+	 * `true` when the entry is a real directory worth descending into.
+	 *
+	 * `inTree` is set for an entry at the project or label level, where a regular file is
+	 * left for `prune` rather than refused.
+	 */
+	const directory = (path: string, inTree: boolean): boolean => {
 		let stats;
 		try {
 			stats = lstatSync(path);
@@ -897,11 +915,13 @@ function treeShape(siteDirectory: string): { examined: number; problems: string[
 			problems.push(`${shown(path)} is a symbolic link.`);
 			return false;
 		}
-		if (!stats.isDirectory()) {
+		if (stats.isDirectory()) return true;
+		if (!inTree) {
 			problems.push(`${shown(path)} is not a directory.`);
-			return false;
+		} else if (!stats.isFile()) {
+			problems.push(`${shown(path)} is neither a directory nor a regular file.`);
 		}
-		return true;
+		return false;
 	};
 
 	const entries = (path: string): string[] => {
@@ -918,14 +938,14 @@ function treeShape(siteDirectory: string): { examined: number; problems: string[
 		let real = true;
 		for (const segment of tree) {
 			path = join(path, segment);
-			real = directory(path);
+			real = directory(path, false);
 			if (!real) break;
 		}
 		if (!real) continue;
 		for (const project of entries(path)) {
 			const projectPath = join(path, project);
-			if (!directory(projectPath)) continue;
-			for (const label of entries(projectPath)) directory(join(projectPath, label));
+			if (!directory(projectPath, true)) continue;
+			for (const label of entries(projectPath)) directory(join(projectPath, label), true);
 		}
 	}
 
@@ -941,16 +961,35 @@ function treeShape(siteDirectory: string): { examined: number; problems: string[
  * extraction writes cannot drift into disagreeing and oscillating between runs. A regular
  * file at a kept path stays; anything else goes: a file no plan names, a symbolic link at
  * any depth (unlinked, never followed, so what it points at survives), and then every
- * directory the walk left empty. The two tree roots themselves are never removed.
+ * directory the walk left empty **that no planned destination sits under**. The two tree
+ * roots themselves are never removed.
+ *
+ * That last clause is what keeps the dry run readable. A stray file standing where a label
+ * directory goes leaves its project directory empty for a moment, and without the clause
+ * the run would report removing a directory it recreates two lines later, which reads as
+ * churn rather than as the one stale file it actually removed.
  *
  * It runs only once every earlier row has passed, which is what keeps a laptop without
  * credentials, or a config that stopped validating, from losing an extracted tree it can
- * no longer rebuild. The shape check has already refused a link or a file at the levels
- * above a label directory; the root is looked at again here rather than trusted, because
- * the cache fill in between can take as long as a download.
+ * no longer rebuild. The shape check has already refused a link, and anything that is
+ * neither a directory nor a regular file, at every level down to a label directory, and
+ * left a regular file there for this walk, which removes it because no plan names it. The
+ * root is looked at again here rather than trusted, because the cache fill in between can
+ * take as long as a download.
  */
 function prune(siteDirectory: string, keep: ReadonlySet<string>, writer: Writer): number {
 	const before = writer.removed.length;
+
+	// Every directory a kept file sits in, and every directory above it. Extraction is about
+	// to create these, so an empty one is not stale.
+	const wanted = new Set<string>();
+	for (const path of keep) {
+		let directory = dirname(path);
+		while (!wanted.has(directory) && directory !== dirname(directory)) {
+			wanted.add(directory);
+			directory = dirname(directory);
+		}
+	}
 
 	/** Returns whether the directory was left holding nothing. */
 	const walk = (directory: string): boolean => {
@@ -960,7 +999,7 @@ function prune(siteDirectory: string, keep: ReadonlySet<string>, writer: Writer)
 			// `withFileTypes` answers from the directory entry itself, as `lstat` does, so a
 			// link to a directory reports as a link here and is never descended into.
 			if (entry.isDirectory()) {
-				if (walk(path)) writer.remove(path);
+				if (walk(path) && !wanted.has(path)) writer.remove(path);
 				else remaining += 1;
 			} else if (entry.isFile() && keep.has(path)) {
 				remaining += 1;

@@ -25,7 +25,6 @@ import { z } from 'zod';
 import { bind, UsageError } from '../cli/args.js';
 import { bucketOf } from '../commands/common.js';
 import { PREFETCH_PARAMS, PREFETCH_POSITIONALS } from '../commands/prefetch-params.js';
-import type { AnyCommand } from '../registry/command.js';
 import { shapeOf } from '../registry/params.js';
 
 import { joinPosix, normaliseSitePath, resolveInside, type SiteDescriptor } from './site.js';
@@ -151,10 +150,10 @@ const SHELL_REWRITES = /["'\\$*?~{}()<>]/;
 /**
  * The shape `bind` reads, and only that.
  *
- * `bind` takes an `AnyCommand` and reads its `name`, its `params` and its `positionals` and
- * nothing else, so the cast is to fields it never touches. The alternative, a binder of this
- * module's own over `parseArgs`, is a second definition of what the CLI accepts, which is
- * the disagreement this whole predicate exists to remove.
+ * `bind` is typed as `name`, `params` and `positionals`, so prefetch's table is passed as it
+ * is, with no import of `commands/prefetch.ts` and its writers. The alternative, a binder of
+ * this module's own over `parseArgs`, is a second definition of what the CLI accepts, which
+ * is the disagreement this whole predicate exists to remove.
  */
 const PREFETCH_BINDING = {
 	name: 'prefetch',
@@ -242,7 +241,7 @@ function prefetchProblems(located: Located, site: SiteDescriptor): string[] {
 
 	let bound: unknown;
 	try {
-		bound = bind(PREFETCH_BINDING as unknown as AnyCommand, rest);
+		bound = bind(PREFETCH_BINDING, rest);
 	} catch (error) {
 		if (!(error instanceof UsageError)) throw error;
 		return [...problems, `${text} is refused by the CLI before it runs: ${error.message}`];

@@ -41,7 +41,11 @@ filesystem, so every change is visible in the transcript and in git.
 a note says so. Editing an existing page is Read then Edit, not a scaffold.
 
 The slug is the filename and is not a front matter field, so a page cannot disagree with
-its own address. `index.md` is the section root and maps to the trailing-slash address.
+its own address. `index.md` is the section root and serves the section's address with no
+trailing slash, spelled like any leaf: `content/en/guide/index.md` is at `<mount>/guide`.
+So `guide.md` beside `guide/index.md` would be two pages at one address, and the compiler
+reports it as a `slug-reserved` error naming both files. That holds across languages too:
+`content/ja/guide.md` beside `content/en/guide/index.md` is the same collision.
 
 ### Front matter
 

@@ -197,9 +197,9 @@ export default defineConfig({
 				// `unhandledNode` arms for node types this AST major does not have.
 				'src/ast/**': { statements: 100, branches: 90, functions: 100, lines: 100 },
 
-				// The hand-run guards, each of which spawns something. Measured 824/910
-				// statements 90.55, 344/450 branches 76.44, 128/138 functions 92.75, 752/822
-				// lines 91.48, across `lint.mjs`, `check-imports.mjs`, `check-paint.mjs`,
+				// The hand-run guards, each of which spawns something. Measured at step 8:
+				// 873/958 statements 91.13, 364/470 branches 77.45, 132/142 functions 92.96,
+				// 801/869 lines 92.18, across `lint.mjs`, `check-imports.mjs`, `check-paint.mjs`,
 				// `check-cli.mjs`, `verify.mjs` and, since step 6, `check-infra.mjs`.
 				// `check-stack.mjs` is not in the group because it is not in the report at all,
 				// and the exclusion above says why.
@@ -216,13 +216,14 @@ export default defineConfig({
 				// mean simulating a broken machine rather than testing a guard.
 				//
 				// Branches is the one to watch, and it is said here rather than left to be
-				// found: 344 of 450, which clears the floor by four tenths of a point. That is
-				// `check-infra.mjs` at 120 of 163. It was a twentieth of a point before the step
-				// 6 review fixes; the second git-history row in `lint.mjs` is driven by three new
-				// cases and the ladder's resolved run-as-main predicate by one, so the group came
-				// up rather than down. Raising the floor to the measurement would make a rounding
-				// change a failure, and lowering it would be lowering a floor to fit a module
-				// whose failure paths are in fact tested, so it stays at 76.
+				// found. It was 344 of 450 at step 6, four tenths of a point over the floor, and
+				// the tight module was `check-infra.mjs` at 120 of 163. Re-measured at step 8,
+				// after `check-cli.mjs` grew the first-run row that installs the kit inside a
+				// pnpm workspace: 873/958 statements, 364/470 branches, 132/142 functions,
+				// 801/869 lines, so branches now clear by a point and a half. Raising the floor
+				// to the measurement would make a rounding change a failure, and lowering it
+				// would be lowering a floor to fit a module whose failure paths are in fact
+				// tested, so it stays at 76.
 				'scripts/*.mjs': { statements: 88, branches: 76, functions: 88, lines: 89 },
 			},
 		},

@@ -440,7 +440,7 @@ const CASES: readonly Case[] = [
 			}),
 	},
 	{
-		name: 'a page at a reserved root, and a page at the path of a section root in another language',
+		name: 'a page at a reserved root, a page at the path of a section root in another language, and redirect sources at taken addresses',
 		rules: ['slug-reserved'],
 		arms: [
 			{
@@ -453,6 +453,18 @@ const CASES: readonly Case[] = [
 				matches:
 					/^content\/ja\/developer\.md and content\/en\/developer\/index\.md are both served at "developer"/,
 				why: 'A page and a section root sharing a path, split across two languages so a check that looks inside one locale at a time finds nothing. The corpus has every section root in every language, so both files are planted.',
+			},
+			{
+				rule: 'slug-reserved',
+				matches:
+					/^content\/en\/reference\/moved\.md redirects from "guide", which is the address content\/en\/guide\/index\.md is served at/,
+				why: 'A redirect source that is not the slug of any page and is the address of one, which is the case the manifest filter compares slugs for and lets through.',
+			},
+			{
+				rule: 'slug-reserved',
+				matches:
+					/^content\/en\/reference\/second-move\.md redirects from "old\/index", and content\/en\/reference\/moved\.md redirects from "old", which is the same address/,
+				why: 'Two redirect sources spelled as a leaf and a section root, which no slug comparison can see are one address.',
 			},
 		],
 		run: () =>
@@ -474,6 +486,18 @@ const CASES: readonly Case[] = [
 					repo,
 					'content/ja/developer.md',
 					'---\ntitle: \u30ac\u30a4\u30c9\ndescription: \u30ac\u30a4\u30c9\u306e\u30da\u30fc\u30b8\u3067\u3059\u3002\n---\n\n## \u7bc0\n\n\u672c\u6587\u3002\n',
+				);
+				// `guide` is no page's slug and is the address of `guide/index`, so a comparison of
+				// slugs passes it. `old` and `old/index` are no page at all, and are one address.
+				write(
+					repo,
+					'content/en/reference/moved.md',
+					'---\ntitle: Moved\ndescription: A page that claims two old addresses.\nredirectFrom:\n  - guide\n  - old\n---\n\n## Section\n\nText.\n',
+				);
+				write(
+					repo,
+					'content/en/reference/second-move.md',
+					'---\ntitle: Moved again\ndescription: A page that claims an old address another page claims.\nredirectFrom:\n  - old/index\n---\n\n## Section\n\nText.\n',
 				);
 			}),
 	},

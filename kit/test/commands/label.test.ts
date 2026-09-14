@@ -55,7 +55,7 @@ const KIT_VERSION = '@hex-pro/docs-kit@0.0.1';
 const BUCKET = 'a-bucket-that-is-not-real';
 
 /** A sha that is in the fixture's version table, and one that is not. */
-const LABELLED_COMMIT = '67a7f22c66619693ab861f82cd1cc5fb2f1788a6';
+const LABELLED_COMMIT = 'fc2ef4dea95fb36e5201504e7d06fd2cd0c79b56';
 const NEW_COMMIT = '0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c';
 
 /** Every environment variable `awsConfigured` and `bucketOf` read, cleared by default. */

@@ -411,7 +411,7 @@ export const GLOB_WORKSPACE: readonly ConsumerFile[] = [
 	},
 	{
 		path: 'apps/front/app/root.tsx',
-		why: 'wiring-localised-paths reads the SEO decision here. The imports and the Layout head through the canonical and alternates block, which is where the docs decision goes; the CSP loader and the error boundary are cut.',
+		why: 'wiring-root-seo reads the SEO decision here. The imports and the Layout head through the canonical and alternates block, which is where the docs decision goes; the CSP loader and the error boundary are cut.',
 		contents: [
 			'import {',
 			'\tdata,',
@@ -950,7 +950,7 @@ export const LITERAL_WORKSPACE: readonly ConsumerFile[] = [
 	},
 	{
 		path: 'kcalc-web/front/app/root.tsx',
-		why: 'wiring-localised-paths reads the SEO decision here. The imports and the Layout head through the canonical block, whose robots branch reads noindex, nofollow here; the rest is cut.',
+		why: 'wiring-root-seo reads the SEO decision here. The imports and the Layout head through the canonical block, whose robots branch reads noindex, nofollow here; the rest is cut.',
 		contents: [
 			'import {',
 			'\tLinks,',

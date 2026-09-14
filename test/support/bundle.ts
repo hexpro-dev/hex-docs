@@ -56,24 +56,36 @@ export function fixtureBundle(): FixtureBundle {
 }
 
 /**
- * The fixture site config, pointed at the bundle this run compiled.
+ * The fixture site config, checked against the bundle this run compiled.
  *
- * The committed config names a commit from a different corpus history, and `docsServer`
- * refuses a manifest whose commit is not the one the label names, so the default version
- * is repointed. `redirects` is what `hexdocs sync` writes from the manifest.
+ * The committed config is what `hexdocs sync` writes for this corpus: its default version
+ * names the commit the corpus materialises to, and its `redirects` are the manifest's.
+ * They are compared here rather than patched in memory, because a patch would keep every
+ * suite green over a checked-in config that no longer matches the corpus, which is the
+ * one file a reader takes as an example of a synced config. A corpus edit moves the sha,
+ * and this names the file to update instead of letting `docsServer` answer every request
+ * with a 500 about a commit.
  */
 export function fixtureSite(bundle: FixtureBundle, basePath = '/fixture-app/docs'): DocsSiteConfig {
 	const committed = JSON.parse(
 		readFileSync(join(CONSUMER_ROOT, 'fixture-app.docs.json'), 'utf8'),
 	) as DocsSiteConfig;
-	return {
-		...committed,
-		basePath,
-		versions: committed.versions.map((entry) =>
-			entry.default === true ? { ...entry, commit: bundle.manifest.commit } : entry,
-		),
-		redirects: { ...bundle.manifest.redirects },
-	};
+	const pinned = committed.versions.find((entry) => entry.default === true)?.commit;
+	if (pinned !== bundle.manifest.commit) {
+		throw new Error(
+			`fixtures/site/fixture-app.docs.json names ${String(pinned)} as its default commit, and ` +
+				`the fixture corpus materialises to ${bundle.manifest.commit}. Set the default ` +
+				`version's commit to that sha.`,
+		);
+	}
+	const redirects = JSON.stringify(committed.redirects ?? {});
+	if (redirects !== JSON.stringify(bundle.manifest.redirects)) {
+		throw new Error(
+			`fixtures/site/fixture-app.docs.json carries redirects ${redirects}, and the compiled ` +
+				`manifest carries ${JSON.stringify(bundle.manifest.redirects)}. Copy the manifest's.`,
+		);
+	}
+	return { ...committed, basePath };
 }
 
 /** The glob key a consumer's `import.meta.glob` produces for one stored object. */

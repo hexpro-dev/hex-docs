@@ -26,7 +26,7 @@ export class UsageError extends Error {}
  * from that is the only thing a model reads before deciding what to send.
  */
 export function optionsFor(
-	command: AnyCommand,
+	command: Pick<AnyCommand, 'params' | 'positionals'>,
 ): Record<string, { type: 'string' | 'boolean'; multiple?: true }> {
 	const options: Record<string, { type: 'string' | 'boolean'; multiple?: true }> = {};
 	for (const [name, param] of Object.entries(command.params)) {
@@ -48,8 +48,17 @@ export function optionsFor(
  * `{ project: 'build' }` with `sync` as the only positional. Reading `argv[0]` as the
  * command name first and parsing the rest against that command's own table removes the
  * whole class.
+ *
+ * Typed as the three fields it reads rather than as a whole command, so a caller binding
+ * argv against a parameter table it does not own as a command, which is what the prebuild
+ * predicate in `wiring/prebuild.ts` does with prefetch's, passes the table itself. A cast
+ * to `AnyCommand` there would type-check a handler and a tool name that do not exist, and
+ * would keep compiling if `bind` later started reading one of them.
  */
-export function bind(command: AnyCommand, argv: readonly string[]): unknown {
+export function bind(
+	command: Pick<AnyCommand, 'name' | 'params' | 'positionals'>,
+	argv: readonly string[],
+): unknown {
 	let parsed;
 	try {
 		parsed = parseArgs({

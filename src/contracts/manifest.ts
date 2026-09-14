@@ -157,7 +157,8 @@ export interface PageLocaleRecord {
 	 *
 	 * This is the page's **own** state, and `coverage` counts it. The effective state, the
 	 * worst of the page and every snippet it transcludes, is on the compiled page where
-	 * the reader's notice reads it. Two numbers because there are two questions: a
+	 * the reader's notice reads it, and in `effective` below whenever it differs from this
+	 * one. Two numbers because there are two questions: a
 	 * translator asks which files to open, and a reader asks whether to trust the words in
 	 * front of them, and a page whose only stale part is a shared fragment answers those
 	 * differently. `TranslationRecord.state` in `frontmatter.ts` is the other half.
@@ -511,6 +512,19 @@ export function validateManifestShape(manifest: BundleManifest): string[] {
 						`pages["${slug}"].locales.${key}.updatedAt is "${record.updatedAt}", which is not a ` +
 							`UTC timestamp. Freshness is a comparison of these, so an unparseable one compares ` +
 							`as neither newer nor older and the page reads current against everything.`,
+					);
+				}
+				// The refusal `pageLocaleRecordSchema` makes, repeated here because this function
+				// is what `docsServer` runs and it has no Zod. A reader folding
+				// `effective ?? state` gets one answer either way, so this protects no reader: it
+				// holds the one-spelling property of a write-once manifest. Without it a writer
+				// that stamps `effective` on every record passes `build`'s manifest check and
+				// `docsServer`'s, and is refused only later, by whichever command first parses the
+				// manifest with the bundle schema.
+				if (record.effective !== undefined && record.effective === record.state) {
+					problems.push(
+						`pages["${slug}"].locales.${key}.effective is "${record.effective}", the same as its ` +
+							`state. The effective state is written only when it differs, so omit it.`,
 					);
 				}
 			}

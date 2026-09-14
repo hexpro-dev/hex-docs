@@ -103,7 +103,7 @@ export const CHECK_IDS = [
 	'wiring-deploy-hash-dirs',
 	'wiring-prebuild-hook',
 	'wiring-routes',
-	'wiring-localised-paths',
+	'wiring-root-seo',
 	'wiring-sitemap',
 	'wiring-mcp',
 	// the app repo's own wiring

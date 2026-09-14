@@ -31,7 +31,6 @@ import {
 	parseRouteTable,
 	readRouteTable,
 	routeTableProblems,
-	rowId,
 	type RouteNode,
 } from '../../src/wiring/route-table.js';
 
@@ -363,19 +362,12 @@ describe('the rows the wiring compares against', () => {
 		readFileSync(join(CONSUMER_ROOT, 'fixture-app.docs.json'), 'utf8'),
 	) as DocsSiteConfig;
 
-	test('rowId reads an id where a row carries one', () => {
-		expect(rowId(MACHINES[0] as DocsRouteRow)).toBe('docs:/app/docs/llms.txt');
-		expect(rowId(PAGES[0] as DocsRouteRow)).toBeUndefined();
-	});
-
-	// A marked failure, and the marker is the point. `kit/test/wiring/route-loader.ts` fills
-	// the machine ids the row contract names until the runtime half writes them, so that the
-	// fixture baseline can be wired at all. The day `docsRouteRows` carries `docs:<path>` on
-	// every machine row, this assertion passes, `test.fails` turns it red, and whoever made
-	// that change is pointed at `withContractIds` to delete, and at this test to unmark.
-	test.fails('every machine row carries docs:<path> as its id, so withContractIds can go', () => {
+	// The contract the loader model and the check both lean on: a machine row names the id
+	// it is declared under, so the printed spread passes it through and two rows sharing one
+	// module never collide. Drop it from `docsRouteRows` and this is the test that says so.
+	test('every machine row carries docs:<path> as its id', () => {
 		const machines = docsRouteRows([config]).filter((row) => row.kind === 'machine');
 		expect(machines.length).toBeGreaterThan(0);
-		expect(machines.map((row) => rowId(row))).toEqual(machines.map((row) => `docs:${row.path}`));
+		expect(machines.map((row) => row.id)).toEqual(machines.map((row) => `docs:${row.path}`));
 	});
 });

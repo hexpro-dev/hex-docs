@@ -90,6 +90,12 @@ const BY_TOOL_SAFE_RECIPES: Record<string, true> = {
 	'aws.list-objects': true,
 	'aws.list-objects-page': true,
 	'aws.get-object': true,
+	// Not a file read, and allowed deliberately. It runs the consuming site's route config
+	// through that site's own React Router, which executes `app/routes.ts` and what it
+	// imports. `docs_verify_install` needs it because a text match over `routes.ts` passed a
+	// table that could not load at all. It executes nothing the site's own build does not,
+	// and it writes nothing: the command prints the table and exits.
+	'react-router.routes': true,
 };
 
 export { NO_EXEC };

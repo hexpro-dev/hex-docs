@@ -948,7 +948,7 @@ function buildEdits(site: SiteDescriptor, bucket: string | undefined): Edit[] {
 		},
 		{
 			id: 'site-config',
-			check: 'wiring-localised-paths',
+			check: 'wiring-root-seo',
 			file: joinPosix(site.site, 'app/docs'),
 			present: PRESENT.siteConfig,
 			apply: APPLY.refuse,
@@ -1010,7 +1010,7 @@ function buildEdits(site: SiteDescriptor, bucket: string | undefined): Edit[] {
 		},
 		{
 			id: 'root-seo',
-			check: 'wiring-localised-paths',
+			check: 'wiring-root-seo',
 			file: rootFile,
 			present: PRESENT.rootSeo,
 			apply: APPLY.refuse,

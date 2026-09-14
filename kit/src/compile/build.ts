@@ -46,7 +46,13 @@ import { probeAsset } from './assets.js';
 import { readFrontMatter } from './frontmatter.js';
 import { compilePage, rawSnippetBody, type CompiledPageOutput } from './page.js';
 import { createImageResolver, createLinkResolver, type LinkTargets } from './links.js';
-import { loadProject, type LoadedProject, type SourceDocument } from './project.js';
+import {
+	loadProject,
+	redirectCollisions,
+	type LoadedProject,
+	type RedirectDeclaration,
+	type SourceDocument,
+} from './project.js';
 import { parseDocument } from './markdown/index.js';
 import { highlight } from './highlight/index.js';
 import { buildSearchIndex, type IndexablePage } from './search.js';
@@ -180,20 +186,34 @@ export function buildBundle(appRoot: string, options: BuildOptions): BuildResult
 
 	// ---- what a link may point at -------------------------------------------
 	const redirects = new Map<string, string>();
+	const declarations: RedirectDeclaration[] = [];
 	const drafts = new Set<string>();
 	for (const [slug, byLocale] of project.pages) {
 		const source = byLocale.get(SOURCE_LOCALE);
 		if (source === undefined) continue;
-		const front = parseDocument(source.text, {
+		const frontMatter = parseDocument(source.text, {
 			file: source.file,
 			config,
 			services: nullServices(),
-		}).frontMatter.data;
+		}).frontMatter;
+		const front = frontMatter.data;
 		if (front.draft === true) drafts.add(slug);
 		for (const from of Array.isArray(front.redirectFrom) ? front.redirectFrom : []) {
-			if (typeof from === 'string') redirects.set(from, slug);
+			if (typeof from !== 'string') continue;
+			redirects.set(from, slug);
+			declarations.push({
+				from,
+				to: slug,
+				file: source.file,
+				line: frontMatter.keyLines['redirectFrom'],
+			});
 		}
 	}
+	// Here rather than in `loadProject`, beside the page and section-root arm, because the
+	// sources are front matter and this is the loop that reads it. Without it the manifest
+	// filter below compares slugs, a source at a section root's address reaches the bundle,
+	// and the first refusal is `hexdocs sync`'s, in another repository.
+	findings.push(...redirectCollisions(project.pages, declarations));
 	const published = new Set(
 		[...project.pages.keys()].filter((slug) => options.includeDrafts === true || !drafts.has(slug)),
 	);

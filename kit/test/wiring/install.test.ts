@@ -288,7 +288,7 @@ const CLAIMS: readonly Claim[] = [
 	{
 		id: 'site-config',
 		present: 'siteConfig',
-		check: 'wiring-localised-paths',
+		check: 'wiring-root-seo',
 		byHand: true,
 		reapply: 'refuses',
 		why: 'It needs a project id, a mount path and a labelled commit that nothing here knows.',
@@ -328,7 +328,7 @@ const CLAIMS: readonly Claim[] = [
 	{
 		id: 'root-seo',
 		present: 'rootSeo',
-		check: 'wiring-localised-paths',
+		check: 'wiring-root-seo',
 		byHand: true,
 		reapply: 'refuses',
 		why: 'The one place a docs page canonical, alternates and robots tag can be decided, in a file hand-edited in every commit.',

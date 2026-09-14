@@ -35,11 +35,16 @@ export const INDEX_SEGMENT = 'index';
 /**
  * First segments a page may not claim.
  *
- * Each of these is already a route under a project's docs mount. React Router breaks
- * a ranking tie on declaration order, so a page named `search` would resolve to
- * whichever of the two was declared first, deterministically and invisibly. Refusing
- * the name at compile time is the only version of this check that fails somewhere a
- * person is looking.
+ * Each of these is a name a docs mount serves or keeps for itself. `llms` and `llms-full`
+ * are the machine files, `v` is where `docsHrefFor` spells a pinned version, and `search`,
+ * `assets`, `raw`, `sitemap` and `robots` are held for endpoints and trees that are not
+ * routed under the mount today. No entry collides with a route row in this release: below
+ * the mount every docs row is a literal path (`llms.txt`, not `llms`), so there is no
+ * ranking tie for a page to lose. What the list
+ * prevents is a later release that routes one of these names taking the address from under
+ * a page that already holds it, and a reader or an agent meeting a page and a package file
+ * that answer to one name. Refusing the name at compile time is the only version of this
+ * check that fails somewhere a person is looking.
  */
 export const RESERVED_SLUG_ROOTS = [
 	'search',
@@ -58,9 +63,8 @@ export const RESERVED_SLUG_ROOTS = [
  * `_bundles` is deliberately not in that list. It is the prefetch directory name, so it
  * looks like it belongs, but the segment grammar above already refuses a leading
  * underscore and the reserved check is never reached for it. Listing it would attach a
- * reason ("this ties with a built-in route") to an entry that is refused for an
- * entirely different one, which is the kind of comment that gets trusted and then
- * copied.
+ * reason ("the package keeps this name") to an entry that is refused for an entirely
+ * different one, which is the kind of comment that gets trusted and then copied.
  */
 
 export type ParsedSlug =
@@ -160,7 +164,7 @@ export function parseSlug(input: string): SlugParse {
 		return fail(
 			input,
 			'reserved-root',
-			`"${first}" is a reserved route under a docs mount. Rename the page: a slug that ties with a built-in route resolves to whichever was declared first.`,
+			`"${first}" is a reserved route under a docs mount. Rename the page: the package keeps this name for its own files and endpoints, and a release that routes it would take the address from the page.`,
 		);
 	}
 

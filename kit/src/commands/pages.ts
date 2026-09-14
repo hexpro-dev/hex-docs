@@ -11,21 +11,27 @@
  * memory; a bundle directory has one on disk. Everything below reads the same fields out
  * of the same shape, so `--bundle` cannot grow a different idea of what a page is.
  *
- * The one field a manifest cannot answer is `effectiveState`, and the comment on it says
- * what is done about that in each mode.
+ * `effectiveState` is the one cell the two modes reach by different routes: a source tree
+ * reads it off the compiled pages `buildBundle` has in hand, and a bundle reads the
+ * manifest's own `effective ?? state`. They are kept separate on purpose, because the
+ * comparison between the modes is then what proves the manifest carries what the compiled
+ * pages say.
  */
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { notRunRow } from '../../../src/contracts/diagnostics.js';
-import { TRANSLATION_STATES, type TranslationState } from '../../../src/contracts/frontmatter.js';
+import type { TranslationState } from '../../../src/contracts/frontmatter.js';
 import { LOCALES, sortLocales, type Locale } from '../../../src/contracts/locales.js';
 import { AST_VERSION } from '../../../src/contracts/ast.js';
-import { MANIFEST_KEY, pageKey, type BundleManifest } from '../../../src/contracts/manifest.js';
+import {
+	MANIFEST_KEY,
+	type BundleManifest,
+	type PageLocaleRecord,
+} from '../../../src/contracts/manifest.js';
 import { parseSlug } from '../../../src/contracts/slug.js';
 import { buildBundle } from '../compile/build.js';
-import { gunzipMember } from '../compile/serialise.js';
 import { bundleManifestSchema } from '../contracts/bundle.schema.js';
 import { defineCommand } from '../registry/command.js';
 
@@ -52,8 +58,9 @@ export type BundleRead =
 /**
  * How far down a wrong path this looks for the bundle the caller meant.
  *
- * `hexdocs prefetch` writes `_bundles/<project>/<sha>/ast-N/`, so the natural mistake is
- * to pass the cache root or the project directory, three levels above the manifest. The
+ * `hexdocs build --out <dir>` writes `<dir>/<project>/<sha>/ast-N/` and `hexdocs prefetch`
+ * caches the same layout under its cache root, so the natural mistake is to pass the output
+ * or cache root or the project directory, up to three levels above the manifest. The
  * search is bounded in both directions on purpose: a caller who passes a repository root
  * by accident would otherwise pay a full tree walk to be told the same thing, and the
  * cap is what stops a helpful message becoming a hang.
@@ -110,7 +117,8 @@ export function readBundle(cwd: string, path: string): BundleRead {
 			ok: false,
 			why:
 				`${directory} has no ${MANIFEST_KEY}. A bundle directory is the ast-N directory itself, ` +
-				`which is what hexdocs prefetch writes at _bundles/<project>/<sha>/ast-${AST_VERSION}.` +
+				`which is what hexdocs build --out writes at <out>/<project>/<sha>/ast-${AST_VERSION}, ` +
+				`and what hexdocs prefetch keeps at the same path under its cache.` +
 				(candidates.length === 0
 					? ' The manifest is also written last, so its absence can mean a partial download.'
 					: ` One is below this path: ${candidates.join(', ')}.`),
@@ -154,40 +162,6 @@ export function readBundle(cwd: string, path: string): BundleRead {
 }
 
 /**
- * The effective translation state, read out of a compiled page payload.
- *
- * `manifest.ts` opens by saying that nothing may need a page payload to answer a
- * question about the bundle, and this is the one read in this package that does. The
- * reason is that the effective state is by construction not in the manifest:
- * `PageLocaleRecord.state` is the page's own state because that is what a translator
- * acts on, and the worst of the page and everything it transcludes lives on the compiled
- * page where the reader's notice reads it. The alternative was a field that is populated
- * from a source tree and null from a bundle, and a null that means "this mode does not
- * answer" is indistinguishable from a null that means "the payload is not here".
- *
- * So a null from this function has exactly one meaning: this directory does not hold a
- * readable payload for that page and locale, which is what a partial download looks
- * like. The shape check is deliberately narrow rather than `compiledPageSchema`: one
- * field is wanted, and validating the whole payload would refuse a page for reasons that
- * have nothing to do with the question and that `hexdocs bundle` already reports.
- */
-function payloadState(directory: string, slug: string, locale: Locale): TranslationState | null {
-	const path = join(directory, pageKey(locale, slug));
-	if (!existsSync(path)) return null;
-	let value: unknown;
-	try {
-		value = JSON.parse(gunzipMember(readFileSync(path)).toString('utf8'));
-	} catch {
-		return null;
-	}
-	const state = (value as { translation?: { state?: unknown } } | null)?.translation?.state;
-	if (typeof state !== 'string') return null;
-	return (TRANSLATION_STATES as readonly string[]).includes(state)
-		? (state as TranslationState)
-		: null;
-}
-
-/**
  * The section a slug sits in, or `null` for a page at the docs root.
  *
  * Derived rather than stored, because the slug is the only thing that decides it: the
@@ -210,7 +184,8 @@ export type PagesLocaleEntry = {
 	state: TranslationState;
 	/**
 	 * `CompiledPage.translation.state`: the worst of the page and every snippet it
-	 * transcludes, which is what a reader gets.
+	 * transcludes, which is what a reader gets. A bundle carries it as
+	 * `PageLocaleRecord.effective` wherever it differs from `state`.
 	 *
 	 * Two fields rather than one because a current page full of stale snippets is not
 	 * current to a reader and is not a page to retranslate, and a single number would
@@ -310,9 +285,15 @@ export const pages = defineCommand({
 		let manifest: BundleManifest;
 		let origin: string;
 		// Where the effective state comes from. A source tree has the compiled pages in
-		// hand; a bundle directory has to read the payload back. Both answer the same
-		// question, which is what keeps the field meaning one thing.
-		let effectiveState: (slug: string, locale: Locale) => TranslationState | null;
+		// hand; a bundle has the manifest, which carries `effective` wherever it differs from
+		// the page's own state. The source mode deliberately does not read its own manifest
+		// the same way: reading the compiled page there is what lets the comparison of the two
+		// modes catch a manifest that dropped `effective`, or a bundle read that ignored it.
+		let effectiveState: (
+			slug: string,
+			locale: Locale,
+			record: PageLocaleRecord,
+		) => TranslationState | null;
 
 		if (input.bundle === undefined) {
 			let result;
@@ -347,7 +328,7 @@ export const pages = defineCommand({
 			}
 			manifest = read.manifest;
 			origin = read.directory;
-			effectiveState = (slug, locale) => payloadState(read.directory, slug, locale);
+			effectiveState = (_slug, _locale, record) => record.effective ?? record.state;
 		}
 
 		// Two things are going on here and only one of them is about locales.
@@ -406,7 +387,7 @@ export const pages = defineCommand({
 				}
 				locales[locale] = {
 					state: localeRecord.state,
-					effectiveState: effectiveState(slug, locale),
+					effectiveState: effectiveState(slug, locale, localeRecord),
 					title: localeRecord.title,
 					sourceUpdated: sourceRecord?.updatedAt ?? null,
 					translationUpdated: locale === manifest.sourceLocale ? null : localeRecord.updatedAt,

@@ -20,6 +20,7 @@
  * and it would do it silently on the machine of whoever had one configured.
  */
 
+import { execFileSync } from 'node:child_process';
 import {
 	chmodSync,
 	cpSync,
@@ -225,9 +226,10 @@ interface ConfigOptions {
  *
  * Derived from the checked-in fixture config rather than written out, so the page list,
  * the hidden list and the seven nav labels are the ones a real `hexdocs sync` produced.
- * The commit is the only field that has to be replaced: the fixture names two shas that
- * predate this corpus, and `fill` compares the manifest's self-declared commit against
- * the one the version asks for.
+ * The version table is the only field replaced, because the tests vary its label and its
+ * digest and drop the fixture's second version. The commit is read off the compiled
+ * manifest rather than off the fixture, because `fill` compares the manifest's
+ * self-declared commit against the one the version asks for, and a corpus edit moves it.
  */
 function siteConfigText(options: ConfigOptions = {}): string {
 	const fixture = JSON.parse(
@@ -761,6 +763,64 @@ describe('pruning', () => {
 		}
 	});
 
+	test('a stray regular file at the project or label level, a .DS_Store included, is removed and counted', async () => {
+		// Finder writes a `.DS_Store` into every directory it opens and the deploy host is a
+		// Mac. The tree row used to refuse a file at these levels, which failed the production
+		// prebuild over a file nobody would ever want built. It is a stale file like any other.
+		const site = makeSite('glob-workspace');
+		try {
+			await run(site);
+			const { bundle, public: publicTree } = trees(site);
+			const stray = [
+				plant(join(bundle, '.DS_Store')),
+				plant(join(publicTree, '.DS_Store')),
+				plant(join(bundle, PROJECT, '.DS_Store')),
+				plant(join(publicTree, PROJECT, '.DS_Store')),
+				plant(join(publicTree, 'manual.pdf')),
+				plant(join(bundle, PROJECT, 'notes.txt')),
+			];
+
+			const second = await run(site);
+
+			expect(second.code).toBe(0);
+			const shape = row(second, 'prefetch-trees');
+			// Looked at and passed: the nine directories a clean second run counts, and the six
+			// files beside them.
+			expect([shape.status, shape.examined]).toEqual(['pass', 15]);
+			for (const path of stray) expect([path, existsSync(path)]).toEqual([path, false]);
+			expect([...second.writer.removed].sort()).toEqual([...stray].sort());
+			expect(second.data['removed']).toBe(6);
+			expect(String(row(second, 'prefetch-extract').note)).toContain('6 removed');
+			expect(readdirSync(bundle)).toEqual([PROJECT]);
+			expect(readdirSync(join(bundle, PROJECT))).toEqual([LABEL]);
+			expect(tree(join(bundle, PROJECT, LABEL))).toEqual(expectedFiles().bundle);
+			expect(tree(join(publicTree, PROJECT, LABEL))).toEqual(expectedFiles().public);
+			expect(second.data['written']).toBe(0);
+		} finally {
+			removeConsumer(site.consumer);
+		}
+	});
+
+	test('a regular file standing where a configured label directory goes is removed, and the label extracted', async () => {
+		// The file has the label's own name, so it is exactly where extraction needs a
+		// directory. It is still not a planned destination, so it goes first.
+		const site = makeSite('glob-workspace');
+		try {
+			const { public: publicTree } = trees(site);
+			const squatter = plant(join(publicTree, PROJECT, LABEL), 'not a directory\n');
+
+			const outcome = await run(site);
+
+			expect(outcome.code).toBe(0);
+			expect(row(outcome, 'prefetch-trees').status).toBe('pass');
+			expect(outcome.writer.removed).toEqual([squatter]);
+			expect(lstatSync(squatter).isDirectory()).toBe(true);
+			expect(tree(join(publicTree, PROJECT, LABEL))).toEqual(expectedFiles().public);
+		} finally {
+			removeConsumer(site.consumer);
+		}
+	});
+
 	test('a symbolic link inside a label directory is unlinked, and what it points at survives', async () => {
 		const site = makeSite('glob-workspace');
 		const outside = join(root, 'outside-the-site');
@@ -990,17 +1050,14 @@ describe('a tree this command will not write into', () => {
 			},
 		},
 		{
-			name: 'a file sits where a project directory goes',
+			// Not a regular file, so the prune's `unlink` is not the answer for it. A regular
+			// file at this level is removed instead, in the pruning cases above.
+			name: 'a named pipe sits where a label directory goes',
 			plant: (site) => {
-				plant(join(trees(site).public, 'manual.pdf'));
-				return 'public/_docs/manual.pdf is not a directory';
-			},
-		},
-		{
-			name: 'a file sits where a label directory goes',
-			plant: (site) => {
-				plant(join(trees(site).bundle, PROJECT, 'notes.txt'));
-				return `app/docs/_bundles/${PROJECT}/notes.txt is not a directory`;
+				const pipe = join(trees(site).bundle, PROJECT, 'pipe');
+				mkdirSync(join(pipe, '..'), { recursive: true });
+				execFileSync('mkfifo', [pipe]);
+				return `app/docs/_bundles/${PROJECT}/pipe is neither a directory nor a regular file`;
 			},
 		},
 		{

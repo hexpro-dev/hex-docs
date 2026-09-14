@@ -423,12 +423,12 @@ describe('the shape of every command, committed', () => {
 			page            docs_page            nothing  [slug root]    bundle format limit locale offset root slug
 			bundle          docs_bundle          nothing  [path]         against path
 			label           docs_label           nothing  []             cache commit project released root source-repo version
-			scaffold        docs_scaffold        nothing  [kind]         kind locale product-name project repo root site slug title
+			scaffold        docs_scaffold        nothing  [kind]         commit kind locale product-name project released repo root site slug title version
 			skills          docs_skills          nothing  [id]           id
 			verify-install  docs_verify_install  nothing  [root]         mount root site
 			init            -                    files    [root]         locale product-name project repo root write
 			build           -                    files    [root]         include-drafts out root
-			install         -                    files    [root]         mount root site write
+			install         -                    files    [root]         bucket mount root site write
 			sync            -                    files    [root]         cache project root site
 			publish         -                    network  [bundle]       bucket bundle profile region
 			prefetch        -                    files    [root]         bucket cache offline profile region root site

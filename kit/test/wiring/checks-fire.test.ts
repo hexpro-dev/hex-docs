@@ -69,7 +69,7 @@ import { parseJsonc } from '../../src/wiring/needles.js';
 import { validConfigs } from '../../src/wiring/site.js';
 
 import { applyRoot, applyRoutes, applySitemap, indent, once } from './apply-instructions.js';
-import { modelExec, withContractIds } from './route-loader.js';
+import { modelExec } from './route-loader.js';
 
 const SITE_CONFIG = join(CONSUMER_ROOT, 'fixture-app.docs.json');
 const KIT_VERSION = '@hex-pro/docs-kit@0.0.0-test';
@@ -143,9 +143,7 @@ function git(repo: Repo, ...argv: string[]): void {
  */
 function execFor(repo: Repo): Exec {
 	return modelExec(() =>
-		withContractIds(
-			docsRouteRows(validConfigs(detectSite({ repoRoot: repo.root, site: repo.site }))),
-		),
+		docsRouteRows(validConfigs(detectSite({ repoRoot: repo.root, site: repo.site }))),
 	);
 }
 
@@ -773,11 +771,11 @@ const MUTATIONS: readonly Mutation[] = [
 	},
 
 	// -------------------------------------------------------------------------
-	// wiring-localised-paths: the site configs and root's indexing decision
+	// wiring-root-seo: the site configs and root's indexing decision
 	// -------------------------------------------------------------------------
 	{
 		name: 'root.tsx does not ask the docs match',
-		check: 'wiring-localised-paths',
+		check: 'wiring-root-seo',
 		why: 'Without the call a docs page is an address missing from LOCALISED_PATHS and ships noindex, and no row said why.',
 		apply: (repo) =>
 			edit(repo, rootFile(repo), (text) =>
@@ -791,7 +789,7 @@ const MUTATIONS: readonly Mutation[] = [
 	},
 	{
 		name: 'root.tsx ignores the docs languages',
-		check: 'wiring-localised-paths',
+		check: 'wiring-root-seo',
 		why: 'The alternates then name every language, including fallback translations served noindex, which Google reads as a broken hreflang group.',
 		apply: (repo) =>
 			edit(repo, rootFile(repo), (text) =>
@@ -801,7 +799,7 @@ const MUTATIONS: readonly Mutation[] = [
 	},
 	{
 		name: 'root.tsx ignores the docs indexable answer',
-		check: 'wiring-localised-paths',
+		check: 'wiring-root-seo',
 		why: 'A fallback page would then carry a canonical and alternates, which is defect 13 again.',
 		apply: (repo) =>
 			edit(repo, rootFile(repo), (text) =>
@@ -811,14 +809,14 @@ const MUTATIONS: readonly Mutation[] = [
 	},
 	{
 		name: 'there is no root.tsx',
-		check: 'wiring-localised-paths',
+		check: 'wiring-root-seo',
 		why: 'Nothing decides whether a docs page is indexed, and that is a site this package cannot install into.',
 		apply: (repo) => remove(repo, rootFile(repo)),
 		outcome: fails(/root\.tsx does not exist/),
 	},
 	{
 		name: 'the site config does not validate',
-		check: 'wiring-localised-paths',
+		check: 'wiring-root-seo',
 		why: 'Every route, canonical, alternate and sitemap entry for this mount is derived from that one file, so a config that does not validate is a docs mount that does not exist. The sitemap row loses its source with it, which is why that row is declared here rather than tolerated.',
 		apply: (repo) =>
 			editJson(repo, `${repo.site}/app/docs/fixture-app.docs.json`, (value) => {

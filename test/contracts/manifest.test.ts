@@ -199,6 +199,35 @@ describe('the invariants a schema cannot express', () => {
 		);
 	});
 
+	test('an effective state is refused when it repeats the state, and carried when it differs', () => {
+		// The omission is the contract, and this is the half of it a consuming site runs:
+		// `pageLocaleRecordSchema` makes the same refusal in the toolchain, and without this
+		// one a manifest stamping `effective` on every record passes `docsServer` and `build`
+		// alike and is refused only by whichever command parses it with Zod first.
+		const withEffective = (
+			state: PageLocaleRecord['state'],
+			effective: PageLocaleRecord['state'],
+		) => {
+			const base = manifest();
+			const record = base.pages.index?.locales.en;
+			if (record === undefined) throw new Error('the fixture lost its page');
+			return validateManifestShape({
+				...base,
+				pages: {
+					index: { ...base.pages.index, locales: { en: { ...record, state, effective } } },
+				},
+			} as BundleManifest);
+		};
+
+		const repeated = withEffective('current', 'current');
+		expect(repeated).toHaveLength(1);
+		expect(repeated[0]).toContain('pages["index"].locales.en.effective is "current"');
+		expect(withEffective('source', 'source').join(' ')).toContain('the same as its state');
+
+		expect(withEffective('current', 'stale')).toEqual([]);
+		expect(withEffective('current', 'scaffolded')).toEqual([]);
+	});
+
 	test('a redirect that shadows a live page is caught', () => {
 		const problems = validateManifestShape(manifest({ redirects: { index: 'index' } }));
 		expect(problems.some((p) => p.includes('would shadow'))).toBe(true);

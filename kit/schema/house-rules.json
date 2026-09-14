@@ -132,7 +132,7 @@
 		"wiring-deploy-hash-dirs",
 		"wiring-prebuild-hook",
 		"wiring-routes",
-		"wiring-localised-paths",
+		"wiring-root-seo",
 		"wiring-sitemap",
 		"wiring-mcp",
 		"wiring-allow-paths",

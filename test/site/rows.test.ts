@@ -29,8 +29,11 @@ const COMMITTED = JSON.parse(
 	readFileSync(join(CONSUMER_ROOT, 'fixture-app.docs.json'), 'utf8'),
 ) as DocsSiteConfig;
 
-/** The fixture config with the redirect `hexdocs sync` writes from the fixture manifest. */
-const SITE: DocsSiteConfig = { ...COMMITTED, redirects: { 'first-tag': 'guide/first-tag' } };
+/** The fixture config, which carries the redirect `hexdocs sync` writes from the fixture manifest. */
+const SITE: DocsSiteConfig = COMMITTED;
+
+/** The same config with no `redirects` member, as a config synced from a bundle with none. */
+const { redirects: _redirects, ...PLAIN } = COMMITTED;
 
 /**
  * A second mount, so the multi-site shape is exercised rather than assumed. Both consumers
@@ -115,8 +118,9 @@ describe('the page rows', () => {
 	});
 
 	test('a config with no redirects contributes page rows for its pages alone', () => {
-		const plain = docsRouteRows([COMMITTED]).filter((row) => row.kind === 'page');
-		expect(plain.length).toBe(COMMITTED.pages.length);
+		expect(Object.keys(SITE.redirects ?? {})).not.toEqual([]);
+		const plain = docsRouteRows([PLAIN]).filter((row) => row.kind === 'page');
+		expect(plain.length).toBe(PLAIN.pages.length);
 	});
 });
 

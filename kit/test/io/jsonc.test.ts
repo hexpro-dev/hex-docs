@@ -50,7 +50,7 @@ function fileOf(shape: ConsumerShape, path: string): string {
 }
 
 const TSCONFIG = fileOf('glob-workspace', 'apps/front/tsconfig.json');
-const BARE_TSCONFIG = fileOf('literal-workspace', 'web/front/tsconfig.json');
+const BARE_TSCONFIG = fileOf('literal-workspace', 'kcalc-web/front/tsconfig.json');
 const DEPLOY = fileOf('glob-workspace', 'deploy.config.json');
 const DEPLOY_NO_FRONT = fileOf('literal-workspace', 'deploy.config.json');
 const WORKSPACE = fileOf('glob-workspace', 'pnpm-workspace.yaml');
@@ -91,12 +91,25 @@ describe('stripComments', () => {
 			extends: '../../config/tsconfig.front.json',
 			compilerOptions: {
 				baseUrl: '.',
-				resolveJsonModule: true,
+				rootDirs: ['.', '.react-router/types'],
 				paths: {
 					'~/*': ['./app/*'],
+					'@hexpro/google-auth-secret-retriever': [
+						'../../common/google-auth-secret-retriever/src/index.ts',
+					],
+					'@hexpro/google-auth-secret-retriever/dom': [
+						'../../common/google-auth-secret-retriever/src/dom/index.ts',
+					],
 					'@hexpro/private-image-converter': ['../../common/private-image-converter/src/index.ts'],
+					'@hexpro/private-image-converter/formats': [
+						'../../common/private-image-converter/src/formats.ts',
+					],
+					'@hexpro/private-image-converter/dom': [
+						'../../common/private-image-converter/src/dom/index.ts',
+					],
 				},
 			},
+			include: ['app/**/*.ts', 'app/**/*.tsx', 'app/types/**/*.d.ts', '.react-router/types/**/*'],
 		});
 	});
 
@@ -215,6 +228,7 @@ describe('rootSpan and findValue', () => {
 			[
 				'[',
 				'\t\t\t\t"common/ui", "common/i18n", "common/blog",',
+				'\t\t\t\t"common/google-auth-secret-retriever",',
 				'\t\t\t\t"common/private-image-converter"',
 				'\t\t\t]',
 			].join('\n'),
@@ -242,6 +256,7 @@ describe('arrayElements', () => {
 			'"common/ui"',
 			'"common/i18n"',
 			'"common/blog"',
+			'"common/google-auth-secret-retriever"',
 			'"common/private-image-converter"',
 		]);
 	});
@@ -260,19 +275,53 @@ describe('arrayElements', () => {
 describe('appendToArray', () => {
 	test('puts the entry on its own line at the last element indent, leaving the packing alone', () => {
 		// Line 245 of the real `deploy.config.json` puts three directory names on one line and
-		// the long one on its own, so the array's indentation is not the entry's: the line the
-		// last element starts on is the only thing that says how deep a new one sits.
+		// the two long ones on their own, so the array's indentation is not the entry's: the
+		// line the last element starts on is the only thing that says how deep a new one sits.
 		const next = appendToArray(DEPLOY, 'hash.extra_dirs.front', '"common/docs"');
 		expect(next).toBe(
 			[
 				'{',
+				'\t"sites": {',
+				'\t\t"pro": {',
+				'\t\t\t"projects": {',
+				'\t\t\t\t"api": {',
+				'\t\t\t\t\t"path": "pro/api",',
+				'\t\t\t\t\t"build": "encore"',
+				'\t\t\t\t},',
+				'\t\t\t\t"front": {',
+				'\t\t\t\t\t"path": "pro/front",',
+				'\t\t\t\t\t"build": "docker"',
+				'\t\t\t\t},',
+				'\t\t\t\t"database": {',
+				'\t\t\t\t\t"path": "pro/database"',
+				'\t\t\t\t}',
+				'\t\t\t}',
+				'\t\t},',
+				'\t\t"apps": {',
+				'\t\t\t"projects": {',
+				'\t\t\t\t"api": {',
+				'\t\t\t\t\t"path": "apps/api",',
+				'\t\t\t\t\t"build": "encore"',
+				'\t\t\t\t},',
+				'\t\t\t\t"front": {',
+				'\t\t\t\t\t"path": "apps/front",',
+				'\t\t\t\t\t"build": "docker"',
+				'\t\t\t\t},',
+				'\t\t\t\t"database": {',
+				'\t\t\t\t\t"path": "apps/database"',
+				'\t\t\t\t}',
+				'\t\t\t}',
+				'\t\t}',
+				'\t},',
 				'\t"hash": {',
 				'\t\t"exclude_dirs": [',
-				'\t\t\t"node_modules", "build", "dist", ".git"',
+				'\t\t\t"node_modules", ".encore", "encore.gen", ".react-router",',
+				'\t\t\t"build", "dist", ".git", ".DS_Store"',
 				'\t\t],',
 				'\t\t"extra_dirs": {',
 				'\t\t\t"front": [',
 				'\t\t\t\t"common/ui", "common/i18n", "common/blog",',
+				'\t\t\t\t"common/google-auth-secret-retriever",',
 				'\t\t\t\t"common/private-image-converter",',
 				'\t\t\t\t"common/docs"',
 				'\t\t\t]',
@@ -287,13 +336,39 @@ describe('appendToArray', () => {
 	test('the array the file already had is unchanged except for the added entry', () => {
 		const next = appendToArray(DEPLOY, 'hash.extra_dirs.front', '"common/docs"') ?? '';
 		expect(JSON.parse(next)).toEqual({
+			sites: {
+				pro: {
+					projects: {
+						api: { path: 'pro/api', build: 'encore' },
+						front: { path: 'pro/front', build: 'docker' },
+						database: { path: 'pro/database' },
+					},
+				},
+				apps: {
+					projects: {
+						api: { path: 'apps/api', build: 'encore' },
+						front: { path: 'apps/front', build: 'docker' },
+						database: { path: 'apps/database' },
+					},
+				},
+			},
 			hash: {
-				exclude_dirs: ['node_modules', 'build', 'dist', '.git'],
+				exclude_dirs: [
+					'node_modules',
+					'.encore',
+					'encore.gen',
+					'.react-router',
+					'build',
+					'dist',
+					'.git',
+					'.DS_Store',
+				],
 				extra_dirs: {
 					front: [
 						'common/ui',
 						'common/i18n',
 						'common/blog',
+						'common/google-auth-secret-retriever',
 						'common/private-image-converter',
 						'common/docs',
 					],
@@ -301,8 +376,11 @@ describe('appendToArray', () => {
 			},
 		});
 		// And the exclusion array beside it was not touched at all, which a reserialiser
-		// would have reflowed onto four lines.
-		expect(next).toContain('\t\t\t"node_modules", "build", "dist", ".git"\n');
+		// would have reflowed onto eight lines.
+		expect(next).toContain(
+			'\t\t\t"node_modules", ".encore", "encore.gen", ".react-router",\n' +
+				'\t\t\t"build", "dist", ".git", ".DS_Store"\n',
+		);
 	});
 
 	test('an array that is not there is null, which is what the second consumer needs', () => {
@@ -351,20 +429,49 @@ describe('setMember', () => {
 				'\t"extends": "../../config/tsconfig.front.json",',
 				'\t"compilerOptions": {',
 				'\t\t"baseUrl": ".",',
-				'\t\t"resolveJsonModule": true,',
+				'\t\t"rootDirs": [".", ".react-router/types"],',
 				'\t\t"paths": {',
 				'\t\t\t"~/*": ["./app/*"],',
-				'\t\t\t/* The image converter, resolved to its TypeScript source. It is a',
-				'\t\t\t * submodule whose package exports point at a dist/ that nothing in this',
-				'\t\t\t * repo builds, so mapping straight to the source is what makes the',
-				'\t\t\t * compiler and the bundler agree.',
+				'\t\t\t/* The QR/authenticator package, resolved to its TypeScript source.',
+				'\t\t\t *',
+				'\t\t\t * It is a submodule (see pnpm-workspace.yaml) whose package `exports`',
+				'\t\t\t * point at a `dist/` that nothing in this repo builds, and the deploy',
+				'\t\t\t * never runs `pnpm install` \u2014 it builds in the working tree \u2014 so an',
+				'\t\t\t * install-time compile step would be unreliable by construction.',
+				'\t\t\t * Mapping straight to the source makes `pnpm dev`, `pnpm build`,',
+				'\t\t\t * `pnpm typecheck` and the deploy behave identically, and',
+				'\t\t\t * `vite-tsconfig-paths` turns this into the matching Vite alias so the',
+				'\t\t\t * compiler and the bundler cannot disagree. Nothing commits a `dist/`,',
+				'\t\t\t * so removing these entries fails loudly rather than quietly serving a',
+				'\t\t\t * stale artefact.',
+				'\t\t\t */',
+				'\t\t\t"@hexpro/google-auth-secret-retriever": [',
+				'\t\t\t\t"../../common/google-auth-secret-retriever/src/index.ts"',
+				'\t\t\t],',
+				'\t\t\t"@hexpro/google-auth-secret-retriever/dom": [',
+				'\t\t\t\t"../../common/google-auth-secret-retriever/src/dom/index.ts"',
+				'\t\t\t],',
+				'\t\t\t/* The image converter, on the same terms and for the same reasons.',
+				'\t\t\t * See the note above; nothing about it differs except the name.',
 				'\t\t\t */',
 				'\t\t\t"@hexpro/private-image-converter": [',
 				'\t\t\t\t"../../common/private-image-converter/src/index.ts"',
 				'\t\t\t],',
+				'\t\t\t"@hexpro/private-image-converter/formats": [',
+				'\t\t\t\t"../../common/private-image-converter/src/formats.ts"',
+				'\t\t\t],',
+				'\t\t\t"@hexpro/private-image-converter/dom": [',
+				'\t\t\t\t"../../common/private-image-converter/src/dom/index.ts"',
+				'\t\t\t],',
 				'\t\t\t"@hex-pro/docs": ["../../common/docs/src/index.ts"]',
 				'\t\t}',
-				'\t}',
+				'\t},',
+				'\t"include": [',
+				'\t\t"app/**/*.ts",',
+				'\t\t"app/**/*.tsx",',
+				'\t\t"app/types/**/*.d.ts",',
+				'\t\t".react-router/types/**/*"',
+				'\t]',
 				'}',
 				'',
 			].join('\n'),
@@ -381,12 +488,30 @@ describe('setMember', () => {
 		expect(next).toBe(
 			[
 				'{',
+				'\t"sites": {',
+				'\t\t"kcalc": {',
+				'\t\t\t"projects": {',
+				'\t\t\t\t"api": {',
+				'\t\t\t\t\t"path": "kcalc-web/api",',
+				'\t\t\t\t\t"build": "custom"',
+				'\t\t\t\t},',
+				'\t\t\t\t"front": {',
+				'\t\t\t\t\t"path": "kcalc-web/front",',
+				'\t\t\t\t\t"build": "docker"',
+				'\t\t\t\t},',
+				'\t\t\t\t"database": {',
+				'\t\t\t\t\t"path": "kcalc-web/database"',
+				'\t\t\t\t}',
+				'\t\t\t}',
+				'\t\t}',
+				'\t},',
 				'\t"hash": {',
 				'\t\t"exclude_dirs": [',
-				'\t\t\t"node_modules", "build", "dist", ".git"',
+				'\t\t\t"node_modules", ".encore", "encore.gen", ".react-router",',
+				'\t\t\t"build", "dist", ".git", ".DS_Store"',
 				'\t\t],',
 				'\t\t"extra_dirs": {',
-				'\t\t\t"worker": ["web/database", "dockerfiles"],',
+				'\t\t\t"worker": ["kcalc-web/database", "kcalc-web/push", "recipe-core", "dockerfiles"],',
 				'\t\t\t"front": ["common/docs"]',
 				'\t\t}',
 				'\t}',
@@ -397,11 +522,12 @@ describe('setMember', () => {
 	});
 
 	test('replacing an existing member touches its value and nothing else', () => {
-		const next =
-			setMember(TSCONFIG, span(TSCONFIG, 'compilerOptions'), 'resolveJsonModule', 'false') ?? '';
-		expect(next).toBe(TSCONFIG.replace('"resolveJsonModule": true', '"resolveJsonModule": false'));
+		const next = setMember(TSCONFIG, span(TSCONFIG, 'compilerOptions'), 'baseUrl', '"./app"') ?? '';
+		expect(next).toBe(TSCONFIG.replace('"baseUrl": ".",', '"baseUrl": "./app",'));
 		// The comment above the other member is still there, in one piece.
-		expect(next).toContain(' * compiler and the bundler agree.');
+		expect(next).toContain(
+			' * compiler and the bundler cannot disagree. Nothing commits a `dist/`,',
+		);
 	});
 
 	test('the before option matches the key order a real config already has', () => {
@@ -498,7 +624,34 @@ describe('insertBefore', () => {
 				'  - config',
 				'  - common/*',
 				'  # Deliberately not a workspace member, despite living under common/.',
+				'  #',
+				'  # It is a submodule of its own repository (@hexpro/google-auth-secret-retriever,',
+				'  # published to npm) with its own lockfile, its own CI and its own toolchain.',
+				'  # Enrolling it here would make `pnpm install` inside that directory install this',
+				"  # whole monorepo and ignore the lockfile the package's CI is pinned to.",
+				'  #',
+				'  # apps/front consumes its TypeScript source through one `paths` entry in',
+				'  # apps/front/tsconfig.json, which is what resolves it in both tsc and Vite. Its',
+				'  # package `exports` point at a `dist/` that nothing here builds, so a',
+				'  # `workspace:*` link would resolve to nothing. It has no runtime dependencies,',
+				"  # so there is nothing to install on the site's behalf either.",
+				'  - "!common/google-auth-secret-retriever"',
+				'  # Excluded for the same reasons as the package above: its own repository, its',
+				'  # own lockfile, its own CI, and a `dist/` that nothing here builds. apps/front',
+				'  # consumes its TypeScript source through `paths` entries in',
+				'  # apps/front/tsconfig.json.',
 				'  - "!common/private-image-converter"',
+				'  - pro/database',
+				'  - pro/api',
+				'  - pro/front',
+				'  - games/database',
+				'  - games/api',
+				'  - games/front',
+				'  - citadel/database',
+				'  - citadel/api',
+				'  - citadel/front',
+				'  - apps/database',
+				'  - apps/api',
 				'  # The docs submodule, deliberately not a workspace member.',
 				'  - "!common/docs"',
 				'  - apps/front',
@@ -596,9 +749,17 @@ describe('the mcp config', () => {
 			[
 				'{',
 				'\t"mcpServers": {',
+				'\t\t"encore-mcp": {',
+				'\t\t\t"command": "encore",',
+				'\t\t\t"args": ["mcp", "run"]',
+				'\t\t},',
 				'\t\t"shadcn": {',
-				'\t\t\t"command": "npx",',
-				'\t\t\t"args": ["-y", "shadcn@latest", "mcp"]',
+				'\t\t\t"command": "pnpx",',
+				'\t\t\t"args": ["shadcn@latest", "mcp"]',
+				'\t\t},',
+				'\t\t"cloudflare": {',
+				'\t\t\t"command": "pnpx",',
+				'\t\t\t"args": ["mcp-remote", "https://docs.mcp.cloudflare.com/mcp"]',
 				'\t\t},',
 				'\t\t"hexdocs": { "command": "node", "args": ["common/docs/kit/bin/hexdocs", "mcp"] }',
 				'\t}',

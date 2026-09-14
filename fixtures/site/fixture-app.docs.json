@@ -16,7 +16,7 @@
 	"versions": [
 		{
 			"label": "1.1.0",
-			"commit": "67a7f22c66619693ab861f82cd1cc5fb2f1788a6",
+			"commit": "fc2ef4dea95fb36e5201504e7d06fd2cd0c79b56",
 			"released": "2026-04-08",
 			"default": true,
 			"digest": "3f1c0a2b9d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8"
@@ -28,6 +28,9 @@
 		}
 	],
 	"hidden": ["reference/api"],
+	"redirects": {
+		"first-tag": "guide/first-tag"
+	},
 	"pages": [
 		"index",
 		"guide/index",

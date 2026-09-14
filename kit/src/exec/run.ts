@@ -84,15 +84,16 @@ export interface Exec {
  * usage error. `gh api` separately substitutes `{owner}`, `{repo}` and `{branch}` in its
  * endpoint argument from the repository at the cwd, and that argument is the `gh.api`
  * recipe's only hole. None of it is reachable today, because every hole is a computed key,
- * a content type from a table, a local path, a digest, a sha or a bucket name out of a
- * config file this repository owns. The one value that comes from outside is
- * `--starting-token`, which is the continuation token S3 itself just returned, and base64
- * carries neither a colon nor a leading dash. That inventory is the sentence to check when
+ * a content type from a table, a local path, a digest, a sha, or a bucket name. The bucket
+ * name enters through `bucketOf` in `commands/common.ts`, from `--bucket` or
+ * `HEXDOCS_BUCKET`, and is held there to the S3 naming grammar, so it carries neither a
+ * colon nor a leading dash. The one value that reaches a hole from outside with no check of
+ * its own is `--starting-token`, which is the continuation token S3 itself just returned,
+ * and base64 carries neither of those either. That inventory is the sentence to check when
  * a hole is next filled from somewhere else, a pull request title or an action input, and
- * the check
- * belongs where the value enters rather than here: a `file://` refusal in this function
- * would be the deleted class's mistake again, refusing a legitimate value shape no caller
- * produces, in the wrong place.
+ * the check belongs where the value enters rather than here: a `file://` refusal in this
+ * function would be the deleted class's mistake again, refusing a legitimate value shape no
+ * caller produces, in the wrong place.
  *
  * The NUL stays, and for a different reason from the rest. Node refuses it itself, with a
  * `TypeError` out of `spawnSync` naming neither the recipe nor the value, so this is a

@@ -37,7 +37,6 @@ import ts from 'typescript';
 import type { DocsRouteRow } from '../../../src/site/address.js';
 import { runRecipe, type Exec, type RunResult } from '../../src/exec/run.js';
 import { valueImportSpecifiers } from '../../src/wiring/needles.js';
-import { rowId } from '../../src/wiring/route-table.js';
 
 interface Entry {
 	id?: string;
@@ -163,24 +162,6 @@ export function loadRouteTable(siteRoot: string, rows: readonly DocsRouteRow[]):
 	} catch (error) {
 		return refused(error instanceof Error ? error.message : String(error));
 	}
-}
-
-/**
- * The route rows with the machine ids the row contract names, where a row lacks one.
- *
- * Temporary, and marked so it cannot outlive its reason. `DocsRouteRow.id` is added by the
- * runtime half in the same step as this wiring, and until it lands every machine row names
- * one module with no id, so the model refuses the table exactly as the real loader would.
- * That would leave the wired baseline red and every mutation below it unable to show a row
- * moving. `route-table.test.ts` carries a `test.fails` asserting the rows already carry these
- * ids; the day they do, it turns red and names this function to delete.
- */
-export function withContractIds(rows: readonly DocsRouteRow[]): DocsRouteRow[] {
-	return rows.map((row) =>
-		row.kind === 'machine' && rowId(row) === undefined
-			? ({ ...row, id: `docs:${row.path}` } as DocsRouteRow)
-			: row,
-	);
 }
 
 /**

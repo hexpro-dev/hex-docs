@@ -169,17 +169,6 @@ export function readRouteTable(site: SiteDescriptor, exec: Exec): RouteTable {
 	return table;
 }
 
-/**
- * The id a row names, where it names one.
- *
- * `DocsRouteRow.id` is present exactly on machine rows. It is read through this rather than
- * off the row so the wiring layer compiles against a row type that has not yet grown the
- * field, and it is the one place to delete when every row type in reach carries it.
- */
-export function rowId(row: DocsRouteRow): string | undefined {
-	return (row as { readonly id?: string }).id;
-}
-
 function declared(nodes: readonly RouteNode[], row: DocsRouteRow): RouteNode[] {
 	const path = row.path.slice(1);
 	return nodes.filter((node) => node.path === path && node.file === row.file);
@@ -236,14 +225,14 @@ export function routeTableProblems(
 		);
 	}
 	const renamed = machines.filter((row) => {
-		const id = rowId(row);
+		const id = row.id;
 		const node = declared(routes, row)[0];
 		return id !== undefined && node !== undefined && node.id !== id;
 	});
 	const firstRenamed = renamed[0];
 	if (firstRenamed !== undefined) {
 		problems.push(
-			`${renamed.length} machine route(s) carry an id other than the one their row names, starting with \`${firstRenamed.path}\` declared as \`${declared(routes, firstRenamed)[0]?.id ?? ''}\` where the row names \`${rowId(firstRenamed) ?? ''}\`.`,
+			`${renamed.length} machine route(s) carry an id other than the one their row names, starting with \`${firstRenamed.path}\` declared as \`${declared(routes, firstRenamed)[0]?.id ?? ''}\` where the row names \`${firstRenamed.id ?? ''}\`.`,
 		);
 	}
 	return problems;

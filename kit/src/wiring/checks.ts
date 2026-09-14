@@ -85,7 +85,7 @@ export const CONSUMER_CHECK_IDS = [
 	'wiring-deploy-hash-dirs',
 	'wiring-prebuild-hook',
 	'wiring-routes',
-	'wiring-localised-paths',
+	'wiring-root-seo',
 	'wiring-sitemap',
 	'wiring-mcp',
 ] as const satisfies readonly CheckId[];
@@ -710,17 +710,18 @@ const routes: WiringProbe = {
 /**
  * The site configs and the one host edit that decides whether a docs page is indexed.
  *
- * The id still says localised paths, and the row no longer reads that list. Docs addresses
- * do not join `LOCALISED_PATHS` at all: its second reader is the language-cookie redirect,
- * and a docs page left out of it is already exempt from the redirect, which is the exemption
- * the translation notice needs. What decides the canonical, the alternates and the robots
- * tag for a docs page is now `root.tsx` reading the docs match through
- * `docsSeoFromMatches`, so that call is what this row asserts.
+ * Docs addresses do not join `LOCALISED_PATHS` at all: its second reader is the
+ * language-cookie redirect, and a docs page left out of it is already exempt from the
+ * redirect, which is the exemption the translation notice needs. What decides the
+ * canonical, the alternates and the robots tag for a docs page is `root.tsx` reading the
+ * docs match through `docsSeoFromMatches`, so that call is what this row asserts, and the
+ * id names it. An id naming the host list this row used to be about sends whoever reads a
+ * failure to a file the row no longer opens.
  */
-const localisedPaths: WiringProbe = {
-	id: 'wiring-localised-paths',
+const rootSeo: WiringProbe = {
+	id: 'wiring-root-seo',
 	run(site, ctx) {
-		const id = 'wiring-localised-paths';
+		const id = 'wiring-root-seo';
 		const findings: RawFinding[] = [];
 
 		for (const project of site.projects) {
@@ -900,7 +901,7 @@ export const PROBES = {
 	'wiring-deploy-hash-dirs': deployHashDirs,
 	'wiring-prebuild-hook': prebuildHook,
 	'wiring-routes': routes,
-	'wiring-localised-paths': localisedPaths,
+	'wiring-root-seo': rootSeo,
 	'wiring-sitemap': sitemap,
 	'wiring-mcp': mcp,
 } as const satisfies Record<ConsumerCheckId, WiringProbe>;

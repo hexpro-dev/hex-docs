@@ -290,14 +290,19 @@ export const RULE_DEFINITIONS = {
 		id: 'slug-reserved',
 		category: 'nav',
 		defaultSeverity: 'error',
-		title: 'Do not use a slug the routing already owns, or an address another page has.',
+		title:
+			'Do not use a slug the routing already owns, or an address another page or redirect has.',
 		consequence:
-			'The first segments reserved under a docs mount belong to the package: the version pin, the machine files, and names held for endpoints that are not built yet. A page there shares a name with an address the package serves or has kept for later, and a URL stops saying which of the two it means. A page and a section root at one path, such as guide.md beside guide/index.md in any two languages, are one address, because addresses carry no trailing slash; a consuming site mounting both declares one path twice, and hex-web refuses that route table when it loads, naming a route id rather than either file.',
+			'The first segments reserved under a docs mount belong to the package: the version pin, the machine files, and names held for endpoints that are not built yet. A page there shares a name with an address the package serves or has kept for later, and a URL stops saying which of the two it means. A page and a section root at one path, such as guide.md beside guide/index.md in any two languages, are one address, because addresses carry no trailing slash; a consuming site mounting both declares one path twice, and hex-web refuses that route table when it loads, naming a route id rather than either file. A redirectFrom entry at an address a page or another redirect already has is the same collision: the manifest keeps a source that is only the same address and not the same slug, and hexdocs sync then refuses the site config in the web repository, a publish after the change that caused it.',
 		examples: [
 			{ bad: 'A page at the search slug.', good: 'A page at the searching-tags slug.' },
 			{
 				bad: 'content/ja/guide.md beside content/en/guide/index.md.',
 				good: 'content/ja/guide/overview.md beside content/en/guide/index.md.',
+			},
+			{
+				bad: 'redirectFrom: guide on a page, beside content/en/guide/index.md.',
+				good: 'redirectFrom: guide-overview on a page, where no page is served at that address.',
 			},
 		],
 	},
@@ -762,17 +767,17 @@ export const CHECK_DEFINITIONS = {
 	'wiring-routes': {
 		id: 'wiring-routes',
 		category: 'wiring',
-		title: 'Derive the docs routes from the registry, in the right order.',
+		title: "Declare the docs routes where the site's own route loader expects them.",
 		consequence:
-			'Three separate failures live here. A machine endpoint mounted under the language segment is dispatched to `queryRoute`, which runs no parent loader, so an invalid language answers 200. A `:slug.*` pattern declared before a static-suffix pattern wins the tie and swallows it. And a docs route that exports `headers` ships pages with no Content-Security-Policy and no nonce, because React Router copies only Set-Cookie from a parent.',
+			'A table React Router refuses fails the build, a machine endpoint mounted under the language segment runs no parent loader so an invalid language answers 200, a docs page missing from either mount is the site 404, and a docs route that exports `headers` ships pages without the root policy, because React Router copies only Set-Cookie from a parent.',
 		unit: 'route declarations',
 	},
-	'wiring-localised-paths': {
-		id: 'wiring-localised-paths',
+	'wiring-root-seo': {
+		id: 'wiring-root-seo',
 		category: 'wiring',
-		title: 'Add the docs slugs to the localised path list.',
+		title: 'Let root.tsx decide indexing for docs pages from the docs match.',
 		consequence:
-			'The canonical link and all eight hreflang alternates are rendered by root.tsx above the meta outlet and gated on this list, and a child route can append tags but never delete them. A slug missing from it ships with no canonical; a slug in it that the bundle does not carry points eight alternates at eight 404s.',
+			'root.tsx writes the canonical and the alternates above the meta outlet, and a route can add tags but never remove them, so a root that does not ask docsSeoFromMatches ships every docs page noindex, or names fallback translations in its alternates. The row also refuses a site config that does not validate, because every route and sitemap entry for the mount is derived from it.',
 		unit: 'docs paths',
 	},
 	'wiring-sitemap': {

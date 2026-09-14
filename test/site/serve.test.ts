@@ -52,6 +52,21 @@ async function thrown(promise: Promise<unknown>): Promise<Response> {
 }
 
 /** The sources with one manifest swapped, for the refusal cases. */
+/**
+ * A stored raw object as the site serves it at `requested`'s address.
+ *
+ * Written out here rather than borrowed from `serve.ts`, so a substitution that drifted
+ * would disagree with this spelling instead of agreeing with itself.
+ */
+function servedAt(object: string, requested: Locale): string {
+	const stored = bundle.objects.get(object) as string;
+	const prefix = requested === 'en' ? '' : `/${requested}`;
+	const label = site.versions.find((entry) => entry.default === true)?.label;
+	return stored
+		.replaceAll('](hexdocs:page/', `](${prefix}/fixture-app/docs/`)
+		.replaceAll('](hexdocs:asset/', `](/_docs/fixture-app/${label}/assets/`);
+}
+
 function withManifest(manifest: unknown): DocsSources {
 	return { ...sources, manifests: { [globKey(site, 'manifest.json')]: manifest } };
 }
@@ -419,7 +434,16 @@ describe('resource()', () => {
 				type: 'text/markdown; charset=utf-8',
 				language,
 				robots: 'noindex',
-				body: bundle.objects.get(object),
+				body: servedAt(
+					object,
+					path.startsWith('/ja/')
+						? 'ja'
+						: path.startsWith('/es/')
+							? 'es'
+							: path.startsWith('/zh/')
+								? 'zh'
+								: 'en',
+				),
 			});
 		}
 		expect(bundle.manifest.pages['reference/chip-support']?.locales.es?.state).toBe('scaffolded');
@@ -441,7 +465,7 @@ describe('resource()', () => {
 					const own = bundle.manifest.pages[slug]?.locales[locale];
 					const language = own !== undefined && own.state !== 'scaffolded' ? locale : 'en';
 					served.add(language);
-					return (bundle.objects.get(`raw/${language}/${slug}.md`) as string).replace(/\n+$/, '');
+					return servedAt(`raw/${language}/${slug}.md`, locale).replace(/\n+$/, '');
 				})
 				.join('\n\n');
 			expect(await response.text()).toBe(`${expected}\n`);

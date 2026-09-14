@@ -18,7 +18,7 @@ import { readFileSync, readdirSync, statSync, type Dirent } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 import type { Locale } from '../../../src/contracts/locales.js';
-import { matchLocale, sortLocales } from '../../../src/contracts/locales.js';
+import { SOURCE_LOCALE, matchLocale, sortLocales } from '../../../src/contracts/locales.js';
 import type { NavTree } from '../../../src/contracts/nav.js';
 import type { DenyList, DocsProjectConfig } from '../../../src/contracts/project.js';
 import {
@@ -26,7 +26,7 @@ import {
 	FORBIDDEN_SOURCE_NAMES,
 	SITE_ROOT_RELATIVE,
 } from '../../../src/contracts/project.js';
-import { INDEX_SEGMENT, parseSlug } from '../../../src/contracts/slug.js';
+import { INDEX_SEGMENT, parseSlug, slugToPath } from '../../../src/contracts/slug.js';
 import { SNIPPET_ID_PATTERN } from '../../../src/contracts/source.js';
 import type { ZodType } from 'zod';
 
@@ -271,6 +271,114 @@ function addressCollisions(
 				},
 			),
 		);
+	}
+	return found;
+}
+
+/** One `redirectFrom` entry, with the page that declares it. */
+export interface RedirectDeclaration {
+	/** The old slug, as the author typed it. */
+	readonly from: string;
+	/** The slug of the page whose front matter declares it. */
+	readonly to: string;
+	/** The declaring page's file, relative to `docs/site/`. */
+	readonly file: string;
+	/** The line of the `redirectFrom` key, where the reader recorded one. */
+	readonly line: number | undefined;
+}
+
+/**
+ * A slug's address under the mount, which is what a route row is keyed by.
+ *
+ * A slug `parseSlug` refuses is compared as it is spelled. That can only miss a collision
+ * with a name the compiler has already refused to publish under another finding.
+ */
+function addressOf(slug: string): string {
+	const parsed = parseSlug(slug);
+	return parsed.ok ? slugToPath(parsed.slug) : slug;
+}
+
+/**
+ * A redirect source served at an address a page or another redirect source already has.
+ *
+ * `redirectFrom: guide` beside a `guide/index` page is the case that made this necessary.
+ * The manifest's redirect table drops a source whose slug is a published page, but it
+ * compares slugs, and addresses carry no trailing slash, so `guide` and `guide/index` pass
+ * that filter as two names for one address. The bundle then publishes the redirect,
+ * `hexdocs sync` refuses to write the site config that would carry it, and the author
+ * hears about it in the web repository, a publish later and in terms of a config they did
+ * not edit. Two sources at one address are the same failure: a request is answered from
+ * one lookup keyed by address, so one of them would never be answered.
+ *
+ * Checked against the union of every locale's slugs, drafts included, which is what the
+ * page and section-root arm above already does: a page that exists only in Japanese, or
+ * only as a draft, still owns its address the moment it is published, and a check that
+ * waited for that would fire on the commit that did nothing wrong. An exact slug match is
+ * reported too, although the manifest filter already drops it, because dropping it is
+ * silent and the redirect the author wrote does nothing.
+ *
+ * Reported at the declaring page's `redirectFrom` line, once per colliding entry, naming
+ * the file that already holds the address. Nothing is dropped here; `buildBundle`'s filters
+ * are unchanged, and the finding is an error, so nothing publishes either way.
+ */
+export function redirectCollisions(
+	pages: ReadonlyMap<string, ReadonlyMap<Locale, SourceDocument>>,
+	declarations: readonly RedirectDeclaration[],
+): RawFinding[] {
+	const owners = new Map<string, string>();
+	for (const slug of [...pages.keys()].sort()) {
+		const address = addressOf(slug);
+		if (owners.has(address)) continue;
+		const byLocale = pages.get(slug) as ReadonlyMap<Locale, SourceDocument>;
+		const locale = sortLocales([...byLocale.keys()])[0] as Locale;
+		owners.set(address, (byLocale.get(locale) as SourceDocument).file);
+	}
+
+	const sources = new Map<string, RedirectDeclaration>();
+	const found: RawFinding[] = [];
+	const ordered = [...declarations].sort((a, b) =>
+		a.file === b.file ? (a.from < b.from ? -1 : a.from > b.from ? 1 : 0) : a.file < b.file ? -1 : 1,
+	);
+	for (const declaration of ordered) {
+		const address = addressOf(declaration.from);
+		const at = {
+			kind: 'file' as const,
+			file: declaration.file,
+			...(declaration.line === undefined ? {} : { line: declaration.line }),
+		};
+		const owner = owners.get(address);
+		if (owner !== undefined) {
+			found.push(
+				raw(
+					'slug-reserved',
+					at,
+					SOURCE_LOCALE,
+					`${declaration.file} redirects from "${declaration.from}", which is the address ${owner} is served at: a redirect source cannot share an address with a page.`,
+					{
+						remediation: `Remove "${declaration.from}" from redirectFrom, or rename the page at that address. Addresses carry no trailing slash, so a slug and the section root of the same name are one address, and a site config carrying both is refused by hexdocs sync.`,
+						excerpt: declaration.from,
+					},
+				),
+			);
+			continue;
+		}
+		const earlier = sources.get(address);
+		if (earlier !== undefined) {
+			found.push(
+				raw(
+					'slug-reserved',
+					at,
+					SOURCE_LOCALE,
+					`${declaration.file} redirects from "${declaration.from}", and ${earlier.file} redirects from "${earlier.from}", which is the same address: two redirect sources cannot share an address.`,
+					{
+						remediation: `Keep one of the two entries. A request is answered from one table keyed by address, so only one redirect could ever be followed, and which one would depend on file order.`,
+						excerpt: declaration.from,
+					},
+				),
+			);
+			continue;
+		}
+		sources.set(address, declaration);
 	}
 	return found;
 }

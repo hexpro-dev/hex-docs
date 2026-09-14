@@ -17,7 +17,7 @@
  * fails naming the six, and a change that made a seventh cell disagree fails naming that.
  */
 
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -169,8 +169,8 @@ describe('state and effectiveState', () => {
 		for (const page of one.pages) {
 			for (const [locale, cell] of Object.entries(page.locales)) {
 				if (differ.has(`${page.slug}/${locale}`)) continue;
-				// `null` is not agreement. It is what a bundle with no payload returns, and a
-				// source tree always has the compiled page in hand.
+				// `null` is not agreement. It is what the source mode returns for a record with no
+				// compiled page behind it, and `buildBundle` writes no record without one.
 				expect(cell.effectiveState, `${page.slug}/${locale}`).not.toBeNull();
 				expect(cell.effectiveState, `${page.slug}/${locale}`).toBe(cell.state);
 			}
@@ -229,10 +229,25 @@ describe('reading a compiled bundle', () => {
 		const fromBundle = await report({ root: corpus, bundle: prefix });
 
 		// Every field, not a chosen subset. The two modes reach `effectiveState` by
-		// different routes, the compiled page in memory against a gzip member read back off
-		// disk, and that field is the one a second implementation would get wrong quietly.
+		// different routes, the compiled page in memory against the manifest's
+		// `effective ?? state`, and that field is the one a second implementation would get
+		// wrong quietly: a bundle read of `state` alone agrees on forty-five cells of
+		// fifty-one.
 		expect(fromBundle).toEqual(fromSource);
 		expect(disagreeing(fromBundle)).toEqual(DISAGREEING);
+	});
+
+	test('needs nothing but the manifest, so a directory holding only that answers the same', async () => {
+		// The effective state is in the manifest wherever it differs, so the report opens no
+		// page payload. A site's prefetched label directory holds its payloads decompressed
+		// under names no stored key matches, and a bundle read that went back to opening
+		// payloads would answer `null` for every cell there.
+		const alone = join(root, 'manifest-only');
+		mkdirSync(alone, { recursive: true });
+		copyFileSync(join(prefix, 'manifest.json'), join(alone, 'manifest.json'));
+
+		const fromSource = await report({ root: corpus });
+		expect(await report({ root: corpus, bundle: alone })).toEqual(fromSource);
 	});
 
 	test('a directory with no manifest is a not-run row, not an empty page list', async () => {

@@ -30,7 +30,13 @@ import { afterAll, describe, expect, test } from 'vitest';
 import type { FindingLocation } from '../../../src/contracts/diagnostics.js';
 import { FORBIDDEN_SOURCE_NAMES } from '../../../src/contracts/project.js';
 import { findRepositoryRoot, readRepository, toUtcTimestamp } from '../../src/compile/git.js';
-import { loadProject, ProjectError, type LoadedProject } from '../../src/compile/project.js';
+import {
+	loadProject,
+	ProjectError,
+	redirectCollisions,
+	type LoadedProject,
+	type RedirectDeclaration,
+} from '../../src/compile/project.js';
 import type { RawFinding } from '../../src/compile/types.js';
 import {
 	APP_ROOT,
@@ -649,6 +655,77 @@ describe('what a file is allowed to be called', () => {
 			}),
 		);
 		expect(loaded.findings.filter((entry) => entry.rule === 'slug-reserved')).toEqual([]);
+	});
+
+	describe('a redirect source at an address something else already has', () => {
+		// `buildBundle` collects the declarations from each page's front matter and calls
+		// this; `rules-fire.test.ts` claims both messages through a real build. Here the pages
+		// come from a loaded tree and the declarations are written out, so each case says
+		// exactly which entry collides with what.
+		const loaded = loadProject(
+			writeTree({
+				files: {
+					'docs/site/content/en/index.md': page('Home'),
+					'docs/site/content/en/guide/index.md': page('Guide'),
+					'docs/site/content/en/guide/first-tag.md': page('First tag'),
+					'docs/site/content/ja/notes.md': page('Notes'),
+				},
+			}),
+		);
+		const declared = (
+			from: string,
+			file = 'content/en/guide/first-tag.md',
+		): RedirectDeclaration => ({
+			from,
+			to: 'guide/first-tag',
+			file,
+			line: 6,
+		});
+
+		test('a source at a section root address is refused at the redirectFrom line, naming the page', () => {
+			// `guide` is not the slug of any page, so the manifest's slug filter keeps it, and
+			// it is the address `guide/index` is served at. This is the case the arm exists for.
+			const [finding, ...rest] = redirectCollisions(loaded.pages, [declared('guide')]);
+			expect(rest).toEqual([]);
+			expect(finding?.rule).toBe('slug-reserved');
+			expect(finding?.locale).toBe('en');
+			expect(finding?.location).toEqual({
+				kind: 'file',
+				file: 'content/en/guide/first-tag.md',
+				line: 6,
+			});
+			expect(finding?.message).toBe(
+				'content/en/guide/first-tag.md redirects from "guide", which is the address content/en/guide/index.md is served at: a redirect source cannot share an address with a page.',
+			);
+			expect(finding?.remediation).toContain('redirectFrom');
+		});
+
+		test('a source spelled as a page slug, or as a page that exists only in another language, is refused', () => {
+			// The exact slug is dropped from the manifest in silence, so the redirect the author
+			// wrote does nothing; the Japanese page owns its address the day it is published.
+			const findings = redirectCollisions(loaded.pages, [declared('index'), declared('notes')]);
+			expect(findings.map((finding) => finding.message)).toEqual([
+				'content/en/guide/first-tag.md redirects from "index", which is the address content/en/index.md is served at: a redirect source cannot share an address with a page.',
+				'content/en/guide/first-tag.md redirects from "notes", which is the address content/ja/notes.md is served at: a redirect source cannot share an address with a page.',
+			]);
+		});
+
+		test('two sources at one address are refused once, at the later file in path order, naming the earlier', () => {
+			const findings = redirectCollisions(loaded.pages, [
+				declared('old/index', 'content/en/index.md'),
+				declared('old', 'content/en/guide/first-tag.md'),
+			]);
+			expect(findings.map((finding) => finding.message)).toEqual([
+				'content/en/index.md redirects from "old/index", and content/en/guide/first-tag.md redirects from "old", which is the same address: two redirect sources cannot share an address.',
+			]);
+		});
+
+		test('a source at an address nothing holds is no finding, and neither is the same source listed once', () => {
+			expect(
+				redirectCollisions(loaded.pages, [declared('first-tag'), declared('guide/old-name')]),
+			).toEqual([]);
+			expect(redirectCollisions(loaded.pages, [])).toEqual([]);
+		});
 	});
 
 	test('a file under content that is not markdown is refused', () => {
