@@ -5,7 +5,7 @@
  *
  * There is no `<main>`. Both consumers' `root.tsx` already renders one, and two `main`
  * elements is an authoring error a screen reader reports as such. That is a contract point
- * for the install rather than a detail, and `test/render/landmarks.test.ts` asserts the
+ * for the install rather than a detail, and `test/render/shell.test.tsx` (its `landmarks` block) asserts the
  * absence with a planted positive control, because "there is no main" is satisfied by a
  * broken matcher and by a component that rendered nothing at all.
  *

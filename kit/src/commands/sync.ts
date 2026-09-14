@@ -322,10 +322,11 @@ export const sync = defineCommand({
 		const carried = new Set(Object.keys(manifest.pages));
 		const slugs = manifest.llmsOrder.filter((slug) => carried.has(slug));
 		// A page no nav entry reaches is an orphan, which `hexdocs check` reports as a lint
-		// error. It is still a published page, and leaving it out of `pages` would take it
-		// out of `LOCALISED_PATHS` and ship it with no canonical, no alternates and no
-		// noindex. So it is appended in the manifest's own key order, which is code point
-		// order, and named in the output rather than quietly included.
+		// error. It is still a published page, and the consuming site builds its route rows
+		// from `pages`, so leaving it out would give a published page no route at all: the
+		// site's 404 at an address the bundle serves. So it is appended in the manifest's own
+		// key order, which is code point order, and named in the output rather than quietly
+		// included.
 		const inNav = new Set(slugs);
 		const orphans = Object.keys(manifest.pages).filter((slug) => !inNav.has(slug));
 		slugs.push(...orphans);

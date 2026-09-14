@@ -600,10 +600,10 @@ function scaffoldSite(input: KindInput): CommandOutput {
 		'The whole docs mount, as this website sees it: the routes, the hreflang set, the sitemap and the theme class are all derived from this one file.',
 	);
 	plan.note(
-		`versions holds one entry, ${version.label} at ${version.commit.slice(0, 12)}, marked default: the version served at the unprefixed address. hexdocs label checks and returns the patch for every later version, and hexdocs prefetch fails until a bundle for this commit has been published.`,
+		`versions holds one entry, ${version.label} at ${version.commit.slice(0, 12)}, marked default: the version served at the unprefixed address. hexdocs label checks and returns the patch for every later version. hexdocs prefetch fails until a bundle for this commit has been published, and the first prefetch after that still exits 3 on prefetch-skew, because pages is empty until hexdocs sync fills it.`,
 	);
 	plan.note(
-		'pages stays empty. hexdocs sync writes it from the bundle, and it has to be a build input because root.tsx renders the canonical link and all eight hreflang alternates above <Meta />, where a route cannot correct them.',
+		'pages stays empty. hexdocs sync writes it from the bundle, and it has to be a build input because the route table is built from it: a page missing from it has no route and is the site 404.',
 	);
 	plan.note(
 		"themeClass is omitted. Absent is a supported state and means the documentation takes this package's own palette; set it to a class the site already defines to pick up that app's accent.",

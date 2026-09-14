@@ -98,6 +98,11 @@ hexdocs prefetch --site apps/front
 hexdocs sync --site apps/front --project hex-nfc
 ```
 
+When the label points at a sha whose page set differs from `pages`, which includes every first
+label, `prefetch` extracts the bundle and then exits 3 on `prefetch-skew`. That is the order
+working, not a failure to chase: `sync` reads the bundle `prefetch` just cached and writes the
+new `pages`, and the next `prefetch` is clean.
+
 `prefetch` is keyed by sha, so relabelling a sha does no network at all, and a warm cache
 needs no AWS credentials. It verifies the stored digest of every object as fetched and the
 uncompressed digest of every payload after extracting, then lands the page payloads and

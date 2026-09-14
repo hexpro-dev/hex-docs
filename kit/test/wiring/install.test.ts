@@ -1218,7 +1218,8 @@ describe('the printed instructions are shaped to the file they are about', () =>
 		expect(plain).not.toContain('escapeXml(');
 		for (const text of [plain, escaped]) {
 			expect(text).toContain('DOCS.sitemap().flatMap');
-			expect(text).toContain('entry.languages.includes(DEFAULT_LANGUAGE)');
+			expect(text).toContain('entry.languages.map(');
+			expect(text).toContain('hreflang="x-default"');
 		}
 	});
 

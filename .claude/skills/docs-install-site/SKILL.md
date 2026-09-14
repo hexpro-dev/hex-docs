@@ -78,7 +78,7 @@ installed" are one fact.
   `LOCALISED_PATHS` is also what keeps the language-cookie redirect away from them, which the
   translation notice depends on.
 - **The sitemap.** A block that lists each docs page from `DOCS.sitemap()` in the languages
-  that page is indexable in, and writes `x-default` only when English is among them.
+  that page is indexable in, with `x-default` at the English address.
 - **`resolveJsonModule`**, when the shared TypeScript config this site extends does not
   already set it.
 

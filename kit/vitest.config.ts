@@ -146,8 +146,8 @@ export default defineConfig({
 				// is a green row over a broken install, which is the exact class this
 				// repository's counting rule exists to catch. Re-measured after step 8, which
 				// added `route-table.ts`, `prebuild.ts` and `instructions.ts` and rewrote
-				// `checks.ts` and `edits.ts`: 1190/1257 statements, 794/899 branches, 213/213
-				// functions, 1056/1073 lines. The step 5 floors sat two to four points under
+				// `checks.ts` and `edits.ts`, and again after the review fixes merged: 1209/1276
+				// statements 94.75, 822/927 branches 88.67, 216/216 functions, 1070/1088 lines. The step 5 floors sat two to four points under
 				// that, loose enough that skipping all nineteen tests in
 				// `test/wiring/route-table.test.ts` passed. Measured without that file: 93.95
 				// statements and 86.42 branches, so both of these floors fail on it, and
@@ -160,8 +160,8 @@ export default defineConfig({
 				// package for the same reason `src/compile/lint/**` is: several of those arms
 				// are network failures a recording fake can only produce in the shapes
 				// somebody thought of. Re-measured after step 8 and the review fixes to
-				// `prefetch`, `sync` and `label`: 1612/1737 statements, 920/1124 branches,
-				// 240/258 functions, 1470/1569 lines.
+				// `prefetch`, `sync`, `label` and `install`, measured on the merged tree: 1614/1739
+				// statements, 924/1128 branches, 240/258 functions, 1472/1571 lines.
 				'src/commands/**': { statements: 91, branches: 80, functions: 92, lines: 92 },
 
 				// Every branch is coverable because `Exec` is injected. Measured

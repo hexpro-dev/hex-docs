@@ -12,7 +12,7 @@
  * the three-line constructor call, and `start=48 highlight="3,9"` over twelve and means
  * the throw and the alertMessage assignment. Adding `startLine` to the numbers marks
  * nothing at all on either block, which is a failure that renders as a perfectly ordinary
- * code block. `test/render/code.test.ts` names both files and both indices.
+ * code block. `test/render/code.test.tsx` names both files and both indices.
  */
 
 import { useState, type ReactElement } from 'react';

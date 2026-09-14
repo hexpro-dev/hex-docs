@@ -147,7 +147,10 @@ export const SITEMAP_JOIN = '${[...urls, ...docsUrls].join("\\n")}';
  * make it conditional and quietly drop `<lastmod>` from every kcalc page. Both sitemaps also
  * list every page in all seven languages with all seven alternates, and a docs page must not
  * be: a fallback translation is served noindex, and a sitemap naming it points a crawler at
- * a page that asks not to be indexed. `x-default` is written only when English is in the set.
+ * a page that asks not to be indexed. `x-default` is always the English address, for the
+ * reason the root change no longer gates it: a manifest record exists only for a slug whose
+ * English source compiled, and the source locale is never scaffolded, so every row
+ * `DOCS.sitemap()` returns is indexable in English.
  *
  * `escape` is kcalc's `escapeXml`, applied where that file already applies it.
  *
@@ -167,11 +170,9 @@ export function sitemapDocsBlock(escape: boolean): string {
 		'\t\t(lang) =>',
 		`\t\t\t\`    <xhtml:link rel="alternate" hreflang="\${lang}" href="\${${wrap('localeUrl(lang, entry.path)')}}"/>\`,`,
 		'\t);',
-		'\tif (entry.languages.includes(DEFAULT_LANGUAGE)) {',
-		'\t\tlinks.push(',
-		`\t\t\t\`    <xhtml:link rel="alternate" hreflang="x-default" href="\${${wrap('localeUrl(DEFAULT_LANGUAGE, entry.path)')}}"/>\`,`,
-		'\t\t);',
-		'\t}',
+		'\tlinks.push(',
+		`\t\t\`    <xhtml:link rel="alternate" hreflang="x-default" href="\${${wrap('localeUrl(DEFAULT_LANGUAGE, entry.path)')}}"/>\`,`,
+		'\t);',
 		'\treturn entry.languages.map(',
 		'\t\t(lang) =>',
 		`\t\t\t\`  <url>\\n    <loc>\${${wrap('localeUrl(lang, entry.path)')}}</loc>\\n\${links.join("\\n")}\\n    <changefreq>\${entry.changefreq}</changefreq>\\n    <priority>\${entry.priority}</priority>\\n  </url>\`,`,

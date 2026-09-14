@@ -97,7 +97,8 @@ describe('the server module', () => {
 				`../docs/${BUNDLE_TREE}/*/*/raw/**/*.md`,
 				`../docs/${BUNDLE_TREE}/*/*/llms/*.txt`,
 			]);
-			// The raw and llms text arrives as strings, which is the type the server's sources take.
+			// The type argument records what ?raw yields. The server's sources take unknown, so the
+			// same glob written without it fits too.
 			expect(text).toContain('import.meta.glob<string>(');
 			expect(text).toContain('query: "?raw"');
 		},
@@ -220,11 +221,12 @@ describe('the printed instructions', () => {
 		}
 	});
 
-	test('the sitemap block reads each entry languages and writes x-default only with English', () => {
+	test('the sitemap block reads each entry languages and always names English as x-default', () => {
 		for (const escape of [false, true]) {
 			const block = sitemapDocsBlock(escape);
 			expect(sitemapProblems(`${SITEMAP_IMPORT}\n${block}`)).toEqual([]);
-			expect(block).toContain('if (entry.languages.includes(DEFAULT_LANGUAGE)) {');
+			expect(block).toContain('hreflang="x-default"');
+			expect(block).not.toContain('entry.languages.includes(');
 			expect(block.includes('escapeXml(')).toBe(escape);
 			// One line per URL literal, so pasting at any depth puts no tabs into the XML.
 			expect(block.split('\n').filter((line) => (line.match(/`/g) ?? []).length % 2 === 1)).toEqual(

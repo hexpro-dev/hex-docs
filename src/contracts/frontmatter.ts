@@ -47,12 +47,13 @@ export const DEFAULT_PAGE_KIND: PageKind = 'article';
  * no file.
  *
  * `scaffolded` exists because timestamps have the same hole the abandoned
- * `sourceDigest` had: `scaffold_page` writes six locale files with English bodies,
- * every one of them committed after the English source, so every one reads `current`
- * forever and the translation notice never appears on a page that has never been
- * translated. Two independent things set it, so forgetting either still catches it:
- * the scaffolder writes `translated: false` into the file, and a lint rule fires when
- * a non-source page's text is almost identical to the source locale's.
+ * `sourceDigest` had: `hexdocs scaffold` writes a locale file holding the source's
+ * headings with a TODO under each, committed after the English source, so on timestamps
+ * alone it reads `current` forever and the translation notice never appears on a page
+ * that has never been translated. Two independent things set it, so forgetting either
+ * still catches it: the scaffolder writes `translated: false` into the file, and the
+ * compiler grades a non-source page whose body is byte for byte the source's as
+ * scaffolded. A site serves the source page for a scaffolded locale, never the stub.
  */
 export const TRANSLATION_STATES = ['source', 'current', 'stale', 'scaffolded', 'missing'] as const;
 
@@ -113,8 +114,8 @@ export interface DocFrontMatter {
 	since?: string;
 
 	/**
-	 * Slugs this page used to live at. `hexdocs mv` writes them, and the compiler turns
-	 * them into redirects.
+	 * Slugs this page used to live at. An author adds the old slug here when a page moves,
+	 * and the compiler turns them into redirects. There is no rename command.
 	 *
 	 * Three hex-nfc documents already have public addresses through the read-only
 	 * mirror, and step 9 moves them. Without this they 404 the day the migration lands.
@@ -139,12 +140,12 @@ export interface DocFrontMatter {
 	toc?: false;
 
 	/**
-	 * Written by `scaffold_page` into a locale file whose body is still English, and
-	 * removed by whoever actually translates it.
+	 * Written by `hexdocs scaffold` into a locale file it has stubbed, and removed by
+	 * whoever actually translates it.
 	 *
-	 * Only valid on a non-source locale. `hexdocs i18n mark` is the supported way to
-	 * remove it and it refuses while the body is still byte-identical to English, so
-	 * clearing the flag takes an edit rather than a command.
+	 * Only valid on a non-source locale. There is no command that clears it: removing the
+	 * line is part of the translation, and a body left byte-identical to the source is
+	 * graded scaffolded whether or not the flag is still there.
 	 */
 	translated?: false;
 }

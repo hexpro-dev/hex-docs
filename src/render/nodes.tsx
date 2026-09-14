@@ -369,7 +369,7 @@ export function renderBlocks(nodes: readonly Block[], context: RenderContext): R
  * `ast.ts` keeps `ListItem`, `TableCell` and `Step` out of `Block` and `Inline` so the two
  * switches stay exhaustive, and pins the two unions disjoint at the foot of the file. That
  * is a compile-time property; this is the runtime half of it, asserted by
- * `test/render/nodes.test.ts` passing a bare `listItem` through `renderBlocks` and getting
+ * `test/render/nodes.test.tsx` passing a bare `listItem` through `renderBlocks` and getting
  * nothing back rather than a rendered item in the wrong place.
  */
 export function isChildOnly(type: string): boolean {
