@@ -199,6 +199,7 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 						address={props.address}
 						slug={page.slug}
 						formatDate={formatDate}
+						Link={Link}
 					/>
 
 					<h1 id={IDS.title} className="hx-title">
@@ -339,6 +340,7 @@ function TranslationNotice({
 	address,
 	slug,
 	formatDate,
+	Link,
 }: {
 	locale: Locale;
 	sourceLocale: Locale;
@@ -346,13 +348,18 @@ function TranslationNotice({
 	address: DocsPageData['address'];
 	slug: string;
 	formatDate: (iso: string) => string;
+	Link: DocsLinkComponent;
 }): ReactElement | null {
 	if (notice.state === 'current') return null;
-	// A plain anchor rather than the consumer's router link, and deliberately so: this is
-	// the one link on the page that changes the reader's language, which means it changes
-	// the document's `lang` and `dir`, and a client-side navigation that swapped the
-	// article without the document around it would leave an Arabic shell around English
-	// text. A full load is the honest way to change language.
+	// The consumer's link, like every other docs link, although this is the one that changes
+	// the reader's language. That changes the document's `lang` and `dir`, which the shell
+	// does not own: both consumers' root renders `<html lang dir>` from its own loader data
+	// and revalidates root on every pathname change, and hex-web's language picker already
+	// changes language with a client-side navigation. Measured in the step 8 review: a
+	// router navigation from an Arabic docs page to its English address flipped `<html>` and
+	// `.hx-root` to `lang="en" dir="ltr"`. A plain anchor here used to force the one full
+	// document load on the page, for a reason neither consumer had. A consumer whose root
+	// did not revalidate would be wrong for its own picker first, and the fix belongs there.
 	const sourceHref = docsHref({ ...address, locale: sourceLocale, slug });
 	return (
 		<aside className="hx-banner" data-banner={notice.state}>
@@ -363,7 +370,7 @@ function TranslationNotice({
 							language: languageName(locale, notice.requested),
 						})}
 			</p>
-			<a href={sourceHref}>{uiString(locale, 'noticeReadEnglish')}</a>
+			<Link to={sourceHref}>{uiString(locale, 'noticeReadEnglish')}</Link>
 		</aside>
 	);
 }
