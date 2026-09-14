@@ -48,10 +48,26 @@ export interface Recipe {
 	readonly argv: readonly Slot[];
 	/** One sentence: what this reads, and why running it is safe. */
 	readonly why: string;
+	/**
+	 * The index, among the holes, of a local path the program writes a file to.
+	 *
+	 * Declared only by `FETCH_RECIPES`, and a declaration rather than something read out
+	 * of the argv: `s3api get-object` takes its output path positionally, so nothing in
+	 * the template marks that hole as a place a file lands. The MCP server's recipe set is
+	 * tested to hold no recipe that declares one.
+	 */
+	readonly outputHole?: number;
 }
 
 /**
- * The reads. Nothing here changes anything, anywhere.
+ * The reads. None of them writes a file or changes a repository, a bucket or a remote.
+ *
+ * Two qualifications, because "a read" is true of each entry in a slightly different
+ * sense and the difference is what the MCP server's annotations are derived from. The
+ * `aws` and `gh` entries read over the network. `react-router.routes` writes nothing and
+ * executes the consuming site's own route config, which is code the directory it runs in
+ * chose. What these share is only that they change nothing; how far they reach is
+ * `OPEN_WORLD` in `kit/src/mcp/server.ts`.
  *
  * The four `git` entries at the top are exactly the four calls `kit/src/compile/git.ts`
  * makes. It was the one place in the package that spawned a process directly, and it
@@ -100,16 +116,20 @@ export const READ_RECIPES = {
 	},
 	'react-router.routes': {
 		bin: './node_modules/.bin/react-router',
-		// No hole, so the caller controls nothing but the cwd, and the cwd is the site.
+		// No hole, so the caller controls nothing but the cwd, and the cwd is not a small
+		// thing to control. The binary is a path relative to it, so whoever chooses the cwd
+		// chooses the binary as well as the route config it loads.
 		//
 		// This one is a read in a different sense from the others and the difference is worth
 		// stating where somebody would look. It does not read a file: it runs the consuming
 		// site's own route config through React Router's config loader, which executes
 		// `app/routes.ts` and every module that file imports. That is the whole point, because
 		// a text match over `routes.ts` passed a table that could not load at all (an import
-		// the plugin-less loader cannot resolve, and duplicate route ids). It is also the same
-		// code the site's own `react-router build` executes, so it runs nothing the site's
-		// build does not. It writes nothing: the command prints the table and exits.
+		// the plugin-less loader cannot resolve, and duplicate route ids). Pointed at the
+		// consuming site, it is the same code that site's own `react-router build` executes.
+		// Pointed anywhere else, it is whatever that directory holds, which is why the MCP
+		// server refuses a root outside the project it was started in before this can run.
+		// It writes nothing: the command prints the table and exits.
 		argv: ['routes', '--json'],
 		why: "The consuming site's route table as its own React Router evaluates it, which executes that site's route config and writes nothing.",
 	},
@@ -173,6 +193,21 @@ export const READ_RECIPES = {
 		],
 		why: 'The second and later pages. A full bundle crosses a thousand keys once a manual has sixty pages in seven locales, so a single unpaginated call would silently report the tail absent.',
 	},
+} as const satisfies Readonly<Record<string, Recipe>>;
+
+/**
+ * The one recipe that writes a local file, at a path its caller chooses.
+ *
+ * Its own table, and the reason is the same one that gives the puts theirs. It used to sit
+ * among the reads, and so it sat in the MCP server's set of recipes under a comment saying
+ * that context could not write: nothing reached it from a tool, but a module that did
+ * reach it through the server's context could have written a file anywhere the user can.
+ * A `ReadRecipeId` cannot name it, a tool's declared recipes are `ReadRecipeId`s, and the
+ * server runs nothing a tool did not declare, so that is now a typecheck rather than a
+ * sentence. It is not a write in the sense `WRITE_RECIPES` means, which is changing the
+ * bucket: what it changes is the local disk.
+ */
+export const FETCH_RECIPES = {
 	'aws.get-object': {
 		bin: 'aws',
 		// The same flag, for a different reason. GetObject does declare a `httpChecksum`
@@ -195,7 +230,8 @@ export const READ_RECIPES = {
 			'--output',
 			'json',
 		],
-		why: 'Prefetch. The third hole is the output path, which s3api takes positionally.',
+		why: 'Prefetch. The third hole is the output path, which s3api takes positionally and writes.',
+		outputHole: 2,
 	},
 } as const satisfies Readonly<Record<string, Recipe>>;
 
@@ -273,11 +309,12 @@ export const WRITE_RECIPES = {
 	},
 } as const satisfies Readonly<Record<string, Recipe>>;
 
-export const ALL_RECIPES = { ...READ_RECIPES, ...WRITE_RECIPES } as const;
+export const ALL_RECIPES = { ...READ_RECIPES, ...FETCH_RECIPES, ...WRITE_RECIPES } as const;
 
 export type ReadRecipeId = keyof typeof READ_RECIPES;
+export type FetchRecipeId = keyof typeof FETCH_RECIPES;
 export type WriteRecipeId = keyof typeof WRITE_RECIPES;
-export type RecipeId = ReadRecipeId | WriteRecipeId;
+export type RecipeId = ReadRecipeId | FetchRecipeId | WriteRecipeId;
 
 /** How many values a recipe expects. Derived, so it cannot disagree with the template. */
 export function holeCount(id: RecipeId): number {

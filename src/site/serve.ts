@@ -506,6 +506,16 @@ export function docsServer(sources: DocsSources): DocsServer {
 			const located = locate(url, routed.resources);
 			if (located.kind === 'moved') return moved(located.location);
 			if (located.kind === 'missing') return plain(404, 'Not Found');
+			// A machine address has one spelling, and it has no trailing slash. `llms.txt` links
+			// to each page relative to its own address, so served at `llms.txt/` every link
+			// resolves one segment too deep and 404s, and React Router answers the slash from the
+			// same row. A redirect rather than a second canonical spelling, unlike `page()`,
+			// because nothing marks a text body not indexable and a relative link cannot be told
+			// which address it was read at. It also mends a bundle already published, which
+			// making the compiler write absolute links would not.
+			if (url.pathname.endsWith('/')) {
+				return moved(`${url.pathname.replace(/\/+$/, '')}${url.search}`);
+			}
 
 			const { locale, entry } = located;
 			const site = entry.site;

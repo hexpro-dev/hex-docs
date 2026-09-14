@@ -647,7 +647,7 @@ export const RULE_DEFINITIONS = {
 		defaultSeverity: 'error',
 		title: 'Ship only inert SVG.',
 		consequence:
-			'An SVG is a document on the origin of the consuming site, not only an image source, so a script element or an external reference inside one runs against that origin. That is why this rule is protected and why the sanitiser is held at full coverage.',
+			'An SVG is a document on the origin of the consuming site, not only an image source, so anything in one that runs or embeds a document runs against that origin. The check is an allowlist, because the denylist it replaced passed an XHTML iframe whose srcdoc ran script. That is why this rule is protected and why the allowlist in svg.ts is held at full coverage.',
 		examples: [
 			{
 				bad: '<svg><script>fetch("/admin")</script></svg>',
@@ -882,5 +882,18 @@ export const CHECK_DEFINITIONS = {
 		consequence:
 			'A file the git walk has no date for cannot be graded against its source, and the timestamp fields it would fill are required by the bundle schema. Without this the page compiles to a payload its own schema rejects, and the failure arrives downstream as a digest mismatch naming nothing.',
 		unit: 'files',
+	},
+
+	// -------------------------------------------------------------------------
+	// the MCP server
+	// -------------------------------------------------------------------------
+
+	'mcp-path-outside-project': {
+		id: 'mcp-path-outside-project',
+		category: 'config',
+		title: 'Keep a tool call inside the project the server was started in.',
+		consequence:
+			'Over MCP a root and a site are chosen by the model rather than typed by a person. docs_verify_install and docs_doctor run the consuming site binary at node_modules/.bin/react-router, which loads that directory route config, and git, which runs whatever hooks and fsmonitor command the repository config names. Pointed outside the project, that is code a directory the model named decides, run from a tool a client may approve on its annotations.',
+		unit: 'paths',
 	},
 } as const satisfies Record<CheckId, CheckDefinition>;

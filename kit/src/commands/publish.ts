@@ -56,10 +56,10 @@ import { sha256Hex, type JsonValue } from '../compile/serialise.js';
 import { raw } from '../compile/types.js';
 import type { RawFinding } from '../compile/types.js';
 import { bundleManifestSchema } from '../contracts/bundle.schema.js';
+import { checkFindings } from '../compile/lint/checks.js';
 import { defineCommand } from '../registry/command.js';
 import {
 	base64ToHex,
-	checkFindings,
 	s3Client,
 	type HeadResult,
 	type Refusal,

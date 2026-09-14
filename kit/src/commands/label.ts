@@ -164,9 +164,14 @@ function findSiteConfigs(root: string, project: string): string[] {
  * The default cannot be a `Param.fallback`, because that is one printed value and this
  * one is a function of the environment. So it is resolved here with the default named in
  * the flag's help text, which is the same shape `init` uses for a default it cannot spell
- * statically. `XDG_CACHE_HOME` is honoured because `hex-terraform/deploy/src/build.ts`
- * already honours it, and a second convention would put the deploy's cache and this
- * command's cache in two places on one machine.
+ * statically. `XDG_CACHE_HOME` is honoured as the XDG base directory convention, and the
+ * rule is the one `defaultCacheRoot` in `prefetch.ts` applies, so this command looks for a
+ * bundle in the cache `prefetch` fills. It is written twice because `prefetch` writes and
+ * this command is a tool, and the import-graph walk refuses a writer module in a tool's
+ * graph; the two have to be changed together. Nothing here follows the deploy host's other
+ * caches: `hex-terraform/deploy/src/build.ts` reads `XDG_CACHE_HOME` only on a platform
+ * that is neither darwin nor Windows, and only to find Encore's cache, so on the Mac that
+ * deploys the two already live apart.
  */
 function cacheRoot(flag: string | undefined, cwd: string): string {
 	if (flag !== undefined) return resolve(cwd, flag);
@@ -411,6 +416,7 @@ export function patchFor(
 export const label = defineCommand({
 	name: 'label',
 	tool: 'docs_label',
+	runs: ['aws.head-object', 'gh.api', 'git.merge-base-is-ancestor'],
 	writes: 'nothing',
 	summary: 'Check that a commit is safe to label as a version, and return the edit.',
 	detail:

@@ -20,8 +20,21 @@ export type { Command, CommandOutput, Ctx, Writer, Writes } from './registry/com
 export { jsonSchemaOf, shapeOf } from './registry/params.js';
 export type { Input, Param, Params } from './registry/params.js';
 
-export { ALL_RECIPES, HOLE, READ_RECIPES, WRITE_RECIPES, holeCount } from './exec/recipes.js';
-export type { Recipe, RecipeId, ReadRecipeId, WriteRecipeId } from './exec/recipes.js';
+export {
+	ALL_RECIPES,
+	FETCH_RECIPES,
+	HOLE,
+	READ_RECIPES,
+	WRITE_RECIPES,
+	holeCount,
+} from './exec/recipes.js';
+export type {
+	FetchRecipeId,
+	Recipe,
+	RecipeId,
+	ReadRecipeId,
+	WriteRecipeId,
+} from './exec/recipes.js';
 export { ExecRefusal, NO_EXEC, runRecipe } from './exec/run.js';
 export type { Exec, RunOptions, RunResult } from './exec/run.js';
 

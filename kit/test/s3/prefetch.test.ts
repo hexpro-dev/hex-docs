@@ -60,6 +60,7 @@ import {
 	searchKey,
 	type BundleManifest,
 } from '../../../src/contracts/manifest.js';
+import { AST_VERSION } from '../../../src/contracts/ast.js';
 import { buildBundle } from '../../src/compile/build.js';
 import { writeBundle } from '../../src/compile/bundle.js';
 import { gunzipMember, gzipMember, sha256Hex } from '../../src/compile/serialise.js';
@@ -69,6 +70,14 @@ import { fileWriter, recordingWriter } from '../../src/io/write.js';
 import type { Exec, RunResult } from '../../src/exec/run.js';
 import { exitCodeFor, invoke, type Ctx } from '../../src/registry/command.js';
 import type { Writer } from '../../src/registry/command.js';
+import {
+	PLACEHOLDER_DESCRIPTION,
+	TODO_TRANSLATE_PAGE,
+	TODO_WRITE_PAGE,
+	TODO_WRITE_SECTION,
+	translationStub,
+} from '../../src/templates/page.js';
+import { sourceScaffold } from '../../src/templates/source.js';
 
 const BUCKET = 'hexdocs-fixture-bucket';
 const KIT_VERSION = '@hex-pro/docs-kit@0.0.0';
@@ -485,7 +494,7 @@ describe.each(CONSUMER_SHAPES)('a warm cache, on the %s consumer', (shape) => {
 		expect(checked).toBe(outcome.data['files'] as number);
 	});
 
-	test('the rows are the five this command reports, in order, and there is no gitignore row', () => {
+	test('the rows are the six this command reports, in order, and there is no gitignore row', () => {
 		// The gitignore lines are `install`'s to write and `verify-install`'s to check. A
 		// second writer of the same two lines in a prebuild hook is how a consumer's file
 		// comes to carry them twice under two headers.
@@ -493,6 +502,7 @@ describe.each(CONSUMER_SHAPES)('a warm cache, on the %s consumer', (shape) => {
 			'prefetch-configs',
 			'prefetch-trees',
 			'prefetch-cache',
+			'prefetch-placeholders',
 			'prefetch-extract',
 			'prefetch-skew',
 		]);
@@ -580,6 +590,71 @@ describe('a cold cache', () => {
 		} finally {
 			removeConsumer(site.consumer);
 			rmSync(cache, { recursive: true, force: true });
+		}
+	});
+
+	test('a manifest the bucket does not hold names the AST major this kit reads, not only an unpublished commit', async () => {
+		// The bucket below holds this very bundle, under the next AST major, which is exactly
+		// what an app repository pinned to a newer hex-docs publishes. The key this kit asks for
+		// carries its own major, so the answer is a 404 indistinguishable from a commit nobody
+		// published, and the note used to say only that. Re-running the app workflow at its old
+		// pin recompiles to the same major and skips, so that sentence sent somebody nowhere.
+		const site = makeSite('glob-workspace');
+		const cache = join(root, 'other-major');
+		const bucket = join(root, 'bucket-other-major');
+		const elsewhere = bundlePrefix(manifest.project, manifest.commit, AST_VERSION + 1);
+		cpSync(cachedBundle, join(bucket, ...elsewhere.split('/')), { recursive: true });
+		const asked: string[] = [];
+		const exec: Exec = (id, holes) => {
+			asked.push(holes[1] ?? '');
+			const source = join(bucket, ...(holes[1] ?? '').split('/'));
+			if (id !== 'aws.get-object' || !existsSync(source)) {
+				return {
+					status: 255,
+					stdout: '',
+					stderr: 'An error occurred (404) when calling the GetObject operation: Not Found',
+				};
+			}
+			writeFileSync(holes[2] ?? '', readFileSync(source));
+			return { status: 0, stdout: '{}', stderr: '' };
+		};
+		try {
+			const outcome = await run(site, {
+				cache,
+				bucket: BUCKET,
+				fake: Object.assign(new FakeS3(null, prefix), { exec }),
+			});
+			const note = String(row(outcome, 'prefetch-cache').note);
+			expect(asked).toEqual([`${prefix}/${MANIFEST_KEY}`]);
+			expect(row(outcome, 'prefetch-cache').status).toBe('not-run');
+			expect(note).toContain(`published under a different AST major from ast-${AST_VERSION}`);
+			expect(note).toContain('hex-docs submodule pin');
+			expect(outcome.code).toBe(3);
+		} finally {
+			removeConsumer(site.consumer);
+			rmSync(cache, { recursive: true, force: true });
+			rmSync(bucket, { recursive: true, force: true });
+		}
+	});
+
+	test('an object the stored manifest names and the bucket lacks is not called an unpublished bundle', async () => {
+		const site = makeSite('glob-workspace');
+		const cache = join(root, 'missing-object');
+		const served = join(root, 'served-missing-object');
+		cpSync(cachedBundle, served, { recursive: true });
+		const gone = manifest.objects[0]?.key ?? '';
+		rmSync(join(served, ...gone.split('/')));
+		try {
+			const outcome = await run(site, { cache, serve: served, bucket: BUCKET });
+			const note = String(row(outcome, 'prefetch-cache').note);
+			expect(note).toContain(
+				`${prefix}/${gone} is not in the bucket, and the manifest stored beside it names it`,
+			);
+			expect(note).not.toContain('never published');
+		} finally {
+			removeConsumer(site.consumer);
+			rmSync(cache, { recursive: true, force: true });
+			rmSync(served, { recursive: true, force: true });
 		}
 	});
 
@@ -1663,6 +1738,186 @@ describe('a docs directory the configs cannot be read out of', () => {
 // ---------------------------------------------------------------------------
 // The locale set the corpus actually carries
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// A labelled bundle that is still the scaffold
+// ---------------------------------------------------------------------------
+
+describe('a labelled bundle whose pages are still the scaffold', () => {
+	/**
+	 * An app repository exactly as `hexdocs init` writes it, compiled, with a hook to change
+	 * it first.
+	 *
+	 * Built from `sourceScaffold` itself rather than from a copy of its output, so the text
+	 * under test is the text the templates write today. The mirror patch is skipped because
+	 * there is no mirror script to patch, and nothing about the page depends on it.
+	 */
+	function scaffolded(name: string, edit: (repo: string) => void = () => undefined) {
+		const repo = join(root, `scaffold-${name}`);
+		const plan = sourceScaffold({
+			project: PROJECT,
+			productName: 'Fixture',
+			repo: 'hexpro-dev/fixture-app',
+			locales: ['en', 'es'],
+		});
+		for (const file of plan.files) {
+			if (file.action !== 'create') continue;
+			mkdirSync(join(repo, file.path, '..'), { recursive: true });
+			writeFileSync(join(repo, file.path), file.contents, 'utf8');
+		}
+		edit(repo);
+		const git = (...args: string[]): void => {
+			execFileSync(
+				'git',
+				[
+					'-c',
+					'user.name=Fixture',
+					'-c',
+					'user.email=fixture@example.com',
+					'-c',
+					'commit.gpgsign=false',
+					...args,
+				],
+				{
+					cwd: repo,
+					stdio: 'ignore',
+					env: {
+						...process.env,
+						GIT_AUTHOR_DATE: '2026-05-01T00:00:00Z',
+						GIT_COMMITTER_DATE: '2026-05-01T00:00:00Z',
+					},
+				},
+			);
+		};
+		git('init', '-q');
+		git('add', '-A');
+		git('commit', '-q', '-m', 'scaffold');
+		const built = buildBundle(repo, { generator: KIT_VERSION });
+		expect(built.manifestProblems).toEqual([]);
+		const cache = join(root, `scaffold-${name}-cache`);
+		writeBundle(cache, built.manifest, built.objects);
+		return { manifest: built.manifest, cache };
+	}
+
+	const index = (repo: string, locale = 'en'): string =>
+		join(repo, 'docs', 'site', 'content', locale, 'index.md');
+
+	const REAL_DESCRIPTION = 'How to read and write NFC tags with the fixture app.';
+	const REAL_BODY =
+		'The fixture app reads a tag the moment it touches the phone.\n\n## Reading a tag\n\nHold the tag against the top of the phone until it vibrates.\n';
+
+	async function prefetchOf(built: { manifest: BundleManifest; cache: string }) {
+		const site = makeSite('glob-workspace', {
+			edit: (config) => {
+				config['versions'] = [
+					{ label: '0.1.0', commit: built.manifest.commit, released: '2026-05-01', default: true },
+				];
+				config['pages'] = Object.keys(built.manifest.pages).sort();
+				delete config['hidden'];
+				delete config['redirects'];
+			},
+		});
+		try {
+			return await run(site, { cache: built.cache });
+		} finally {
+			removeConsumer(site.consumer);
+		}
+	}
+
+	test('the untouched scaffold is refused, naming the project, the label, the page and every placeholder', async () => {
+		const outcome = await prefetchOf(scaffolded('untouched'));
+		const placeholder = row(outcome, 'prefetch-placeholders');
+		expect(placeholder.status).toBe('fail');
+		expect(placeholder.examined).toBe(1);
+		const note = String(placeholder.note);
+		expect(note).toContain(`${PROJECT} version "0.1.0" page "index" still carries`);
+		expect(note).toContain(
+			`the placeholder description ${JSON.stringify(PLACEHOLDER_DESCRIPTION)}`,
+		);
+		expect(note).toContain(`the body marker ${JSON.stringify(TODO_WRITE_PAGE)}`);
+		expect(note).toContain(`the body marker ${JSON.stringify(TODO_WRITE_SECTION)}`);
+		expect(outcome.code).toBe(3);
+		// Refused before the trees are touched: nothing was extracted, nothing pruned.
+		expect(outcome.rows.map((entry) => entry.id)).toEqual([
+			'prefetch-configs',
+			'prefetch-trees',
+			'prefetch-cache',
+			'prefetch-placeholders',
+		]);
+		expect(outcome.writer.written).toEqual([]);
+		expect(outcome.writer.removed).toEqual([]);
+	});
+
+	test('one real sentence in place of the description is still refused while the body is TODO', async () => {
+		const built = scaffolded('description-only', (repo) => {
+			const text = readFileSync(index(repo), 'utf8');
+			writeFileSync(index(repo), text.replace(PLACEHOLDER_DESCRIPTION, REAL_DESCRIPTION));
+		});
+		expect(built.manifest.pages['index']?.locales.en?.description).toBe(REAL_DESCRIPTION);
+		const note = String(row(await prefetchOf(built), 'prefetch-placeholders').note);
+		expect(note).not.toContain('the placeholder description');
+		expect(note).toContain(`the body marker ${JSON.stringify(TODO_WRITE_PAGE)}`);
+	});
+
+	test('a marker the author reflowed across a line break is still the marker', async () => {
+		const built = scaffolded('reflowed', (repo) => {
+			const text = readFileSync(index(repo), 'utf8')
+				.replace(PLACEHOLDER_DESCRIPTION, REAL_DESCRIPTION)
+				.replace(TODO_WRITE_SECTION, TODO_WRITE_SECTION.replace(' this ', '\nthis '))
+				.replace(TODO_WRITE_PAGE, 'The opening paragraph is written.');
+			writeFileSync(index(repo), text);
+		});
+		const placeholder = row(await prefetchOf(built), 'prefetch-placeholders');
+		expect(placeholder.status).toBe('fail');
+		expect(String(placeholder.note)).toContain(
+			`the body marker ${JSON.stringify(TODO_WRITE_SECTION)}`,
+		);
+	});
+
+	test('a written page passes', async () => {
+		const built = scaffolded('written', (repo) => {
+			writeFileSync(
+				index(repo),
+				`---\ntitle: Fixture documentation\ndescription: ${REAL_DESCRIPTION}\n---\n\n${REAL_BODY}`,
+			);
+		});
+		const placeholder = row(await prefetchOf(built), 'prefetch-placeholders');
+		expect([placeholder.status, placeholder.examined]).toEqual(['pass', 1]);
+	});
+
+	test('a scaffolded translation beside a written source page passes, because its locale is served the source', async () => {
+		const built = scaffolded('translation', (repo) => {
+			writeFileSync(
+				index(repo),
+				`---\ntitle: Fixture documentation\ndescription: ${REAL_DESCRIPTION}\n---\n\n${REAL_BODY}`,
+			);
+			const stub = translationStub({
+				front: [
+					{ key: 'title', value: 'Fixture documentation' },
+					{ key: 'description', value: REAL_DESCRIPTION },
+				],
+				headings: [{ depth: 2, text: 'Reading a tag' }],
+			});
+			if (!stub.ok) throw new Error(stub.why);
+			mkdirSync(join(index(repo, 'es'), '..'), { recursive: true });
+			writeFileSync(index(repo, 'es'), stub.contents);
+		});
+		// The stub really is in the bundle, as a scaffolded Spanish page carrying its marker,
+		// so the pass below is not a pass over a bundle with no translation in it.
+		expect(built.manifest.pages['index']?.locales.es?.state).toBe('scaffolded');
+		const spanish = gunzipMember(
+			readFileSync(
+				join(built.cache, ...prefixOf(built.manifest).split('/'), 'raw', 'es', 'index.md.gz'),
+			),
+		).toString('utf8');
+		expect(spanish).toContain(TODO_TRANSLATE_PAGE);
+		const placeholder = row(await prefetchOf(built), 'prefetch-placeholders');
+		expect([placeholder.status, placeholder.examined]).toEqual(['pass', 1]);
+	});
+});
+
+const prefixOf = (built: BundleManifest): string =>
+	bundlePrefix(built.project, built.commit, built.ast);
 
 test('the corpus covers every locale, so the extraction sweep is not one language wide', () => {
 	// The destination sweep above iterates `manifest.locales`, which would be satisfied by a

@@ -143,6 +143,7 @@
 		"bundle-digest-mismatch",
 		"bundle-label-unknown-sha",
 		"bundle-shallow-clone",
-		"bundle-file-undated"
+		"bundle-file-undated",
+		"mcp-path-outside-project"
 	]
 }

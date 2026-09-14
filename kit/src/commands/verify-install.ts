@@ -77,6 +77,7 @@ function nextActionFor(rows: readonly CheckRow[], site: string): NextAction {
 export const verifyInstall = defineCommand({
 	name: 'verify-install',
 	tool: 'docs_verify_install',
+	runs: ['git.ls-files-stage', 'react-router.routes'],
 	writes: 'nothing',
 	summary: 'Check that a consuming website is wired for a docs mount.',
 	detail:

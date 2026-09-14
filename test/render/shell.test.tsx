@@ -8,6 +8,7 @@ import { CONSUMER_ROOT } from '../../fixtures/index.js';
 import type { Locale } from '../../src/contracts/locales.js';
 import type { CompiledPage } from '../../src/contracts/page.js';
 import type { DocsSiteConfig } from '../../src/contracts/site.js';
+import type { DocsLinkComponent } from '../../src/render/context.js';
 import { DocsPage } from '../../src/render/page.js';
 import { IDS } from '../../src/site/ids.js';
 import type { DocsPageData } from '../../src/site/route.js';
@@ -243,10 +244,31 @@ describe('the notices', () => {
 		expect(html).toContain('data-banner="fallback"');
 	});
 
-	test('the notice links to the source page with a plain anchor', async () => {
-		// The one link on the page that changes the reader's language, and therefore the
-		// document's own `lang` and `dir`. A client-side navigation would swap the article
-		// and leave the shell around it in the wrong language.
+	test('the notice links to the source page through the consumer link, like every other docs link', async () => {
+		// It is the one link that changes the reader's language, and it used to be a plain
+		// anchor on the grounds that a client-side navigation would leave the shell in the
+		// wrong language. Neither consumer does that: both render `<html lang dir>` from root
+		// data and revalidate root on a pathname change, so the anchor bought a full reload
+		// and nothing else. A marked link proves which component rendered it, because the
+		// default one is itself a plain anchor and a markup match could not tell them apart.
+		const Marked: DocsLinkComponent = ({ to, children, ...rest }) => (
+			<a href={to} data-consumer-link="" {...rest}>
+				{children}
+			</a>
+		);
+		const data = await pageData({
+			manifest: MANIFEST,
+			site: SITE,
+			locale: 'fr',
+			slug: 'developer/architecture',
+			load,
+		});
+		const html = renderToStaticMarkup(<DocsPage {...data} Link={Marked} />);
+		const banner =
+			/<aside class="hx-banner" data-banner="fallback">[\s\S]*?<\/aside>/.exec(html)?.[0] ?? '';
+		expect(banner).toContain(
+			'<a href="/fixture-app/docs/developer/architecture" data-consumer-link="">',
+		);
 		expect(fallback).toMatch(/<a href="\/fixture-app\/docs\/developer\/architecture">/);
 	});
 });

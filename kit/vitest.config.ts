@@ -91,6 +91,12 @@ export default defineConfig({
 					lines: 100,
 				},
 
+				// The SVG allowlist, which is the only thing between an SVG a commit adds and script
+				// running in the consuming site origin, and whose failure is silent: a construct the
+				// walk misreads publishes. Measured 280/280 statements, 239/239 branches, 14/14
+				// functions, 233/233 lines, so a new arm arrives with a test or fails here.
+				'src/compile/svg.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
+
 				// The parser. Measured 752/806 statements, 421/487 branches, 65/65 functions,
 				// 698/732 lines. Branches sits lowest because a recursive descent parser is
 				// mostly branches, and the uncovered ones are the recovery arms for source

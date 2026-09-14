@@ -44,6 +44,7 @@ import {
 	serve,
 	type ToolDescriptor,
 } from '../../src/mcp/protocol.js';
+import { ALL_RECIPES, type Recipe } from '../../src/exec/recipes.js';
 import { toolDescriptors } from '../../src/mcp/server.js';
 import { TOOLS } from '../../src/registry/index.js';
 
@@ -226,20 +227,60 @@ describe('the reference client against the real launcher', () => {
 		expect(problems).toEqual([]);
 	});
 
-	test('every tool is annotated read-only, and the annotation is a fact', () => {
-		// `readOnlyHint` is true because a tool-bearing command declares `writes: 'nothing'`
-		// and the `Command` union gives it no other type to have. The assertion is over the
-		// descriptors this package builds rather than over the wire, because the wire copy
-		// would pass with a hard-coded quartet.
-		for (const descriptor of toolDescriptors() as ToolDescriptor[]) {
-			expect(descriptor.annotations).toEqual({
-				readOnlyHint: true,
-				destructiveHint: false,
-				idempotentHint: true,
-				openWorldHint: false,
+	test('the annotations on the wire are the ones the recipes declare, tool by tool', () => {
+		// Pinned per tool rather than checked against a quartet, because a quartet is what was
+		// here: every tool advertised `openWorldHint: false`, including `docs_label`, which
+		// calls `gh api` and `aws s3api`, and `docs_verify_install`, which runs the consuming
+		// site's own React Router. A client may approve a call on these, so a wrong one is a
+		// tool that looks safer than it is. Read off the wire, because that is what a client
+		// reads.
+		const expected: Record<string, boolean> = {
+			docs_doctor: true,
+			docs_check: false,
+			docs_pages: false,
+			docs_page: false,
+			docs_bundle: false,
+			docs_label: true,
+			docs_scaffold: false,
+			docs_skills: false,
+			docs_verify_install: true,
+		};
+		const wire = listed as unknown as { name: string; annotations?: Record<string, unknown> }[];
+		expect(wire.map((tool) => tool.name).sort()).toEqual(Object.keys(expected).sort());
+		for (const tool of wire) {
+			expect({ tool: tool.name, annotations: tool.annotations }).toEqual({
+				tool: tool.name,
+				annotations: {
+					readOnlyHint: true,
+					destructiveHint: false,
+					idempotentHint: true,
+					openWorldHint: expected[tool.name],
+				},
 			});
 		}
-		for (const command of TOOLS) expect(command.writes).toBe('nothing');
+	});
+
+	test('a tool is open-world exactly when a recipe it runs leaves the repository', () => {
+		// The derivation, stated independently of the server's own table: git reads the
+		// repository at a confined root, and every other binary reaches the network or runs
+		// the consuming site's code. A tool whose `runs` gained `gh.api` without its annotation
+		// turning true, or an annotation hard-coded again, fails here naming the tool.
+		const OPEN_BINARIES = new Set(['aws', 'gh', './node_modules/.bin/react-router']);
+		const descriptors = new Map(
+			(toolDescriptors() as ToolDescriptor[]).map((descriptor) => [descriptor.name, descriptor]),
+		);
+		for (const command of TOOLS) {
+			if (command.tool === null) continue;
+			const open = command.runs.some((id) => OPEN_BINARIES.has((ALL_RECIPES[id] as Recipe).bin));
+			expect({
+				tool: command.tool,
+				open: descriptors.get(command.tool)?.annotations.openWorldHint,
+			}).toEqual({
+				tool: command.tool,
+				open,
+			});
+			expect(command.writes).toBe('nothing');
+		}
 	});
 
 	test('ping answers', async () => {

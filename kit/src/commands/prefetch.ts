@@ -7,9 +7,10 @@
  * consumers' CSP already assumes, and it is why an earlier design's origin URL and disk
  * cache path are not fields on `DocsSiteConfig`.
  *
- * It hangs off `prebuild`, which is the one script that always runs: the deploy runs
- * `pnpm build` on the host before the Docker build, and the container's own
- * `npm install --ignore-scripts` never re-runs it. So the normal case is a laptop or a
+ * It hangs off `prebuild`, which is the one script that always runs: the deploy runs the
+ * site's build script on the host before the Docker build (`npm run build` for hex-web's
+ * front, which has no lockfile of its own, and npm fires the pre-hook as pnpm does), and
+ * the container's own `npm install --ignore-scripts` never re-runs it. So the normal case is a laptop or a
  * build host with a warm cache, and **a warm cache makes zero exec calls and needs no
  * AWS credentials.** That is a property worth protecting rather than an optimisation: a
  * prefetch that reached for a bucket on every build would put an AWS profile in the
@@ -87,7 +88,9 @@ import { raw, type RawFinding } from '../compile/types.js';
 import { bundleManifestSchema } from '../contracts/bundle.schema.js';
 import { docsSiteConfigSchema, versionTableProblems } from '../contracts/config.schema.js';
 import { defineCommand, type Ctx, type Writer } from '../registry/command.js';
-import { checkFindings, s3Client, type S3Client } from '../s3/client.js';
+import { PLACEHOLDER_DESCRIPTION, TODO_WRITE_PAGE, TODO_WRITE_SECTION } from '../templates/page.js';
+import { checkFindings } from '../compile/lint/checks.js';
+import { s3Client, type S3Client } from '../s3/client.js';
 
 import { bucketOf, regionOf, rootOf } from './common.js';
 import { PREFETCH_PARAMS, PREFETCH_POSITIONALS } from './prefetch-params.js';
@@ -338,6 +341,19 @@ export const prefetch = defineCommand({
 			return output([configRow, treeRow, cacheRow], { site: siteDirectory, prefetched: false }, []);
 		}
 
+		// ---- a labelled bundle that is still the scaffold ------------------------
+
+		// Before anything is pruned or extracted, so a refused bundle leaves the site's trees as
+		// they were rather than half replaced by a page nobody wrote.
+		const placeholderRow = placeholders(bundles);
+		if (placeholderRow.status !== 'pass') {
+			return output(
+				[configRow, treeRow, cacheRow, placeholderRow],
+				{ site: siteDirectory, prefetched: false },
+				[],
+			);
+		}
+
 		// ---- prune, then extract into the site ----------------------------------
 
 		const plans = bundles.map((bundle) => planFor(bundle, siteDirectory));
@@ -397,7 +413,7 @@ export const prefetch = defineCommand({
 			}
 		}
 
-		const rows = [configRow, treeRow, cacheRow, extractRow, skew(bundles)];
+		const rows = [configRow, treeRow, cacheRow, placeholderRow, extractRow, skew(bundles)];
 		return output(
 			rows,
 			{
@@ -562,8 +578,17 @@ function fill(
 		const result = client.get(`${prefix}/${key}`, path);
 		if (result.kind === 'ok') return null;
 		if (result.kind === 'absent') {
+			// Two causes for a missing manifest, and the key only distinguishes them from the
+			// outside. The prefix carries this kit's AST major, and `publish` writes under the
+			// major the compiling kit had, so a commit published by an app repository pinned to a
+			// different hex-docs is absent here exactly as an unpublished one is. Re-running the
+			// app workflow at its old pin recompiles to the same major and skips, so naming only
+			// the first cause sends somebody to the step that cannot help.
 			return {
-				why: `${prefix}/${key} is not in the bucket. Version "${entry.label}" points at a commit whose bundle was never published, so every page of it would 404.`,
+				why:
+					key === MANIFEST_KEY
+						? `${prefix}/${key} is not in the bucket. Version "${entry.label}" points at a commit whose bundle was either never published, or was published under a different AST major from ast-${AST_VERSION}, which is the only one this kit reads. Compare the hex-docs submodule pin in the app repository with the one in this site; if they differ, publish the commit again from an app repository pinned to this one. Either way every page of it would 404.`
+						: `${prefix}/${key} is not in the bucket, and the manifest stored beside it names it, so the bundle for version "${entry.label}" is incomplete and a page or asset that needs it would 404. hexdocs publish uploads the manifest last and only once every object it names is stored, so this is a manifest written some other way or an object removed since. Establish which before labelling this commit or publishing anything else under the prefix.`,
 			};
 		}
 		return { why: result.credentials ? `${result.why} ${CREDENTIALS_ADVICE}` : result.why };
@@ -575,8 +600,12 @@ function fill(
 		if (failure !== null) return failure;
 		loaded = readCachedManifest(join(cacheDirectory, MANIFEST_KEY));
 		if (loaded === null) {
+			// Not a different AST major: the key carries this kit's major, and `publish` writes a
+			// manifest only under the major it declares. What reaches here is a manifest whose
+			// shape drifted within one major, from a kit newer or older than this one, or an object
+			// that is not the manifest at all.
 			return {
-				why: `${prefix}/${MANIFEST_KEY} downloaded and is not a manifest this toolchain can read. Check the AST major: a bundle from a newer kit is not malformed, it is one this submodule cannot mount.`,
+				why: `${prefix}/${MANIFEST_KEY} downloaded and is not a manifest this toolchain can read. It is stored under this kit's AST major, so the likely cause is a kit on the other side of a schema change within ast-${AST_VERSION}: compare the hex-docs submodule pin in the app repository with the one in this site. A manifest that does not parse as JSON at all is a corrupt object instead, and deleting the cache directory and running again tells the two apart.`,
 			};
 		}
 	}
@@ -1094,6 +1123,88 @@ function prune(siteDirectory: string, keep: ReadonlySet<string>, writer: Writer)
 	// The writer's own list rather than a count kept here, so the number on the row is the
 	// number of paths the writer says went.
 	return writer.removed.length - before;
+}
+
+// ---------------------------------------------------------------------------
+// A scaffold that was labelled
+// ---------------------------------------------------------------------------
+
+/** Said once on the row, because every page it names has the same remedy. */
+const PLACEHOLDER_REASON =
+	'These are the words hexdocs init and hexdocs scaffold write into a new page, and a site serves a labelled bundle as indexable pages with the placeholder as their meta description. Write the page in the app repository, publish that commit, and label it instead. A scaffolded translation is not refused here: its locale is served the source page, so its TODO text never reaches a reader.';
+
+/**
+ * Whitespace folded to single spaces, so a marker the author reflowed across a line
+ * break is still the marker.
+ */
+function folded(text: string): string {
+	return text.replace(/\s+/g, ' ');
+}
+
+/**
+ * Every labelled bundle's source-locale pages, refused while they still carry the scaffold.
+ *
+ * Nothing upstream refuses this, and the step 8 review found it on its way to production:
+ * hex-web labelled the untouched `hexdocs init` commit of hex-nfc, which compiled with
+ * zero findings, and the production build served `/hex-nfc/docs` as an indexable page in the
+ * sitemap whose description read "Replace this sentence..." and whose body was TODO lines.
+ * The author knew it was a placeholder. The label was the decision, and this is the last
+ * point before a build where that decision can be refused.
+ *
+ * Here rather than as a lint rule, which was the review's first proposal, for the reason its
+ * skeptic gave: an error in `build` turns the app repository's publish red on every push
+ * while a manual is being written, and publishing an unfinished commit is fine. Labelling one
+ * is what is not.
+ *
+ * The strings are the templates' own exported constants, never a second spelling, so the
+ * day the scaffold's wording changes this changes with it. Three are read: the placeholder
+ * description, in the manifest, and the two TODO lines for writing a page, in the source
+ * locale's raw markdown. The translation markers are deliberately not read, because a
+ * scaffolded translation is served as the source page.
+ *
+ * The raw markdown is read out of the cache, whose stored digests the cache row has just
+ * checked. A page that documents the scaffold and quotes one of those lines verbatim is
+ * refused too, which is the price of a match on the words; quoting the marker inside a
+ * sentence that changes one word of it is the way round.
+ */
+function placeholders(bundles: readonly Bundle[]): CheckRow {
+	const problems: string[] = [];
+	let examined = 0;
+
+	for (const { config, entry, manifest, cacheDirectory } of bundles) {
+		const source = manifest.sourceLocale;
+		for (const slug of Object.keys(manifest.pages).sort()) {
+			const record = manifest.pages[slug]?.locales[source];
+			if (record === undefined) continue;
+			examined += 1;
+
+			const found: string[] = [];
+			if (folded(record.description).includes(PLACEHOLDER_DESCRIPTION)) {
+				found.push(`the placeholder description ${JSON.stringify(PLACEHOLDER_DESCRIPTION)}`);
+			}
+			const key = rawKey(source, slug);
+			const stored = readFileSync(localPath(cacheDirectory, key));
+			const markdown = folded((isGzipped(key) ? gunzipMember(stored) : stored).toString('utf8'));
+			for (const marker of [TODO_WRITE_PAGE, TODO_WRITE_SECTION]) {
+				if (markdown.includes(marker)) found.push(`the body marker ${JSON.stringify(marker)}`);
+			}
+
+			if (found.length > 0) {
+				problems.push(
+					`${config.project} version "${entry.label}" page "${slug}" still carries ${found.join(' and ')}.`,
+				);
+			}
+		}
+	}
+
+	return problems.length > 0
+		? failedRow(
+				'prefetch-placeholders',
+				examined,
+				'pages',
+				`${problems.join(' ')} ${PLACEHOLDER_REASON}`,
+			)
+		: checkRow('prefetch-placeholders', examined, 'pages', []);
 }
 
 // ---------------------------------------------------------------------------

@@ -31,6 +31,7 @@ import { GLOB_WORKSPACE, LITERAL_WORKSPACE } from '../../../fixtures/consumers.j
 import { CHECK_IDS, LINT_RULE_IDS } from '../../../src/contracts/lint.js';
 import { CHECK_STATES } from '../../../src/contracts/diagnostics.js';
 import { detectSite, memoryFiles } from '../../src/wiring/detect.js';
+import { prebuildFragment } from '../../src/wiring/prebuild.js';
 import { checkDocsShim } from '../../src/wiring/templates.js';
 import type { SiteDescriptor } from '../../src/wiring/site.js';
 
@@ -322,6 +323,23 @@ describe('the exit mapping', () => {
 		expect(run.stderr).toContain('nothing was checked, so nothing was cleared');
 	});
 
+	test('the missing-launcher message says a build never prints it, and quotes the line a build does', () => {
+		// Every prebuild chain verify-install accepts runs the prefetch segment first, through the
+		// same launcher, so a missing submodule stops the build on the shell's own error and exit
+		// 127 before this file runs. Only somebody running the guard by hand sees this branch,
+		// and the shell's line, with the path the prebuild string spells, is what lets them
+		// match it to the build that failed.
+		const run = runShim(null, 0);
+		expect(run.stderr).toContain('A build stops earlier on the same cause');
+		expect(run.stderr).toContain(
+			'  sh: ../../common/docs/kit/bin/hexdocs: No such file or directory',
+		);
+		expect(TEMPLATE).toContain('// Reached only when this file is run on its own.');
+		// The path is the one the prebuild fragment names, not a second spelling of it.
+		const fragment = prebuildFragment(descriptor('/nowhere'));
+		expect(fragment.startsWith('../../common/docs/kit/bin/hexdocs prefetch')).toBe(true);
+	});
+
 	test('a launcher that is there and cannot be spawned exits 1 without blaming the submodule', () => {
 		const run = runShim(report(), 0, 0o644);
 		expect(run.status).toBe(1);
@@ -350,6 +368,120 @@ describe('the exit mapping', () => {
 		// would print a pass forever the day the field is renamed.
 		expect(runShim(report({ exitCode: undefined }), 0).status).toBe(3);
 		expect(runShim(report({ exitCode: 'clean' }), 0).status).toBe(3);
+	});
+});
+
+/** A finding, with only the three strings the shim prints changed. */
+function finding(message: string, remediation: string, consequence: string) {
+	return {
+		rule: 'a-rule-nobody-declared',
+		severity: 'error',
+		category: 'wiring',
+		location: { kind: 'project' },
+		locale: null,
+		message,
+		consequence,
+		remediation,
+		suggestion: null,
+		excerpt: null,
+	};
+}
+
+/**
+ * A report the size of a real one, failing in its first row.
+ *
+ * Nine rows, a note on every passing row, a skipped row and the seven lines of the closing
+ * paragraph, which is the shape the step 8 review ran through a replica of the deploy.
+ */
+function failingReport(first: Record<string, unknown>): string {
+	const passing = Array.from({ length: 7 }, (_, index) => ({
+		id: `a-passing-row-${index + 1}`,
+		status: 'pass',
+		examined: 3,
+		unit: 'things',
+		findings: [],
+		note: `a note on passing row ${index + 1} that takes up a line of its own`,
+	}));
+	return report({
+		exitCode: 3,
+		rows: [
+			first,
+			...passing,
+			{
+				id: 'a-skipped-row',
+				status: 'skipped',
+				examined: 0,
+				unit: 'things',
+				findings: [],
+				note: 'the reason it was skipped',
+			},
+		],
+		notCheckedHere: Array.from({ length: 7 }, (_, index) => `closing paragraph line ${index + 1}`),
+		nextAction: { kind: 'command', argv: ['hexdocs', 'install'], why: 'Start with the first row.' },
+	});
+}
+
+/** What the deploy reports of a failed build: the last twenty lines of stderr, or of stdout. */
+function deployTail(run: Run): string[] {
+	const text = (run.stderr !== '' ? run.stderr : run.stdout).trim();
+	return text.split('\n').slice(-20);
+}
+
+describe('a failing run ends with what failed', () => {
+	test('the last twenty lines carry the failing row, its finding and its remediation, and no closing paragraph', () => {
+		const run = runShim(
+			failingReport({
+				id: 'the-failing-row',
+				status: 'fail',
+				examined: 1,
+				unit: 'declarations',
+				findings: [
+					finding(
+						'the message of the failing finding',
+						'the remediation of the failing finding',
+						'the consequence of the failing finding',
+					),
+				],
+				note: null,
+			}),
+			3,
+		);
+		expect(run.status).toBe(3);
+		const tail = deployTail(run);
+		expect(tail.some((line) => line.includes('the-failing-row'))).toBe(true);
+		expect(tail).toContain('    the remediation of the failing finding');
+		expect(tail).toContain('    the message of the failing finding');
+		// Remediation last, because it is the line somebody acts on.
+		expect(tail.at(-1)).toBe('    the remediation of the failing finding');
+		expect(run.stdout).not.toContain('Not checked here');
+		expect(run.stdout).not.toContain('closing paragraph line');
+		// Printed once: the table names the row and the detail comes after the summary.
+		expect(run.stdout.split('the message of the failing finding')).toHaveLength(2);
+	});
+
+	test('a row that did not run is printed last with its reason, once', () => {
+		const run = runShim(
+			failingReport({
+				id: 'the-row-that-did-not-run',
+				status: 'not-run',
+				examined: 0,
+				unit: 'route declarations',
+				findings: [],
+				note: 'the reason this row could not run',
+			}),
+			3,
+		);
+		const tail = deployTail(run);
+		expect(tail.at(-2)).toBe('  the-row-that-did-not-run  NOT RUN');
+		expect(tail.at(-1)).toBe('    the reason this row could not run');
+		expect(run.stdout.split('the reason this row could not run')).toHaveLength(2);
+	});
+
+	test('a clean run still prints the closing paragraph, where nothing needs the space', () => {
+		const run = runShim(report({ notCheckedHere: ['the one closing line'] }), 0);
+		expect(run.stdout).toContain("Not checked here, and still a person's job:");
+		expect(run.stdout.trim().split('\n').at(-1)).toBe('  the one closing line');
+		expect(run.stdout).not.toContain('What did not pass');
 	});
 });
 

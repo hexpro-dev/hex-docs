@@ -225,6 +225,24 @@ describe('the URL table', () => {
 				location: '/hex-nfc/docs/llms.txt',
 			},
 		],
+		// The router answers a trailing slash from the same row. Served there with a 200,
+		// llms.txt's relative links resolved under the slash and every one of them 404ed.
+		[
+			'/hex-nfc/docs/llms.txt/',
+			{
+				route: 'docs:/hex-nfc/docs/llms.txt',
+				status: 301,
+				location: '/hex-nfc/docs/llms.txt',
+			},
+		],
+		[
+			'/ja/hex-nfc/docs/llms.txt/?x=1',
+			{
+				route: 'docs:/:lang/hex-nfc/docs/llms.txt',
+				status: 301,
+				location: '/ja/hex-nfc/docs/llms.txt?x=1',
+			},
+		],
 
 		// Raw markdown at depth one and two, at both mounts, falling back per page.
 		[
@@ -261,6 +279,14 @@ describe('the URL table', () => {
 				status: 200,
 				contentType: MARKDOWN,
 				contentLanguage: 'en',
+			},
+		],
+		[
+			'/hex-nfc/docs/guide/first-tag.md/',
+			{
+				route: 'docs:/hex-nfc/docs/guide/first-tag.md',
+				status: 301,
+				location: '/hex-nfc/docs/guide/first-tag.md',
 			},
 		],
 		[

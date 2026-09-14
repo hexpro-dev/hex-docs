@@ -202,6 +202,15 @@ function nextActionLines(action: NextAction): string[] {
 export const doctor = defineCommand({
 	name: 'doctor',
 	tool: 'docs_doctor',
+	// `check` for the source half, and `verify-install` for the site half.
+	runs: [
+		'git.head',
+		'git.head-date',
+		'git.is-shallow',
+		'git.log-walk',
+		'git.ls-files-stage',
+		'react-router.routes',
+	],
 	writes: 'nothing',
 	summary: 'Run every check that applies to this repository and report what is wrong.',
 	detail:

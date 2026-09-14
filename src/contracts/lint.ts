@@ -131,6 +131,10 @@ export const CHECK_IDS = [
 	// the page compiled to a payload the bundle's own schema rejects and the failure
 	// arrived downstream as a digest mismatch naming nothing.
 	'bundle-file-undated',
+	// The MCP server. A tool call whose root or site resolves outside the directory the
+	// server was started in is refused before anything runs, because two tools execute
+	// code the target directory controls: the consuming site's own React Router, and git.
+	'mcp-path-outside-project',
 ] as const;
 
 export type CheckId = (typeof CHECK_IDS)[number];

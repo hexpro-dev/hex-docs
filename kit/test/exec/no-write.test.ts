@@ -30,9 +30,17 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { materialiseCorpus } from '../../../fixtures/index.js';
 import { buildBundle } from '../../src/compile/build.js';
 import { writeBundle } from '../../src/compile/bundle.js';
-import { READ_RECIPES, WRITE_RECIPES, holeCount, type RecipeId } from '../../src/exec/recipes.js';
+import {
+	ALL_RECIPES,
+	FETCH_RECIPES,
+	READ_RECIPES,
+	WRITE_RECIPES,
+	holeCount,
+	type Recipe,
+	type RecipeId,
+} from '../../src/exec/recipes.js';
 import { ExecRefusal } from '../../src/exec/run.js';
-import { callTool, serverContext } from '../../src/mcp/server.js';
+import { callTool, mcpRecipes, serverContext } from '../../src/mcp/server.js';
 import { COMMANDS, TOOLS } from '../../src/registry/index.js';
 
 const REPO_ROOT = resolve(fileURLToPath(new URL('../../../', import.meta.url)));
@@ -328,8 +336,8 @@ describe('the tool graph reaches no writer', () => {
 	});
 
 	test('the direct runRecipe callers are exactly these three, in both directions', () => {
-		// `serverContext.exec` refuses a write recipe by name, and that refusal only covers a
-		// caller that goes through `Ctx.exec`. `kit/src/compile/git.ts` does not: it imports
+		// `serverContext.exec` refuses every recipe no tool declares, and that refusal only
+		// covers a caller that goes through `Ctx.exec`. `kit/src/compile/git.ts` does not: it imports
 		// `runRecipe` and calls it, so the compiler's git reads never pass the server's gate.
 		// What closes that instead is its own signature, `git(root, id: ReadRecipeId, ...)`,
 		// which makes a write recipe a typecheck failure at the call site rather than a
@@ -354,9 +362,10 @@ describe('the tool graph reaches no writer', () => {
 		expect(callers.sort()).toEqual([
 			// The CLI context's `exec`, which is the unrestricted one on purpose.
 			'kit/src/cli/main.ts',
-			// The git walk, held by `ReadRecipeId` rather than by the server's set.
+			// The git walk, held by `ReadRecipeId` rather than by the server's set, and counted
+			// in each compiling tool's `runs` so the annotations see it.
 			'kit/src/compile/git.ts',
-			// The server context's `exec`, which wraps it in the read-recipe refusal.
+			// The server context's `exec`, which wraps it in the declared-recipe refusal.
 			'kit/src/mcp/server.ts',
 		]);
 	});
@@ -518,50 +527,83 @@ describe('what the walk from mcp/server.ts actually reaches', () => {
 /**
  * The exec the MCP context carries, refusing by name.
  *
- * `serverContext` does not use `NO_EXEC`: two read-only tools genuinely need git, and
+ * `serverContext` does not use `NO_EXEC`: four read-only tools genuinely need a recipe, and
  * refusing those would make the server answer differently from the CLI about the same
- * tree. What it does instead is a set of read recipe ids, and the two assertions below are
- * the both-directions check on that set. Neither spawns anything: a read id is driven with
- * a deliberately wrong arity, so it reaches `runRecipe` and is refused there for the
- * arity rather than for the id, which is what says it got past the gate.
+ * tree. What it carries instead is the set of recipes the tools declare in `runs`, and the
+ * assertions below are the both-directions check on that set. Neither spawns anything: an
+ * allowed id is driven with a deliberately wrong arity, so it reaches `runRecipe` and is
+ * refused there for the arity rather than for the id, which is what says it got past the
+ * gate.
  */
 function wrongArity(id: RecipeId): string[] {
 	return holeCount(id) === 0 ? ['extra'] : Array(holeCount(id) - 1).fill('value');
 }
 
-describe('the MCP context refuses the write recipes by name', () => {
+describe('the MCP context runs only what a tool declares', () => {
 	const ctx = serverContext(REPO_ROOT, KIT_VERSION);
+	const allowed = mcpRecipes();
 
-	for (const id of Object.keys(WRITE_RECIPES) as RecipeId[]) {
-		test(`${id} is refused`, () => {
+	test('the set is every tool runs list and nothing else, and it is not empty', () => {
+		const declared = new Set(
+			TOOLS.flatMap((command) => (command.tool === null ? [] : command.runs)),
+		);
+		expect([...allowed].sort()).toEqual([...declared].sort());
+		expect(allowed.size).toBeGreaterThan(0);
+	});
+
+	test('no recipe the MCP context runs writes a file, and none is a fetch or a write', () => {
+		// The step 8 review found `aws.get-object` in the hand-written set this replaced, with
+		// its third hole a local path s3api writes, under a comment saying the context could not
+		// write. `outputHole` is the declaration a recipe carries for that, and the fetch and
+		// write tables are where such a recipe lives.
+		for (const id of allowed) {
+			expect((ALL_RECIPES[id] as Recipe).outputHole, `${id} writes to a hole`).toBeUndefined();
+			expect(id in READ_RECIPES, `${id} is not a read`).toBe(true);
+			expect(id in FETCH_RECIPES || id in WRITE_RECIPES, `${id} is a fetch or a write`).toBe(false);
+		}
+	});
+
+	const refused = (Object.keys(ALL_RECIPES) as RecipeId[]).filter(
+		(id) => !allowed.has(id as never),
+	);
+
+	test('what is refused includes every fetch and every write, and one read no tool declares', () => {
+		for (const id of [...Object.keys(FETCH_RECIPES), ...Object.keys(WRITE_RECIPES)]) {
+			expect(refused).toContain(id);
+		}
+		// `aws.list-objects` belongs to `publish` and `prefetch`, and no tool reaches it. A read
+		// is not allowed for being a read.
+		expect(refused).toContain('aws.list-objects');
+	});
+
+	for (const id of Object.keys(ALL_RECIPES) as RecipeId[]) {
+		test(`${id} is ${mcpRecipes().has(id as never) ? 'allowed' : 'refused'} by the context`, () => {
 			let thrown: unknown;
 			try {
-				ctx.exec(id, Array(holeCount(id)).fill('value'), { cwd: REPO_ROOT });
+				ctx.exec(
+					id,
+					allowed.has(id as never) ? wrongArity(id) : Array(holeCount(id)).fill('value'),
+					{
+						cwd: REPO_ROOT,
+					},
+				);
 			} catch (error) {
 				thrown = error;
 			}
-			expect((thrown as Error | undefined)?.message).toContain('does not run');
-			expect((thrown as Error).message).toContain(id);
-		});
-	}
-
-	for (const id of Object.keys(READ_RECIPES) as RecipeId[]) {
-		test(`${id} gets past the gate`, () => {
-			let thrown: unknown;
-			try {
-				ctx.exec(id, wrongArity(id), { cwd: REPO_ROOT });
-			} catch (error) {
-				thrown = error;
+			if (allowed.has(id as never)) {
+				// It reached `runRecipe` and was refused there for the arity, which is what says
+				// the id is in the set. A recipe dropped from every tool's `runs` would fail here
+				// with "does not run" instead.
+				expect(thrown).toBeInstanceOf(ExecRefusal);
+				expect((thrown as Error).message).not.toContain('does not run');
+			} else {
+				expect((thrown as Error | undefined)?.message).toContain('does not run');
+				expect((thrown as Error).message).toContain(id);
 			}
-			// It reached `runRecipe` and was refused there for the arity, which is what says
-			// the id is in the safe set. A read recipe dropped from that set would fail here
-			// with "does not run" instead.
-			expect(thrown).toBeInstanceOf(ExecRefusal);
-			expect((thrown as Error).message).not.toContain('does not run');
 		});
 	}
 
-	test('an id in neither table is refused', () => {
+	test('an id in no table is refused', () => {
 		expect(() => ctx.exec('aws.delete-object' as RecipeId, [], { cwd: REPO_ROOT })).toThrow(
 			/does not run/,
 		);

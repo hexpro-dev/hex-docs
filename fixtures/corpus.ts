@@ -196,7 +196,12 @@ export const REJECTED_ASSETS: readonly { path: string; rule: string; why: string
 	{
 		path: 'unsafe-diagram.svg',
 		rule: 'asset-svg-unsafe',
-		why: 'Carries all five of the things `asset-svg-unsafe` names: a script element, a foreignObject wrapping XHTML, an anchor with an href, an external image reference and an onload handler. Inside an img element none of it runs; navigated to directly on the consuming site, which is what the prefetch produces, all of it does.',
+		why: 'Carries the five constructs the rule used to name as a denylist: a script element, a foreignObject wrapping XHTML, an anchor with an href, an external image reference and an onload handler. Inside an img element none of it runs; navigated to directly on the consuming site, which is what the prefetch produces, all of it does.',
+	},
+	{
+		path: 'srcdoc-iframe.svg',
+		rule: 'asset-svg-unsafe',
+		why: 'The step 8 review payload: an XHTML iframe whose srcdoc runs script against the parent document. It carries none of the five constructs above, which is how it passed the denylist those five were, and headless Chrome ran it with access to the consuming site origin. It is the regression case for the allowlist that replaced that list.',
 	},
 ];
 
