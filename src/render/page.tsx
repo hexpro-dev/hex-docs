@@ -122,7 +122,6 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 		page.title,
 		uiString(props.locale, 'pageLoaded', { title: page.title }),
 		emit,
-		reduced,
 		article,
 		live,
 	);

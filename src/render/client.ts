@@ -83,12 +83,19 @@ export function useDocsEvents(root: RefObject<HTMLElement | null>): EmitFn {
 /**
  * Announces a client-side navigation and moves focus into the article.
  *
- * Three things happen in this order and the order is the whole content of the function.
- * Focus moves first with `preventScroll`, because focusing a `tabindex="-1"` element
- * otherwise scrolls it under the site's sticky header and the reader lands mid-paragraph.
- * The scroll is then explicit, and instant under reduced motion. The announcement goes
- * last, into a polite live region, and is cleared afterwards so it does not read itself
- * out again when something unrelated updates the region.
+ * Focus moves with `preventScroll`, because focusing a `tabindex="-1"` element otherwise
+ * scrolls it under the site's sticky header and the reader lands mid-paragraph. The
+ * announcement goes into a polite live region and is cleared afterwards so it does not
+ * read itself out again when something unrelated updates the region.
+ *
+ * **It does not scroll.** Scrolling is React Router's `<ScrollRestoration />`, which both
+ * consumers render in their root layout: to the saved position on back and forward, to the
+ * element a hash names, and to the top otherwise. That runs in a layout effect and this in a
+ * passive one, so any scroll here lands last. Step 4 scrolled to the top here, and
+ * `test/render/dom/scroll.test.tsx` measured what that did: every search result with an
+ * anchor landed at the top of its page, and every back-button restore was undone. A heading
+ * alias the router cannot find by id is `useAliasScroll`'s, the one scroll the router cannot
+ * make, and it runs after the router's for the same reason.
  *
  * It deliberately does nothing on the first commit. React Router does not move focus on a
  * navigation, which is why this exists, but it also does not re-mount the shell on
@@ -100,7 +107,6 @@ export function useNavigationAnnounce(
 	title: string,
 	announcement: string,
 	emit: EmitFn,
-	reduced: boolean,
 	article: RefObject<HTMLElement | null>,
 	live: RefObject<HTMLElement | null>,
 ): void {
@@ -112,7 +118,6 @@ export function useNavigationAnnounce(
 			return;
 		}
 		article.current?.focus({ preventScroll: true });
-		window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
 		const region = live.current;
 		if (region !== null) {
 			region.textContent = announcement;
@@ -124,7 +129,7 @@ export function useNavigationAnnounce(
 		}
 		emit('hexdocs:navigate', { slug, title, source: 'client' });
 		return undefined;
-	}, [slug, title, announcement, emit, reduced, article, live]);
+	}, [slug, title, announcement, emit, article, live]);
 }
 
 /**

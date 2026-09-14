@@ -1,0 +1,183 @@
+/**
+ * @vitest-environment happy-dom
+ *
+ * Who scrolls after a client-side navigation between two docs pages.
+ *
+ * Both consumers render React Router's `<ScrollRestoration />` in their root layout. It
+ * scrolls in a layout effect when the location changes: to the saved position on a back
+ * or forward navigation, to the element a hash names, or to the top. The shell's own
+ * navigation effect is a passive effect, and passive effects run after every layout effect
+ * in the same commit, so anything the shell scrolls there has the last word.
+ *
+ * Framework mode matters to the setup, and it is reproduced rather than assumed. The Vite
+ * plugin wraps a route module's default export once, at module level, so every page row
+ * that names `routes/docs.tsx` renders the same component function. React Router renders a
+ * leaf with no key, so moving from one docs page to another keeps the shell mounted and its
+ * effect sees a changed slug rather than a first commit. Two routes sharing one `Component`
+ * here are that shape.
+ *
+ * What this cannot say is where the page ends up. happy-dom has no layout, so a scroll call
+ * moves nothing; the assertion is on the order of the calls, which is the whole of the
+ * question, because the last call a browser receives is the position the reader is left at.
+ */
+
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import {
+	createMemoryRouter,
+	Link,
+	Outlet,
+	RouterProvider,
+	ScrollRestoration,
+	useLoaderData,
+} from 'react-router';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+
+import type { CompiledPage } from '../../../src/contracts/page.js';
+import type { DocsSiteConfig } from '../../../src/contracts/site.js';
+import { DocsPage } from '../../../src/render/page.js';
+import type { DocsPageData } from '../../../src/site/route.js';
+import { REPO_ROOT, goldenManifest, goldenPages } from '../../support/golden.js';
+import { pageData } from '../../support/render.js';
+
+const SITE = JSON.parse(
+	readFileSync(join(REPO_ROOT, 'fixtures', 'site', 'fixture-app.docs.json'), 'utf8'),
+) as DocsSiteConfig;
+const MANIFEST = goldenManifest();
+const PAGES = new Map(goldenPages().map((entry) => [`${entry.locale}/${entry.slug}`, entry.page]));
+
+const data = (slug: string): Promise<DocsPageData> =>
+	pageData({
+		manifest: MANIFEST,
+		site: SITE,
+		locale: 'en',
+		slug,
+		load: (l, s) => PAGES.get(`${l}/${s}`) as CompiledPage | undefined,
+	});
+
+/** One component function for both rows, as the Vite plugin produces for one module. */
+function DocsRoute() {
+	return <DocsPage {...(useLoaderData() as DocsPageData)} Link={Link} />;
+}
+
+/** Every scroll the page asked the browser for, in order. */
+const scrolls: string[] = [];
+const scrollIntoView = Element.prototype.scrollIntoView;
+
+beforeEach(() => {
+	scrolls.length = 0;
+	vi.stubGlobal('matchMedia', () => ({
+		matches: false,
+		addEventListener: () => undefined,
+		removeEventListener: () => undefined,
+	}));
+	vi.spyOn(window, 'scrollTo').mockImplementation(((...args: unknown[]) => {
+		const first = args[0];
+		scrolls.push(
+			typeof first === 'object' && first !== null
+				? `to top from the shell`
+				: `to ${String(args[1])} from the router`,
+		);
+	}) as typeof window.scrollTo);
+	Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+		scrolls.push(`into #${this.id}`);
+	};
+});
+
+afterEach(() => {
+	cleanup();
+	Element.prototype.scrollIntoView = scrollIntoView;
+	vi.restoreAllMocks();
+	vi.unstubAllGlobals();
+});
+
+async function mountRouter(): Promise<ReturnType<typeof createMemoryRouter>> {
+	const first = await data('guide/first-tag');
+	const second = await data('guide/troubleshooting');
+	const router = createMemoryRouter(
+		[
+			{
+				id: 'root',
+				path: '/',
+				element: (
+					<>
+						<Outlet />
+						<ScrollRestoration />
+					</>
+				),
+				children: [
+					{
+						id: 'first',
+						path: 'fixture-app/docs/guide/first-tag',
+						loader: () => first,
+						Component: DocsRoute,
+					},
+					{
+						id: 'second',
+						path: 'fixture-app/docs/guide/troubleshooting',
+						loader: () => second,
+						Component: DocsRoute,
+					},
+				],
+			},
+		],
+		{ initialEntries: ['/fixture-app/docs/guide/first-tag'] },
+	);
+	render(<RouterProvider router={router} />);
+	await waitFor(() =>
+		expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(first.page.title),
+	);
+	scrolls.length = 0;
+	return router;
+}
+
+describe('a client-side navigation between docs pages', () => {
+	test('to an address with a hash leaves the reader at the heading the hash names', async () => {
+		// The case search results produce: every hit below a page's top is a link to another
+		// page with an anchor. Scrolling to the top afterwards sends the reader to the start of
+		// a page they asked to see the middle of.
+		const router = await mountRouter();
+		const second = await data('guide/troubleshooting');
+		const target = second.page.headings[1]?.id as string;
+
+		await act(async () => {
+			await router.navigate(`/fixture-app/docs/guide/troubleshooting#${target}`);
+		});
+		await waitFor(() =>
+			expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(second.page.title),
+		);
+
+		expect(scrolls.at(-1), `scrolls in order: ${scrolls.join(', ')}`).toBe(`into #${target}`);
+	});
+
+	test('back to a page leaves the reader where the router restored them', async () => {
+		const router = await mountRouter();
+		await act(async () => {
+			await router.navigate('/fixture-app/docs/guide/troubleshooting');
+		});
+		await act(async () => {
+			await router.navigate(-1);
+		});
+		await waitFor(() =>
+			expect(router.state.location.pathname).toBe('/fixture-app/docs/guide/first-tag'),
+		);
+
+		expect(scrolls.at(-1), `scrolls in order: ${scrolls.join(', ')}`).toMatch(/from the router$/);
+		expect(scrolls).not.toContain('to top from the shell');
+	});
+
+	test('still moves focus into the article, without scrolling to do it', async () => {
+		// The half of the effect that stays. React Router does not move focus on a navigation,
+		// and a keyboard reader left on the link they activated is on a page that no longer
+		// contains it.
+		const router = await mountRouter();
+		const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+		await act(async () => {
+			await router.navigate('/fixture-app/docs/guide/troubleshooting');
+		});
+		await waitFor(() => expect(focus).toHaveBeenCalledWith({ preventScroll: true }));
+		expect(focus.mock.contexts.at(-1)).toBe(document.getElementById('hx-content'));
+	});
+});
