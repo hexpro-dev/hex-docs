@@ -552,6 +552,29 @@ describe('resource()', () => {
 		]);
 	});
 
+	test('answers a trailing slash with a 301 to the slashless address, query kept, in one hop', async () => {
+		// `llms.txt` links relative to its own address. Served at `llms.txt/` with a 200, every
+		// link resolved one segment too deep, `llms.txt/index.md`, and 404ed.
+		const server = docsServer(sources);
+		const cases: [string, string][] = [
+			['/fixture-app/docs/llms.txt/', '/fixture-app/docs/llms.txt'],
+			['/ja/fixture-app/docs/llms.txt/?x=1', '/ja/fixture-app/docs/llms.txt?x=1'],
+			['/fixture-app/docs/llms-full.txt//', '/fixture-app/docs/llms-full.txt'],
+			['/ja/fixture-app/docs/guide/index.md/', '/ja/fixture-app/docs/guide/index.md'],
+			// A casing redirect and the slash together are still one redirect, to the canonical.
+			['/EN/fixture-app/docs/llms.txt/', '/fixture-app/docs/llms.txt'],
+		];
+		for (const [from, to] of cases) {
+			const response = await server.resource(url(from));
+			expect({ from, status: response.status, location: response.headers.get('Location') }).toEqual(
+				{ from, status: 301, location: to },
+			);
+		}
+		// And an address that is not a resource is still a 404 with the slash, not a redirect to
+		// one.
+		expect((await server.resource(url('/fixture-app/docs/typo.md/'))).status).toBe(404);
+	});
+
 	test('a raw page the config lists and the bundle lacks is a 404', async () => {
 		const ahead = { ...site, pages: [...site.pages, 'guide/ghost'] };
 		const response = await docsServer({ ...sources, configs: [ahead] }).resource(
