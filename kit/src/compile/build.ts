@@ -584,13 +584,13 @@ export function buildBundle(appRoot: string, options: BuildOptions): BuildResult
 			const compiled = pages.get(slug);
 			const own = compiled?.get(locale);
 			// A scaffolded file is indexed as the source page, because the source page is
-			// what a reader has to be served at that address. `rawLocale` in
-			// `src/site/serve.ts` already chooses the source locale for a record whose own
+			// what a reader has to be served at that address. `servedLocale` in
+			// `src/site/route.ts` already chooses the source locale for a record whose own
 			// state is `scaffolded`, and `hexdocs scaffold` writes the source's headings with
 			// a TODO under each, so indexing the locale's own page put "TODO" in that
 			// language's index under every heading and none of the prose the reader lands
 			// on. Decided on the page's own state and not the effective one, the rule
-			// `rawLocale` states: a real translation that transcludes a scaffolded snippet is
+			// `servedLocale` states: a real translation that transcludes a scaffolded snippet is
 			// still served, and indexed, in its own language, and its effective state is what
 			// marks the result as untrustworthy. Both land on `missing` in the index.
 			if (own !== undefined && pageStates.get(slug)?.get(locale) !== 'scaffolded') {

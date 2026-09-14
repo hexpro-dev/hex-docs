@@ -272,7 +272,7 @@ const indexes = new Map<Locale, SearchIndex>();
  *
  * Its own page, unless it has none or its own state is `scaffolded`, and the source page
  * otherwise. Read off the manifest's own state rather than the compiled page's effective
- * one, which is the rule `rawLocale` serves raw markdown by. The corpus's scaffolded
+ * one, which is the rule `servedLocale` serves every route by. The corpus's scaffolded
  * Spanish chip matrix is what makes the difference visible here: its file is the English
  * text, but it transcludes the Spanish legend, so the two pages index different words and
  * the glyph count below reads the legend from whichever one this returns.

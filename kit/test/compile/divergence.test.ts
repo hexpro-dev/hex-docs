@@ -373,7 +373,7 @@ describe('a scaffolded snippet', () => {
 			'effective',
 		);
 
-		// The search index chooses the page by its own state, as `rawLocale` does, and this is
+		// The search index chooses the page by its own state, as `servedLocale` does, and this is
 		// the one case where own and effective part. The page is a real Chinese translation
 		// and is served in Chinese, so its Chinese prose is what the index has to hold;
 		// choosing by the effective state would index the English page at a Chinese address.

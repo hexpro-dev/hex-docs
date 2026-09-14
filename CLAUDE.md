@@ -54,9 +54,11 @@ package ships its own UI strings in all seven languages.
 No `.github/` directory in either. Every guard is a hand-run zero-dependency `.mjs` in
 `apps/front/scripts/`, each carrying the comment "There is no CI on this repository."
 
-The one thing that always runs is `prebuild`. Verified: pnpm 10.28.0 fires `prebuild`
-automatically, and `hex-terraform/deploy/src/build.ts` runs `pnpm build` **on the host**
-before the Docker build, so the network and the submodule are available there. The
+The one thing that always runs is `prebuild`. Verified: pnpm 10.28.0 and npm 11 both fire
+`prebuild` automatically, and `hex-terraform/deploy/src/build.ts` builds the front **on the
+host** before the Docker build, so the network and the submodule are available there. It
+runs `npm run build`, not `pnpm build`: it takes the pnpm branch only when the site
+directory holds its own `pnpm-lock.yaml`, and neither consumer's does. The
 container's own `npm install --ignore-scripts` never re-runs it. That is why the docs
 guard hangs off `prebuild` and not off a script somebody has to remember.
 
@@ -81,13 +83,23 @@ consuming site's own origin, which is what the build-time prefetch exists to gua
 `Layout`, above `<Meta />`, gated on `isLocalisedPath(path)`. React Router's `meta()` can
 append tags, never delete them, so a docs route cannot correct its own canonical.
 
-Consequence: **the docs slug list must be a build input.** `hexdocs sync` writes it into
-`<project>.docs.json` and `LOCALISED_PATHS` is derived from it. A slug list that only
-existed at runtime would put a self-referential canonical plus eight alternates pointing
-at eight 404s on every mistyped docs URL.
+**Docs addresses do not join `LOCALISED_PATHS`.** Root asks the docs match instead:
+`docsSeoFromMatches(useMatches())` returns the page's `DocsSeo`, and the installed decision
+is `docsSeo ? docsSeo.indexable : isLocalisedPath(path)`, with the alternates filtered to
+`docsSeo.languages`. A docs loader that threw leaves the match with no data, which reads as
+not indexable, and a mistyped docs URL matches no route at all, so it gets root's `noindex`
+branch. Step 5 derived `LOCALISED_PATHS` from the slug list; step 8 measured that doing so put
+the docs code and every config into each page's client bundle, and gave the docs home no
+canonical because both consumers normalise the trailing slash away before an exact match.
+
+The slug list is still a build input, for the route table: `hexdocs sync` writes it into
+`<project>.docs.json` and the route rows are derived from it.
 
 `isLocalisedPath` has a second caller, `preferredLanguageRedirect` in
-`lib/i18n.server.ts`, which cookie-redirects any bare path it accepts.
+`lib/i18n.server.ts`, which cookie-redirects any bare path it accepts. A docs address is
+absent from the list, so it is never redirected, and that absence is load-bearing: the
+translation notice links to the English address, and a redirect would bounce the reader
+straight back, which is the loop `isLegalPath` exists to prevent for legal pages.
 
 ### Resource routes bypass parent loaders
 
@@ -96,16 +108,20 @@ route's loader and no parent's. `routes/lang.tsx` does all its language validati
 loader, so a machine endpoint mounted under `:lang` answers
 `GET /banana/hex-nfc/docs/llms.txt` with a 200.
 
-Mount `llms.txt`, the raw markdown tree and the JSON index **top-level**, beside
+Mount `llms.txt`, `llms-full.txt` and the raw markdown rows **top-level**, beside
 `robots.txt` and `sitemap.xml`, carrying the language as a segment the route validates
-itself with `matchLanguage()`.
+itself. `docsServer().resource()` does that validation in the order `lang.tsx` does.
 
-### Route ranking ties break on declaration order
+### Every docs route row is static, so declaration order decides nothing
 
-`:slug.json` fails React Router's `/^:[\w-]+$/` test so it scores as a static segment and
-ties with `search.json`. Probed against the installed 7.12: declaring `:slug.json` first
-makes `/…/search.json` resolve to it with `{slug: "search"}`. Declare every static-suffix
-pattern before any `:slug.*` pattern, and pin it with a route-table test.
+A docs row is either fully static or a single leading `:lang` followed by static segments.
+The only overlaps are a `:lang` row against a static row (at a `/docs` mount, `/docs/docs`
+matches the page row and `/:lang/docs` with `lang=docs`), and a static segment outscores a
+dynamic one whichever is declared first. `test/site/router.test.ts` reverses the rows and
+checks every address still reaches the same route, with a planted tie as its positive
+control. Step 5's rows had a `*.md` pattern, and React Router escapes a `*` that is not a
+trailing `/*`, so that row matched only the literal URL `/…/*.md` while every raw address
+404d. The raw rows are now one static `<slug>.md` row per page per mount.
 
 ### The deployment
 
@@ -146,8 +162,9 @@ matches `CLAUDE.md`, `AGENTS.md`, `.claude` and `.agents` by name. Widening that
 `docs/` would push the internal tree to a public repo and nothing would catch it. Add
 exactly `docs/site`, never `docs`, and assert that no bare `docs` entry exists.
 
-The publish workflow is deliberately **not** allowlisted: it names the bucket and the
-publisher role.
+The publish workflow is deliberately **not** allowlisted. It carries neither the bucket nor
+the role, which it reads from repository variables, but it describes the shape of the estate
+and a public mirror has no use for it.
 
 `.claude/` is gitignored there by policy, so skills wiring cannot be committed. `.mcp.json`
 can be. That is why the MCP server exposes `list_skills` and `get_skill`.
@@ -695,12 +712,13 @@ JSX in it. What follows is what would otherwise be rediscovered.
 
 ### Two entry points, and the reason is not tidiness
 
-`src/index.ts` stays importable from bare node. `hex-web` imports this package from places
-with no bundler at all: its hand-run `.mjs` guards, its sitemap generation and `hexdocs
-sync` all run under plain node, where a `.css` specifier throws before anything else
-happens. So the barrel re-exports the contracts, the search client, the string tables and
-the address rules and stops there, and everything that renders lives behind
-`@hex-pro/docs/render`, which is the only module that imports the stylesheet.
+`src/index.ts` stays importable from bare node. The toolchain imports it under `tsx`, and a
+consuming site's `app/lib/docs.server.ts` is loaded by React Router's route-config loader,
+which runs with no Vite plugins at all; a `.css` specifier on either path is a failure a long
+way from its cause. So the barrel re-exports the contracts, the search client, the string
+tables, the address rules, `docsServer` and `docsSeoFromMatches`, and stops there, and
+everything that renders lives behind `@hex-pro/docs/render`, which is the only module that
+imports the stylesheet.
 
 `test/render/entrypoints.test.ts` walks the actual import graph rather than trusting the
 arrangement, because the failure mode is one convenient re-export added a year from now and
@@ -807,7 +825,7 @@ settles it: `reference/api` writes `start=12 highlight="2,5-7"` over ten lines a
 guard clause and the three-line constructor call, and `developer/architecture` writes
 `start=48 highlight="3,9"` and means the throw and the alertMessage assignment. Adding
 `startLine` to the numbers marks nothing at all on either block, which renders as a
-perfectly ordinary code block. `test/render/code.test.ts` names both files and both sets of
+perfectly ordinary code block. `test/render/code.test.tsx` names both files and both sets of
 indices.
 
 ### The table of contents and the anchors come from different lists
@@ -847,9 +865,13 @@ names the reader's language in a lookup table that has no key for anything else.
 - The shell owns the only `h1` and emits **no `<main>`**: both consumers' `root.tsx` already
   renders one, and two is an authoring error a screen reader reports. There is no
   `headingOffset` and there should not be one.
-- Five translation states map to three notices. `scaffolded` folds to `fallback`, which is
-  the fold `kit/src/compile/search.ts` already applies: the reader is looking at English at
-  a Spanish address, which is what a fallback is to them.
+- Five translation states map to three notices. `scaffolded` folds to `fallback`, and the
+  route serves the **source** page for a locale whose own file is scaffolded, never that
+  file. Step 8's review found the route serving it: `hexdocs scaffold` writes the source's
+  headings with a TODO under each, not a copy of the English, so a reader got a page of TODO
+  markers under a notice promising English. The corpus could not show it, because its only
+  scaffolded file is the other signal, a byte copy of the English body. The search index for
+  that locale is built from the source page for the same reason.
 - A stale translation stays indexable. It is a real translation of a real page in that
   language, which is not true of the other two causes.
 - An AST major this runtime does not know is a refusal from `docsRoute`, not a page of
@@ -858,9 +880,10 @@ names the reader's language in a lookup table that has no key for anything else.
 - The payload gets one small hand-written shape check at the seam. Zod is in `kit/` and this
   half may import only `react`, and the alternative is a truncated JSON file becoming an
   exception inside a React render, which on both consumers client-renders the whole shell.
-- A slug the bundle carries and `site.pages` does not is refused. Serving it would ship a
-  page with no canonical, no alternates and no `noindex`, and it would render perfectly.
-  `pageSkew` names the state at build time.
+- A slug the bundle carries and `site.pages` does not is refused. The route table is built
+  from `site.pages`, so such a slug has no row and nothing lists it; serving it through some
+  other path would publish an address the site does not know it has. `pageSkew` names the
+  state at build time.
 - Dates are formatted as the ISO date the bundle already stores, and a consumer passes
   `formatDate` to change that. `Intl.DateTimeFormat` answers from whatever ICU the runtime
   was built with, which is a hydration mismatch on a string the reader sees. Plural
@@ -958,9 +981,11 @@ place to put this" is.
 Three edits the plan's install table has and this deletes, each against the source:
 `root.tsx` already matches app paths by prefix so a docs mount under an app path inherits
 the accent for free; a missing `PATH_SCOPES` entry yields chrome-only strings, which is
-right because this package ships its own in seven languages; and docs pages are not opted
-out of the language cookie redirect, because the reason legal documents are does not apply
-to a manual.
+right because this package ships its own in seven languages; and the cookie redirect needs no
+edit, which step 5 got right for the wrong reason. It said the legal exemption's reason does
+not apply to a manual. It does, word for word: the translation notice links to the English
+address. Step 8 keeps docs addresses out of `LOCALISED_PATHS`, and that absence is the
+exemption.
 
 ### The MCP server is written here, and the SDK is a devDependency that proves it
 
@@ -1552,6 +1577,159 @@ automation there at all. The deny scan is the half that does gate a publish, bec
 on an error envelope. Neither gates a mirror push, and `wiring-allow-paths` could not gate
 a publish even if `check` ran on every commit: it reads the mirror script, and publishing
 does not.
+
+## The hex-web integration (step 8)
+
+Step 8 is the first time this package met a real consumer, and the package had to change
+before hex-web could mount it. What follows is the hex-docs half. The consumer half is
+recorded at the end of the section once it lands.
+
+### Step 5 was green against strings and could not build a real site
+
+A read-only mapping pass ran `install`, `verify-install` and the route rows against the real
+hex-web and kcalc-web and found eighteen defects. A fully green `verify-install` and an
+idempotent `install` coexisted with a site that could not build, and with one that built and
+shipped its most important page wrong. The loud ones: the launcher's first run inside a pnpm
+workspace installed the whole workspace and aborted with no TTY, `--silent` hiding why; the
+prebuild string passed `--root`, which `prefetch` refuses because its root is positional; the
+generated `app/lib/docs.ts` imported `@hex-pro/docs`, which React Router's route-config
+loader cannot resolve because it runs with `plugins: []`; and the printed machine rows had no
+ids, which the route loader refuses as duplicates. The silent ones: the `*.md` raw row matched
+nothing; section roots carried a trailing slash both consumers normalise away, so the docs home
+had no canonical; fallback pages got `noindex` from `meta()` while root still wrote a canonical
+and eight alternates; and the translation notice's English link was cookie-redirected back.
+
+The shape they share is the lesson. The fixture consumers were strings, every wiring check was a
+text match, and nothing evaluated a route table, a prebuild string or an import the way the
+consumer would. The fixtures are now the consumers' real bytes, and the checks below run the
+consumer's own tools.
+
+### Decisions that came out of measuring, not preference
+
+**No bucket name in any config.** A client-reachable `import.meta.glob` with `import: 'default'`
+over `*.docs.json` inlines the whole object into the client bundle; four independent critiques
+measured a sentinel bucket key in the built JavaScript. The bucket reaches `prefetch` through
+`--bucket` in the consumer's own prebuild string, which is private and never bundled, or through
+`HEXDOCS_BUCKET`. `bucketOf` holds it to S3's naming grammar where it enters.
+
+**Addresses are slashless.** Both consumers' `normalise`, `localeUrl` and sitemap drop a
+trailing slash, so the slashless form is the only one a link, the canonical and the sitemap can
+agree on. A leaf and a section root at one address (`guide.md` beside `guide/index.md`, in any
+two locales) and a redirect source colliding with a page address are arms of `slug-reserved`.
+
+**One server module and two route modules in the consumer.** `app/lib/docs.server.ts` holds the
+configs glob and three bundle globs and calls `docsServer`, through an extensionless relative
+import of `<mount>/src/index` so the plugin-less route-config loader can load it.
+`routes/docs.tsx` and `routes/docs.machine.tsx` are one-line loaders. `page()` throws its 301,
+404 and 500 as `Response`s; `resource()` always returns one. Everything subtle is in
+`src/site/serve.ts`, once, for both consumers: the slug comes from a lookup table on the
+lower-cased, decoded, slashless path and is never parsed out of the URL, because React Router
+matches case-insensitively and strips one slash from `.data` requests; a case variant is served
+and marked not indexable, which is the site's existing behaviour for its own pages; and a bundle
+that is missing or malformed is a 500 naming `hexdocs prefetch`, never a throw at import.
+
+**`DocsSeo.languages` agrees with `indexable` by construction.** The manifest carries a page's
+effective translation state when it differs from its own, and `languages` is every locale whose
+effective state is neither `scaffolded` nor `missing`. The sitemap rows carry the same list. A
+sweep over the corpus, and over a corpus perturbed so a snippet is scaffolded, checks every
+page and locale.
+
+**Raw markdown links resolve.** An author writes links relative to the file and images relative
+to the source tree, and neither survives being served at an address or concatenated into
+`llms-full.txt`. The compiler writes resolved destinations as `hexdocs:page/<slug>.md` and
+`hexdocs:asset/<sha>.<ext>`, always immediately after `](` (angle brackets and a leading space are
+removed so the substitution cannot miss them), and the server substitutes the locale prefix, the
+mount and the label. A golden test counts the tokens the parser sees against the ones the
+substitution can find. A link to a page with no source-locale file is `link-resolves`, because
+nothing would serve it.
+
+**Redirects are routed.** `sync` writes the default version's redirects into the config, the
+route rows include each source at both mounts, and `page()` answers with a 301. `sync` used to
+drop a redirected slug from `pages` and nothing else, so a renamed page 404d while the manifest
+said the redirect existed.
+
+**`wiring-routes` runs the consumer's own `react-router routes --json`** through a read recipe,
+then checks the structure: each page row once at the bare mount and once under `:lang`, each
+machine row top level with its id. It is allowed over MCP by name, deliberately, because it
+executes the consumer's route config, which is exactly what that consumer's own build executes.
+A missing binary is `not-run`. `wiring-root-seo` (formerly `wiring-localised-paths`) checks that
+root asks `docsSeoFromMatches`.
+
+**The prebuild predicate binds, it does not match.** `kit/src/commands/prefetch-params.ts` holds
+`prefetch`'s table in a module with no writer imports, so the read-only check can parse the
+prebuild segment against it: split on shell operators, refuse a masking `||` or `;`, require the
+positional root to resolve to the repository and the segment to precede the guard and the build.
+
+**The settings half of `wiring-mcp` is gone.** Whether one developer enabled an MCP server is not
+part of whether a site is wired, and as a build gate it failed every deploy from a machine whose
+local settings did not name it.
+
+### prefetch now deletes, and what it may delete is narrow
+
+A relabel or a removed version used to leave its pages in `app/docs/_bundles/`, where the glob
+bundled them, and its assets in `public/_docs/`, where the build shipped them. Prune runs after
+every cache fill has succeeded and before extraction, and removes what no plan names: a stray
+regular file anywhere in the two trees (a Finder `.DS_Store` included, which the first version of
+this rule refused and would have failed a production prebuild over), and any directory it left
+empty that no planned file sits under. A symbolic link anywhere from the site down to a label
+directory fails a named row with nothing deleted or written, because extraction writes through a
+link. A regular file with more than one link at a planned destination is replaced rather than
+written through, because `writeFileSync` truncates the shared inode. Labels that differ only by
+case are refused, because the deploy host is APFS. Nothing runs when an earlier row has not
+passed, which is what keeps a laptop without credentials from losing a tree it cannot rebuild.
+
+### The launcher
+
+`kit/bin/hexdocs` installs with `--ignore-workspace`: without it pnpm installs the consumer's
+whole workspace from inside the submodule, and with `CI=true` it removes that workspace's
+devDependencies. The install log goes to a file and is replayed to stderr only on failure,
+because the deploy reports the last twenty lines of stderr and a successful first run would
+otherwise bury the row that failed. It reinstalls only a tree it stamped and only when the kit's
+`package.json` or lockfile changed. The obvious rule, reinstall whenever the stamp is absent,
+would have run a production install over this repository's own development install on the next
+`pnpm verify` and deleted the test suite's dependencies.
+
+### Root test files had never been typechecked
+
+`tsconfig.test.json` set `include` and inherited `exclude`, which `extends` replaces wholesale
+and which named `test`. So the typecheck row counted three configurations while one of them
+compiled no test file, from step 1 to step 8, over 23 latent errors. `allowJs` was also missing,
+which is why every `.mjs` import had a directive typing it `any`, and that `any` hid nine more.
+`test/guards.test.ts` now compares every include root's TypeScript files on disk against the
+program, with one reasoned exemption, and a failed typecheck row names the file, which it did not:
+the last twenty-five lines of a failed run were the compiler's diagnostics table.
+
+### The review
+
+Forty-one agents over six lenses, each finding attacked by a skeptic who had to reproduce it:
+35 findings, 31 survived, 4 refuted. That is the highest ratio of any round, and the change was
+the largest. The blocker was the scaffolded page above. The majors were guards that could be
+deleted with the suite green (three in `prefetch`'s integrity checks, three in `sync`'s), a
+sitemap check that failed on the import its own instruction adds, an `install` that printed no
+routes instruction on a first install because its predicate passed over zero rows, and a
+generated guard that failed hex-web's own eslint. Two comments in the renderer named tests that
+did not exist, for a property each was the only record of; those tests now exist.
+
+### Deploy facts this step established
+
+- The front builds with `npm run build` on the deploy host, and hash `extra_dirs` are keyed by
+  project type, so a hex-docs submodule bump rebuilds all five front projects.
+- `git pull` does not check out a newly added submodule, even with `submodule.recurse` set. The
+  first deploy after the integration merges needs `git submodule update --init common/docs`,
+  or the prebuild fails with exit 127 on a launcher that is not there.
+- `wiring-routes` needs the consumer's dependencies installed, which they are at prebuild time.
+- Generated consumer files have to be measured under both consumers' eslint: hex-web lints `.mjs`
+  with node globals, and kcalc gives `.mjs` none.
+
+### What step 8 deliberately does not do
+
+Pinned version addresses (`/v/<label>/`) have no route rows; `docsRoute` still accepts `pinned`.
+There is no `Accept: text/markdown` negotiation, which would need `Vary: Accept` from root's
+`headers`. There is no JSON-LD helper; a consumer builds its own. `search.json` was removed, since
+nothing specified or read it. And three kcalc guards conflict with docs and are recorded for
+kcalc's own install rather than fixed here: `seo-audit.mjs` expects exactly its registry's URLs in
+the sitemap, `check-assets.mjs` refuses `.png` and `.svg` in `public/`, and `check-forbidden.mjs`
+scans the prefetched trees.
 
 ## Code style
 
