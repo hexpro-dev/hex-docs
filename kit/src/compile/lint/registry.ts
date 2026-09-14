@@ -290,10 +290,16 @@ export const RULE_DEFINITIONS = {
 		id: 'slug-reserved',
 		category: 'nav',
 		defaultSeverity: 'error',
-		title: 'Do not use a slug the routing already owns.',
+		title: 'Do not use a slug the routing already owns, or an address another page has.',
 		consequence:
-			'A page whose slug collides with a machine endpoint is shadowed by the route that was declared first, and which one wins is a property of declaration order rather than of anything on the page.',
-		examples: [{ bad: 'A page at the search slug.', good: 'A page at the searching-tags slug.' }],
+			'The first segments reserved under a docs mount belong to the package: the version pin, the machine files, and names held for endpoints that are not built yet. A page there shares a name with an address the package serves or has kept for later, and a URL stops saying which of the two it means. A page and a section root at one path, such as guide.md beside guide/index.md in any two languages, are one address, because addresses carry no trailing slash; a consuming site mounting both declares one path twice, and hex-web refuses that route table when it loads, naming a route id rather than either file.',
+		examples: [
+			{ bad: 'A page at the search slug.', good: 'A page at the searching-tags slug.' },
+			{
+				bad: 'content/ja/guide.md beside content/en/guide/index.md.',
+				good: 'content/ja/guide/overview.md beside content/en/guide/index.md.',
+			},
+		],
 	},
 
 	// -------------------------------------------------------------------------

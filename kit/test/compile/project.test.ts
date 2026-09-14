@@ -552,9 +552,9 @@ describe('what a file is allowed to be called', () => {
 	});
 
 	test('a reserved slug root is refused, and the message names the segment', () => {
-		// Each of these already has a route under a docs mount, and React Router breaks a
-		// ranking tie on declaration order. The page would resolve to whichever was declared
-		// first, deterministically and invisibly.
+		// Each of these is an address a docs mount serves or keeps for itself: the machine
+		// files, the version pin, and names held for endpoints not routed yet. A page at one
+		// of them would share its name with an address the package owns.
 		const loaded = loadProject(
 			writeTree({
 				files: {
@@ -578,6 +578,77 @@ describe('what a file is allowed to be called', () => {
 		}
 		expect([...loaded.pages.keys()]).toEqual(['index']);
 		expect(loaded.examined).toBe(4);
+	});
+
+	test('a page and a section root at one path are refused, naming both files', () => {
+		// `guide.md` and `guide/index.md` are both valid slugs and both addressed as
+		// `<mount>/guide`, because addresses carry no trailing slash. A consuming site would
+		// declare two routes with one id and refuse its own route table at load, naming a
+		// route id rather than either file.
+		const loaded = loadProject(
+			writeTree({
+				files: {
+					'docs/site/content/en/index.md': page('Home'),
+					'docs/site/content/en/guide.md': page('Guide page'),
+					'docs/site/content/en/guide/index.md': page('Guide'),
+					'docs/site/content/en/guide/first-tag.md': page('First tag'),
+				},
+			}),
+		);
+		const finding = only(loaded, 'content/en/guide.md');
+		expect(finding.rule).toBe('slug-reserved');
+		expect(finding.locale).toBe('en');
+		expect(finding.message).toBe(
+			'content/en/guide.md and content/en/guide/index.md are both served at "guide": a page and a section root cannot share a path.',
+		);
+		expect(finding.remediation).toContain('guide/<name>.md');
+		// Both pages stay loaded. Dropping one would choose a winner the author did not, and
+		// turn every link to the loser into a second error.
+		expect([...loaded.pages.keys()].sort()).toEqual([
+			'guide',
+			'guide/first-tag',
+			'guide/index',
+			'index',
+		]);
+		expect(loaded.findings.filter((entry) => entry.rule === 'slug-reserved')).toHaveLength(1);
+	});
+
+	test('the collision is caught when the two files are in different languages', () => {
+		// The Japanese page is served at `/ja/<mount>/guide`, and the English section root
+		// falls back to exactly that address. Looking inside one locale at a time finds
+		// nothing in either, which is the mutation this case exists to turn red.
+		const loaded = loadProject(
+			writeTree({
+				files: {
+					'docs/site/content/en/index.md': page('Home'),
+					'docs/site/content/en/guide/index.md': page('Guide'),
+					'docs/site/content/ja/guide.md': page('Guide page'),
+					'docs/site/content/es/guide.md': page('Guide page'),
+				},
+			}),
+		);
+		// Reported once, at the leaf in the first locale of the tuple order that has one.
+		const collisions = loaded.findings.filter((entry) => entry.rule === 'slug-reserved');
+		expect(collisions).toHaveLength(1);
+		expect(collisions[0]?.locale).toBe('es');
+		expect(collisions[0]?.message).toBe(
+			'content/es/guide.md and content/en/guide/index.md are both served at "guide": a page and a section root cannot share a path.',
+		);
+	});
+
+	test('a section root beside its own pages, and the docs home, collide with nothing', () => {
+		const loaded = loadProject(
+			writeTree({
+				files: {
+					'docs/site/content/en/index.md': page('Home'),
+					'docs/site/content/en/guide/index.md': page('Guide'),
+					'docs/site/content/en/guide/first-tag.md': page('First tag'),
+					'docs/site/content/en/reference/guide.md': page('Not the guide'),
+					'docs/site/content/en/reference/index.md': page('Reference'),
+				},
+			}),
+		);
+		expect(loaded.findings.filter((entry) => entry.rule === 'slug-reserved')).toEqual([]);
 	});
 
 	test('a file under content that is not markdown is refused', () => {

@@ -26,7 +26,7 @@ import {
 	FORBIDDEN_SOURCE_NAMES,
 	SITE_ROOT_RELATIVE,
 } from '../../../src/contracts/project.js';
-import { parseSlug } from '../../../src/contracts/slug.js';
+import { INDEX_SEGMENT, parseSlug } from '../../../src/contracts/slug.js';
 import { SNIPPET_ID_PATTERN } from '../../../src/contracts/source.js';
 import type { ZodType } from 'zod';
 
@@ -223,6 +223,58 @@ function walk(directory: string, base: string, findings: RawFinding[]): string[]
 	return found;
 }
 
+/**
+ * A page and a section root that publish at one address: `guide.md` beside
+ * `guide/index.md`.
+ *
+ * Both are valid slugs, so `parseSlug` has no complaint about either, and the collision
+ * only exists between them. Addresses carry no trailing slash, so `guide` and `guide/index`
+ * are both served at `<mount>/guide`. A consuming site then declares two page routes with
+ * one path, and React Router refuses a route table holding two routes with one id when it
+ * loads it, naming the route id rather than either file.
+ *
+ * Checked over the union of every locale's slugs rather than per locale, because the two
+ * files can sit in different languages. `content/ja/guide.md` beside
+ * `content/en/guide/index.md` is the same collision: the Japanese page is served at
+ * `/ja/<mount>/guide` and the English section root falls back to exactly that address. A
+ * check that looked inside one locale at a time would find nothing in either.
+ *
+ * Reported once per colliding slug, at the leaf's file in the first locale that has it,
+ * with both files named. Neither page is dropped. Dropping one would pick a winner the
+ * author did not choose and turn every link to it into a second error somewhere else, and
+ * the finding is an error, so nothing publishes either way.
+ */
+function addressCollisions(
+	pages: ReadonlyMap<string, ReadonlyMap<Locale, SourceDocument>>,
+): RawFinding[] {
+	const suffix = `/${INDEX_SEGMENT}`;
+	const first = (byLocale: ReadonlyMap<Locale, SourceDocument>): [Locale, SourceDocument] => {
+		const locale = sortLocales([...byLocale.keys()])[0] as Locale;
+		return [locale, byLocale.get(locale) as SourceDocument];
+	};
+	const found: RawFinding[] = [];
+	for (const slug of [...pages.keys()].sort()) {
+		if (!slug.endsWith(suffix)) continue;
+		const leaf = slug.slice(0, -suffix.length);
+		const leaves = pages.get(leaf);
+		if (leaves === undefined) continue;
+		const [locale, page] = first(leaves);
+		const [, root] = first(pages.get(slug) as ReadonlyMap<Locale, SourceDocument>);
+		found.push(
+			raw(
+				'slug-reserved',
+				{ kind: 'file', file: page.file },
+				locale,
+				`${page.file} and ${root.file} are both served at "${leaf}": a page and a section root cannot share a path.`,
+				{
+					remediation: `Rename one of them, in every language that has it: move the page into the section as ${leaf}/<name>.md, or rename the section. Addresses carry no trailing slash, so the two are one address, and a consuming site refuses a route table that holds it twice.`,
+				},
+			),
+		);
+	}
+	return found;
+}
+
 export function loadProject(appRoot: string): LoadedProject {
 	// Split on '/' rather than written as two literals, so this is the same string the
 	// allowlist editor writes and there is no second spelling of the publishable root.
@@ -416,6 +468,8 @@ export function loadProject(appRoot: string): LoadedProject {
 		byLocale.set(locale, document);
 		pages.set(id, byLocale);
 	}
+
+	findings.push(...addressCollisions(pages));
 
 	return {
 		appRoot,

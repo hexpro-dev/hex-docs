@@ -276,6 +276,14 @@ const ROWS: Row[] = [
 		0,
 		'a zero-length page payload is not a page',
 	],
+	[
+		'pageLocaleRecord',
+		pageLocaleRecordSchema,
+		VALID.pageLocaleRecord,
+		'effective',
+		VALID.pageLocaleRecord.state,
+		'the omission is how a record says the two agree, and a second spelling is a second byte form of one manifest',
+	],
 
 	// Paths. A looser grammar writes a file somewhere it should not.
 	[

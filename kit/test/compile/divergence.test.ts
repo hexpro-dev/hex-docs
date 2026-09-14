@@ -214,6 +214,19 @@ describe('a scaffolded snippet', () => {
 		// that is already done.
 		expect(result.manifest.pages['reference/chip-support']?.locales.zh?.state).toBe('current');
 		expect(result.manifest.coverage.zh?.scaffolded).toBe(0);
+
+		// And the manifest says so beside it, which is the case the field exists for. The
+		// served page carries a fallback notice and `noindex` in Chinese, and a consuming
+		// site choosing this page's hreflang set and sitemap rows reads the manifest and
+		// nothing else. With only `state` it would name this address as an indexable
+		// alternate. The corpus's own divergence is a stale snippet, and stale stays
+		// indexable, so this perturbation is the only place the difference is visible.
+		expect(result.manifest.pages['reference/chip-support']?.locales.zh?.effective).toBe(
+			'scaffolded',
+		);
+		expect(result.manifest.pages['reference/chip-support']?.locales.en).not.toHaveProperty(
+			'effective',
+		);
 	});
 
 	test('and the source locale is still the source', () => {
@@ -246,6 +259,38 @@ describe('a snippet a locale does not have', () => {
 		expect(
 			result.lint.envelope.findings.some((finding) => finding.rule === 'snippet-resolves'),
 		).toBe(true);
+	});
+});
+
+describe('a link and an image in a snippet', () => {
+	test('reach the raw markdown of every page that includes the snippet, rewritten', () => {
+		// A snippet's destinations have the snippet's line numbers, and the page's parse
+		// never sees them, so a rewrite taken only from the page's own parse would leave a
+		// transcluded link relative in every page that includes it. The corpus has no link
+		// in a snippet, which is why this perturbation exists.
+		const repo = corpus();
+		const snippet = site(repo, 'snippets/en/safety-note.md');
+		writeFileSync(
+			snippet,
+			`${readFileSync(snippet, 'utf8')}\nSee [the matrix](reference/chip-support.md#ntag-21x) and ![the sheet](../../assets/scan-screen.png).\n`,
+		);
+		commit(repo, 'link from a snippet');
+
+		const result = build(repo);
+		const including = [...result.pages]
+			.filter(([, byLocale]) => byLocale.get('en')?.page.snippets.includes('safety-note'))
+			.map(([slug]) => slug);
+		expect(including.length).toBeGreaterThan(1);
+		const asset = result.manifest.assets.find((entry) => entry.ext === 'png');
+		for (const slug of including) {
+			const raw = objectText(result, rawKey(SOURCE_LOCALE as Locale, slug));
+			expect(raw, slug).toContain('[the matrix](hexdocs:page/reference/chip-support.md#ntag-21x)');
+			expect(raw, slug).toContain(`![the sheet](hexdocs:asset/${asset?.sha256}.png)`);
+		}
+		// Linted once as its own file, so no link finding names the snippet.
+		expect(
+			result.lint.envelope.findings.filter((finding) => finding.rule === 'link-resolves'),
+		).toEqual([]);
 	});
 });
 

@@ -66,4 +66,4 @@ Send the tag identifier from the Scan sheet and the marking printed on
 the packaging to [docs@example.com](mailto:docs@example.com) and we
 will test it. A chip on this list can still fail behind a case with a
 metal plate or a payment card, which is covered in
-[When a scan does not work](../guide/troubleshooting.md).
+[When a scan does not work](hexdocs:page/guide/troubleshooting.md).

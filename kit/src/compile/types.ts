@@ -271,6 +271,44 @@ export interface DisableComment {
 	used: boolean;
 }
 
+/**
+ * Characters on one source line: 1-based line and column, and a length in UTF-16 units.
+ *
+ * The same coordinates a `SourcePosition` uses, so a range and a finding from one parse
+ * count lines and columns the same way.
+ */
+export interface SourceRange {
+	line: number;
+	column: number;
+	length: number;
+}
+
+/**
+ * A link or image destination the parser resolved into the bundle, and exactly where
+ * its bytes sit in the source.
+ *
+ * Recorded so the raw markdown can say where a link goes without a second reading of
+ * the markdown. The served `<slug>.md` is built from the source lines, and before these
+ * existed its links were the author's relative paths: correct from the page's own
+ * address, wrong from `llms-full.txt`, which joins every page under one address, and
+ * wrong from both for an image, whose source path is not an address at all. Rewriting
+ * them with a pattern over the lines would be a second parser disagreeing with this one
+ * about code spans, fences and escapes, and the disagreement would publish as a link
+ * nobody can follow.
+ *
+ * `at` is the column straight after the destination's `(`, where the raw form is written,
+ * and `remove` is everything the author typed from there to the end of the path: any
+ * space, the `<` and `>` of the angle bracket spelling, and the path itself. For a link
+ * the path stops before the fragment, so an `#anchor` survives byte for byte; for an
+ * image it is the whole destination. `remove` holds a range per source line the path
+ * crosses, and one more for a closing `>`.
+ */
+export interface ResolvedDestination {
+	at: { line: number; column: number };
+	remove: SourceRange[];
+	target: { kind: 'page'; slug: string } | { kind: 'asset'; src: string };
+}
+
 /** What `parseDocument` returns for one markdown file. */
 export interface ParsedDocument {
 	/** Relative to `docs/site/`. */
@@ -291,6 +329,13 @@ export interface ParsedDocument {
 	prose: ProseSegment[];
 	/** Snippet ids this document transcludes, in document order, duplicates included. */
 	includes: string[];
+	/**
+	 * Every destination in this file that resolved to a page or an asset.
+	 *
+	 * This file's own and no other: a transcluded snippet is parsed separately and its
+	 * destinations stay with that parse, because their line numbers are the snippet's.
+	 */
+	destinations: ResolvedDestination[];
 	disables: DisableComment[];
 	problems: RawFinding[];
 }

@@ -73,6 +73,7 @@ import {
 	type ProseKind,
 	type ProseSegment,
 	type RawFinding,
+	type ResolvedDestination,
 } from '../types.js';
 import { foldLines, type SourceLine } from './fold.js';
 import { parseInline } from './inline.js';
@@ -87,6 +88,12 @@ export interface BlockContext {
 	problems: RawFinding[];
 	prose: ProseSegment[];
 	includes: string[];
+	/**
+	 * Every destination the inline parser resolved into the bundle, for the raw markdown.
+	 * Required rather than optional, so a caller cannot build a context that quietly drops
+	 * them and publishes a `<slug>.md` whose links point back into the source tree.
+	 */
+	destinations: ResolvedDestination[];
 	/** Guards against a snippet that includes itself, directly or through another. */
 	includeDepth: number;
 }
@@ -189,6 +196,7 @@ export function parseBlocks(lines: readonly SourceLine[], context: BlockContext)
 				...(node === undefined ? {} : { node }),
 			});
 		}
+		context.destinations.push(...result.destinations);
 		// One segment per title, carrying its own line and column. Kept out of the block's
 		// prose on purpose: see `InlineResult.titles`.
 		for (const title of result.titles) {

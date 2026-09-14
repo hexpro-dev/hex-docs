@@ -22,6 +22,7 @@ import {
 	type ParsedDocument,
 	type ProseSegment,
 	type RawFinding,
+	type ResolvedDestination,
 } from '../types.js';
 import { parseBlocks } from './blocks.js';
 import { readSource, toLines, type SourceLine } from './fold.js';
@@ -50,6 +51,7 @@ export function parseDocument(source: string, options: ParseOptions): ParsedDocu
 	const prose: ProseSegment[] = [...frontMatter.prose];
 	const disables: DisableComment[] = [];
 	const includes: string[] = [];
+	const destinations: ResolvedDestination[] = [];
 	const origins: NodeOrigins = options.origins ?? new WeakMap();
 
 	const lines = stripComments(
@@ -67,6 +69,7 @@ export function parseDocument(source: string, options: ParseOptions): ParsedDocu
 		problems,
 		prose,
 		includes,
+		destinations,
 		includeDepth: options.includeDepth ?? 0,
 	});
 
@@ -97,6 +100,7 @@ export function parseDocument(source: string, options: ParseOptions): ParsedDocu
 		origins,
 		prose,
 		includes,
+		destinations,
 		disables,
 		problems,
 	};

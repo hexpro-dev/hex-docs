@@ -105,7 +105,8 @@ const DESCRIBED: Readonly<Partial<Record<LintRuleId, string>>> = {
 	'nav-duplicate': 'Two nav entries for one slug, built by rules-fire.test.ts.',
 	'nav-depth':
 		'A fourth level of nav groups, built by rules-fire.test.ts. The corpus nests exactly three.',
-	'slug-reserved': 'A filename that ties with a built-in route, planted by rules-fire.test.ts.',
+	'slug-reserved':
+		'A filename at a reserved route root, and a page at a section root path in another language. rules-fire.test.ts claims each arm by its message.',
 	'anchor-resolves':
 		'A fragment checked against another page. rules-fire.test.ts writes the pointer.',
 	'translation-missing':
