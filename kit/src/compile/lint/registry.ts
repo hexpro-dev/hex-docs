@@ -647,7 +647,7 @@ export const RULE_DEFINITIONS = {
 		defaultSeverity: 'error',
 		title: 'Ship only inert SVG.',
 		consequence:
-			'An SVG is a document on the origin of the consuming site, not only an image source, so a script element or an external reference inside one runs against that origin. That is why this rule is protected and why the sanitiser is held at full coverage.',
+			'An SVG is a document on the origin of the consuming site, not only an image source, so anything in one that runs or embeds a document runs against that origin. The check is an allowlist, because the denylist it replaced passed an XHTML iframe whose srcdoc ran script. That is why this rule is protected and why the allowlist in svg.ts is held at full coverage.',
 		examples: [
 			{
 				bad: '<svg><script>fetch("/admin")</script></svg>',

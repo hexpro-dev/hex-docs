@@ -107,13 +107,13 @@ describe('the corpus is what it says it is', () => {
 		expect(appFiles().some((path) => path.includes('unsafe-diagram'))).toBe(false);
 	});
 
-	test('the vector asset that must be refused carries every clause the rule names', () => {
-		// All five, not four. `ASSET_EXTENSIONS` in manifest.ts states the refusal as
-		// script, foreignObject, <a href>, external references and every on* attribute.
-		// The fixture carried four of them, so a publish-time check that implemented four
-		// clauses would accept the safe glyph, reject this diagram, and ship the hole.
-		// foreignObject is the one that was missing, and it is the classic bypass: it
-		// embeds arbitrary XHTML inside an SVG.
+	test('the vector asset that must be refused carries the five constructs the rule used to name', () => {
+		// All five, not four. The rule was a denylist of script, foreignObject, <a href>,
+		// external references and every on* attribute, and the fixture carried four of them,
+		// so a publish-time check that implemented four clauses would accept the safe glyph,
+		// reject this diagram, and ship the hole. foreignObject is the one that was missing,
+		// and it is the classic bypass: it embeds arbitrary XHTML inside an SVG. The rule is
+		// an allowlist now, and this file still has to trip it on every one of the five.
 		const svg = readFileSync(join(REJECTED_ROOT, 'unsafe-diagram.svg'), 'utf8');
 		expect(svg).toContain('<script');
 		expect(svg).toContain('<foreignObject');
@@ -129,6 +129,17 @@ describe('the corpus is what it says it is', () => {
 		expect(safe).not.toMatch(/\son[a-z]+=/);
 		expect(safe).not.toMatch(/(?:href|src|xlink:href)=/);
 		expect(safe.match(/http[^"]*/g)).toEqual(['http://www.w3.org/2000/svg']);
+	});
+
+	test('the srcdoc payload carries none of the five, which is how it passed the denylist', () => {
+		// The file exists because a list of five constructs was the whole check, and this
+		// document runs script in the consuming site origin without any of them. If it ever
+		// grows one, it stops being evidence that an allowlist is needed and becomes one
+		// more case the old list would have caught.
+		const svg = readFileSync(join(REJECTED_ROOT, 'srcdoc-iframe.svg'), 'utf8');
+		expect(svg).toContain('<iframe xmlns="http://www.w3.org/1999/xhtml"');
+		expect(svg).toContain('srcdoc="&lt;script&gt;');
+		expect(svg).not.toMatch(/<script|<foreignObject|<a\s|\son[a-z]+=|(?:href|src)=/);
 	});
 
 	test('the deny list is outside the publishable root', () => {

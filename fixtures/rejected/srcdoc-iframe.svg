@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">
+	<iframe xmlns="http://www.w3.org/1999/xhtml" srcdoc="&lt;script&gt;parent.document.title='PWNED-srcdoc:'+parent.document.domain&lt;/script&gt;"></iframe>
+	<rect width="10" height="10" />
+</svg>

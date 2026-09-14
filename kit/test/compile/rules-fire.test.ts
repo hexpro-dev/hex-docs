@@ -564,6 +564,20 @@ const CASES: readonly Case[] = [
 	{
 		name: 'assets that are too large, in the wrong colour space, and an unsafe SVG',
 		rules: ['asset-size', 'asset-colour-space', 'asset-svg-unsafe'],
+		arms: [
+			{
+				rule: 'asset-svg-unsafe',
+				matches:
+					/unsafe-diagram\.svg carries .*elements the SVG allowlist does not name \(a, script/,
+				why: 'The diagram carrying the five constructs the rule used to deny, which has to stay refused under the allowlist that replaced them.',
+			},
+			{
+				rule: 'asset-svg-unsafe',
+				matches:
+					/srcdoc-iframe\.svg carries .*iframe in http:\/\/www\.w3\.org\/1999\/xhtml.*\(srcdoc\)/,
+				why: 'The step 8 review payload, which named none of those five and ran script in the consuming site origin. It is the finding a denylist cannot produce.',
+			},
+		],
 		run: () =>
 			built((repo) => {
 				const config = JSON.parse(readFileSync(site(repo, 'docs.json'), 'utf8')) as {
@@ -577,7 +591,7 @@ const CASES: readonly Case[] = [
 				// The two refused assets are the corpus's own, kept in `rejected/` because a
 				// tree the compiler is asked to build has to build. Copying them in is the
 				// only way to see the findings they exist for.
-				for (const name of ['display-p3.png', 'unsafe-diagram.svg']) {
+				for (const name of ['display-p3.png', 'unsafe-diagram.svg', 'srcdoc-iframe.svg']) {
 					writeFileSync(site(repo, `assets/${name}`), readFileSync(join(REJECTED_ROOT, name)));
 				}
 

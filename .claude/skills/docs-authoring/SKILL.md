@@ -100,7 +100,10 @@ first, per file, never in a batch. Forcing the conversion on a file already in s
 oversaturates it by roughly forty per cent, which is the same bug in reverse.
 
 **SVG.** An SVG asset is a same-origin document on the consuming site, not only an `<img>`
-source, so `asset-svg-unsafe` refuses scripts, foreign objects and external references.
+source, so `asset-svg-unsafe` publishes only what is on an allowlist: drawing elements in the
+SVG namespace, geometry and presentation attributes, and `href` or `url()` pointing at a
+fragment of the same file. Scripts, links, images, animation, foreign content and editor
+metadata are refused. Export as plain SVG and remove the editor namespaces before adding one.
 
 Write real alt text. An image with an empty alt attribute is announced as nothing, which
 is right for decoration and wrong for a screenshot the paragraph refers to.

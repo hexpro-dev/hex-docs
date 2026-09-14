@@ -1,13 +1,14 @@
 /**
  * What `probeAsset` reads out of a file, and what it refuses.
  *
- * Two halves. The corpus half reads the four fixture files, because they are the only
+ * Two halves. The corpus half reads the five fixture files, because they are the only
  * assets that are real: `display-p3.png` carries a genuine `cICP` chunk that `ffprobe
  * -show_entries stream=color_primaries` reports as `smpte432` while the published
- * `scan-screen.png` reports `unknown`, and `unsafe-diagram.svg` carries all five of the
- * things `asset-svg-unsafe` names. The synthetic half builds JPEG, WebP and AVIF byte
- * sequences by hand, because the corpus has none of those and every one of those
- * branches is a publish failure on the first screenshot somebody exports as a JPEG.
+ * `scan-screen.png` reports `unknown`, `unsafe-diagram.svg` carries the five constructs
+ * `asset-svg-unsafe` used to deny, and `srcdoc-iframe.svg` is the payload that denylist
+ * passed. The synthetic half builds JPEG, WebP and AVIF byte sequences by hand, because
+ * the corpus has none of those and every one of those branches is a publish failure on
+ * the first screenshot somebody exports as a JPEG.
  *
  * Nothing here decodes an image. Every builder writes the header the reader claims to
  * read and nothing else, which is the point: a builder that produced a real file would
@@ -19,12 +20,8 @@ import { join } from 'node:path';
 
 import { describe, expect, test } from 'vitest';
 
-import {
-	probeAsset,
-	readDimensions,
-	sniffExtension,
-	svgProblems,
-} from '../../src/compile/assets.js';
+import { probeAsset, readDimensions, sniffExtension } from '../../src/compile/assets.js';
+import { svgFileProblems } from '../../src/compile/svg.js';
 import {
 	FIXTURE_ASSETS,
 	REJECTED_ASSETS,
@@ -51,8 +48,6 @@ function refusal(probe: Probe) {
 /** Read as the compiler will: `readFileSync` hands back a pooled Buffer at an offset. */
 const fixture = (path: string): Uint8Array => readFileSync(join(SITE_ROOT, path));
 const rejected = (path: string): Uint8Array => readFileSync(join(REJECTED_ROOT, path));
-
-const text = (bytes: Uint8Array): string => new TextDecoder('utf-8').decode(bytes);
 
 // ---------------------------------------------------------------------------
 // Byte builders
@@ -271,7 +266,7 @@ describe('the fixture assets', () => {
 			swept += 1;
 		}
 		expect(swept).toBe(REJECTED_ASSETS.length);
-		expect(swept).toBe(2);
+		expect(swept).toBe(3);
 	});
 
 	test('a Buffer at a non-zero byteOffset reads the same as a copy', () => {
@@ -360,113 +355,52 @@ describe('display-p3.png', () => {
 // SVG safety
 // ---------------------------------------------------------------------------
 
-describe('svgProblems', () => {
-	test('the unsafe fixture trips all five clauses', () => {
-		// REJECTED_ASSETS says this file carries all five on purpose. Asserting only that it
-		// was refused would pass with four of the five detectors broken.
-		const problems = svgProblems(text(rejected('unsafe-diagram.svg')));
-		expect(problems).toEqual([
-			'a script element',
-			'a foreignObject element',
-			'an anchor with an href attribute',
-			'an external href reference with the scheme "https:"',
-			'an event attribute, "onload"',
-		]);
-		expect(problems).toHaveLength(5);
-	});
+describe('asset-svg-unsafe through probeAsset', () => {
+	// The allowlist itself is pinned arm by arm in `svg.test.ts`. What is asserted here is
+	// the seam: the probe reads the bytes through it, refuses under the protected rule, and
+	// names every clause in one message.
 
-	test('the unsafe fixture is refused under asset-svg-unsafe, naming every clause', () => {
+	test('the unsafe fixture is refused, naming the five constructs the rule used to deny', () => {
+		// REJECTED_ASSETS says this file carries all five on purpose. Asserting only that it
+		// was refused would pass with the walk broken for four of them.
+		expect(svgFileProblems(rejected('unsafe-diagram.svg'))).toEqual([
+			'namespace declarations other than SVG and XLink ("http://www.w3.org/1999/xhtml")',
+			'elements the SVG allowlist does not name (a, script, foreignObject, image)',
+			'elements outside the SVG namespace (div in http://www.w3.org/1999/xhtml)',
+			'event handler attributes (onload)',
+			'references to something other than a fragment of this file (href "https://example.com/not-a-diagram", href "https://example.com/tracker.png")',
+		]);
 		const probe = refusal(probeAsset(rejected('unsafe-diagram.svg'), 'unsafe-diagram.svg'));
 		expect(probe.rule).toBe('asset-svg-unsafe');
-		for (const clause of ['script element', 'foreignObject', 'anchor', 'external', 'event']) {
-			expect(probe.message).toContain(clause);
-		}
+		expect(probe.message).toContain(
+			'unsafe-diagram.svg carries namespace declarations other than SVG and XLink',
+		);
+		expect(probe.message).toContain('; elements the SVG allowlist does not name (a, script');
 		expect(probe.remediation).toContain('same-origin');
 	});
 
-	test('the published glyph has no problems', () => {
-		expect(svgProblems(text(fixture('assets/nfc-glyph.svg')))).toEqual([]);
+	test('the srcdoc payload the denylist passed is refused under the same rule', () => {
+		// The regression case for step 8. It names none of the five, so a probe still wired to
+		// a list of them publishes it, and headless Chrome ran its script in the site origin.
+		const probe = refusal(probeAsset(rejected('srcdoc-iframe.svg'), 'srcdoc-iframe.svg'));
+		expect(probe.rule).toBe('asset-svg-unsafe');
+		expect(probe.message).toContain('iframe in http://www.w3.org/1999/xhtml');
+		expect(probe.message).toContain('attributes the allowlist does not name (srcdoc)');
 	});
 
-	test('a namespaced script element is still a script element', () => {
-		expect(svgProblems('<svg><svg:script>x</svg:script></svg>')).toEqual(['a script element']);
-	});
-
-	test('an anchor with no href is not reported as an anchor', () => {
-		expect(svgProblems('<svg><a><text>x</text></a></svg>')).toEqual([]);
-	});
-
-	test('an xlink:href with a scheme is an external reference', () => {
-		expect(svgProblems('<svg><use xlink:href="https://example.com/a.svg#x" /></svg>')).toEqual([
-			'an external href reference with the scheme "https:"',
-		]);
-	});
-
-	test('a src attribute counts, in single quotes and unquoted', () => {
-		expect(svgProblems("<svg><image src='ftp://example.com/a' /></svg>")).toEqual([
-			'an external src reference with the scheme "ftp:"',
-		]);
-		expect(svgProblems('<svg><image src=ftp://example.com/a /></svg>')).toEqual([
-			'an external src reference with the scheme "ftp:"',
-		]);
-	});
-
-	test('a protocol-relative reference is external, leading whitespace included', () => {
-		expect(svgProblems('<svg><image href="  //example.com/a.png" /></svg>')).toEqual([
-			'an external href reference beginning with "//"',
-		]);
-	});
-
-	test('a data URI is external, because it carries a scheme', () => {
-		expect(svgProblems('<svg><image href="data:image/png;base64,AA" /></svg>')).toEqual([
-			'an external href reference with the scheme "data:"',
-		]);
-	});
-
-	test('a scheme spelled with character references is still a scheme', () => {
-		// `&#106;avascript:` and `java&#9;script:` both resolve to a working scheme in a
-		// browser, and a scan over the raw text sees neither.
-		expect(svgProblems('<svg><a href="&#106;avascript:alert(1)">x</a></svg>')).toEqual([
-			'an anchor with an href attribute',
-			'an external href reference with the scheme "javascript:"',
-		]);
-		expect(svgProblems('<svg><image href="java&#9;script:alert(1)" /></svg>')).toEqual([
-			'an external href reference with the scheme "javascript:"',
-		]);
-		expect(svgProblems('<svg><image href="&#X6A;avascript:alert(1)" /></svg>')).toEqual([
-			'an external href reference with the scheme "javascript:"',
-		]);
-	});
-
-	test('an unresolvable character reference decodes to nothing rather than throwing', () => {
-		expect(svgProblems('<svg><image href="&#x110000;javascript:x" /></svg>')).toEqual([
-			'an external href reference with the scheme "javascript:"',
-		]);
-	});
-
-	test('same-document and relative references are not external', () => {
-		expect(
-			svgProblems(
-				'<svg xmlns="http://www.w3.org/2000/svg"><use href="#tile" /><image href="tile.png" />' +
-					'<image href="a&nbsp;b" /><image href="?a=1&amp;b=2" /></svg>',
-			),
-		).toEqual([]);
-	});
-
-	test('every on* attribute counts, whatever its case', () => {
-		expect(svgProblems('<svg OnClick="x()"><rect /></svg>')).toEqual([
-			'an event attribute, "onclick"',
-		]);
-	});
-
-	test('only the first occurrence of a clause is reported', () => {
-		const problems = svgProblems(
-			'<svg><script /><script /><image href="https://a/1" /><image href="https://a/2" /></svg>',
+	test('the published glyph has no problems and publishes', () => {
+		expect(svgFileProblems(fixture('assets/nfc-glyph.svg'))).toEqual([]);
+		expect(asset(probeAsset(fixture('assets/nfc-glyph.svg'), 'assets/nfc-glyph.svg')).ext).toBe(
+			'svg',
 		);
-		expect(problems).toEqual([
-			'a script element',
-			'an external href reference with the scheme "https:"',
-		]);
+	});
+
+	test('a file that ends inside a tag is refused as unreadable XML before its size is read', () => {
+		const probe = refusal(
+			probeAsset(ascii('<svg xmlns="http://www.w3.org/2000/svg" width="10" height='), 'cut.svg'),
+		);
+		expect(probe.rule).toBe('asset-svg-unsafe');
+		expect(probe.message).toContain('the file ends inside a tag');
 	});
 });
 
@@ -690,7 +624,13 @@ describe('truncated files', () => {
 			{ name: 'shot.jpg', bytes: jpeg(EXIF_SEGMENT).subarray(0, 12), ext: 'JPEG' },
 			{ name: 'shot.webp', bytes: webp(vp8Chunk(8, 8)).subarray(0, 20), ext: 'WebP' },
 			{ name: 'shot.avif', bytes: avif(8, 8).subarray(0, 40), ext: 'AVIF' },
-			{ name: 'shot.svg', bytes: ascii('<svg width="10" height='), ext: 'SVG' },
+			// Complete XML with no usable size, because a file cut off inside a tag is refused
+			// by the safety walk first, which is the order `probeAsset` documents.
+			{
+				name: 'shot.svg',
+				bytes: ascii('<svg xmlns="http://www.w3.org/2000/svg" width="10" height=""></svg>'),
+				ext: 'SVG',
+			},
 		];
 		let swept = 0;
 		for (const entry of cases) {

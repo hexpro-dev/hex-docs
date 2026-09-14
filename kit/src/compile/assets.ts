@@ -24,11 +24,13 @@
  * **An SVG is read for what it can do, not only for how it draws.** Inside an `img`
  * element an SVG cannot run script, which is how the renderer uses it. But `hexdocs
  * prefetch` copies assets into the consuming site's `public/`, Vite copies that into
- * `build/client/`, and the result is a directly navigable same-origin URL. Navigated
- * to, the file is a document served as `image/svg+xml`, and any `script` element,
- * `foreignObject` or `on*` handler in it runs in the site's own origin.
- * `ASSET_EXTENSIONS` in `manifest.ts` states the same thing from the contract's side,
- * and `asset-svg-unsafe` is a protected rule, so no project can switch it off.
+ * `build/client/`, and the result is a directly navigable same-origin URL with no
+ * Content-Security-Policy. Navigated to, the file is a document served as
+ * `image/svg+xml`, and anything in it that runs or embeds a document runs in the site's
+ * own origin. So an SVG is published only when every construct in it is on the allowlist
+ * in `svg.ts`, which says at its head why that replaced a denylist. `ASSET_EXTENSIONS` in
+ * `manifest.ts` states the same thing from the contract's side, and `asset-svg-unsafe` is
+ * a protected rule, so no project can switch it off.
  *
  * What this module does not decide: the byte budget, which the caller applies from
  * `budgets.assetBytesMax` against the `bytes` reported here, and the LQIP placeholder,
@@ -37,6 +39,7 @@
 
 import type { AssetExtension, ColourProbe } from '../../../src/contracts/manifest.js';
 import type { LintRuleId } from '../../../src/contracts/lint.js';
+import { svgFileProblems } from './svg.js';
 import type { AssetProbe } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -507,28 +510,18 @@ function avifDimensions(bytes: Uint8Array): Dimensions | undefined {
 // ---------------------------------------------------------------------------
 
 /**
- * An element's opening tag: its name, and everything up to the closing angle bracket.
+ * An attribute of the root element, for reading its size.
  *
- * The attribute part steps over quoted values, so an angle bracket inside an attribute
- * does not end the tag early. This is a scanner, not an XML parser, and the ways it is
- * approximate all fail closed: a `script` element inside a comment or a CDATA section is
- * reported even though it would never run, and the answer to that is to delete a
- * commented out script nobody needed.
+ * Only the dimension reader below uses this, and it is deliberately not the safety check:
+ * `svgProblems` in `svg.ts` reads the whole document with its namespaces, and a size read
+ * off an unsafe file is never published because `probeAsset` refuses the file first.
  */
-const TAG_PATTERN = /<([a-zA-Z][^\s/>]*)((?:[^>"']|"[^"]*"|'[^']*')*)/g;
-
 const ATTRIBUTE_PATTERN =
 	/([a-zA-Z_:][-a-zA-Z0-9:._]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/g;
 
 interface SvgAttribute {
 	name: string;
 	value: string;
-}
-
-interface SvgTag {
-	/** Lower case, with any namespace prefix removed. */
-	name: string;
-	attributes: SvgAttribute[];
 }
 
 function attributesOf(source: string): SvgAttribute[] {
@@ -539,126 +532,12 @@ function attributesOf(source: string): SvgAttribute[] {
 	return attributes;
 }
 
-function localName(name: string): string {
-	const colon = name.indexOf(':');
-	return (colon === -1 ? name : name.slice(colon + 1)).toLowerCase();
-}
-
-function svgTags(source: string): SvgTag[] {
-	const tags: SvgTag[] = [];
-	for (const match of source.matchAll(TAG_PATTERN)) {
-		tags.push({ name: localName(match[1] ?? ''), attributes: attributesOf(match[2] ?? '') });
-	}
-	return tags;
-}
-
-const NAMED_REFERENCES = new Map([
-	['amp', '&'],
-	['lt', '<'],
-	['gt', '>'],
-	['quot', '"'],
-	['apos', "'"],
-]);
-
-function referencedCharacter(code: number): string {
-	return Number.isFinite(code) && code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : '';
-}
-
-/**
- * Character references decoded, because an attribute value is not read literally.
- *
- * `&#106;avascript:` is a legal spelling of `javascript:` and a browser resolves it
- * before it looks at the scheme. A scan over the raw text sees a value with no scheme in
- * it and passes the file.
- */
-function decodeCharacterReferences(value: string): string {
-	return value.replace(/&(#[xX][0-9a-fA-F]+|#[0-9]+|[a-zA-Z]+);/g, (whole, body: string) => {
-		if (/^#[xX]/.test(body)) return referencedCharacter(Number.parseInt(body.slice(2), 16));
-		if (body.startsWith('#')) return referencedCharacter(Number.parseInt(body.slice(1), 10));
-		return NAMED_REFERENCES.get(body.toLowerCase()) ?? whole;
-	});
-}
-
-/** Tab, newline and carriage return, which every browser strips out of a URL. */
-const URL_STRIPPED = new RegExp(`[${String.fromCharCode(9, 10, 13)}]`, 'g');
-
-/**
- * An attribute value as a browser resolves it before parsing it as a URL.
- *
- * Those three characters are removed rather than trimmed, so `java&#9;script:` is seen
- * as the scheme it is, and the trim stops leading whitespace hiding a protocol-relative
- * reference from a `startsWith` test.
- */
-function normaliseReference(value: string): string {
-	return decodeCharacterReferences(value).replace(URL_STRIPPED, '').trim();
-}
-
-const URL_SCHEME = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
-
-/**
- * What is unsafe about an SVG, one string per clause of `asset-svg-unsafe`.
- *
- * One per clause rather than one per occurrence, so a diagnostic names every kind of
- * problem the file has and an author fixes them in one pass instead of publishing five
- * times. An empty array means the file is publishable.
- *
- * The five clauses are the ones `ASSET_EXTENSIONS` names: a `script` element, a
- * `foreignObject`, an anchor with an `href`, an external reference, and any `on*` event
- * attribute. They matter because the prefetch turns this file into a directly navigable
- * same-origin document on the consuming site, where all five run or load.
- *
- * An external reference is a scheme or a leading `//` in an `href` or a `src`, which
- * catches `data:` along with the network schemes. That is stricter than the same-origin
- * argument needs, and it is the rule as stated; the cost is that an inlined raster has
- * to be unpacked into its own asset, and the alternative is a scheme allowlist that has
- * to be maintained against every scheme a browser learns.
- */
-export function svgProblems(source: string): string[] {
-	let script = false;
-	let foreign = false;
-	let anchor = false;
-	let external: string | undefined;
-	let handler: string | undefined;
-
-	for (const element of svgTags(source)) {
-		if (element.name === 'script') script = true;
-		if (element.name === 'foreignobject') foreign = true;
-		if (element.name === 'a' && element.attributes.some((one) => localName(one.name) === 'href')) {
-			anchor = true;
-		}
-
-		for (const attribute of element.attributes) {
-			const name = localName(attribute.name);
-			if ((name === 'href' || name === 'src') && external === undefined) {
-				const value = normaliseReference(attribute.value);
-				const scheme = URL_SCHEME.exec(value);
-				if (scheme !== null) {
-					external = `an external ${name} reference with the scheme "${scheme[1] ?? ''}:"`;
-				} else if (value.startsWith('//')) {
-					external = `an external ${name} reference beginning with "//"`;
-				}
-			}
-			if (handler === undefined && /^on[a-z]/i.test(attribute.name)) {
-				handler = `an event attribute, "${attribute.name.toLowerCase()}"`;
-			}
-		}
-	}
-
-	const problems: string[] = [];
-	if (script) problems.push('a script element');
-	if (foreign) problems.push('a foreignObject element');
-	if (anchor) problems.push('an anchor with an href attribute');
-	if (external !== undefined) problems.push(external);
-	if (handler !== undefined) problems.push(handler);
-	return problems;
-}
-
 /**
  * The root element's attributes, exactly as written.
  *
- * Not lower cased, unlike the safety scan: XML is case sensitive and `viewBox` is the
- * only spelling a browser honours, so a reader accepting `viewbox` would publish an
- * intrinsic size the page will not have.
+ * Not lower cased: XML is case sensitive and `viewBox` is the only spelling a browser
+ * honours, so a reader accepting `viewbox` would publish an intrinsic size the page will
+ * not have.
  */
 function svgRootAttributes(source: string): SvgAttribute[] | undefined {
 	const at = svgRootIndex(source);
@@ -1005,13 +884,20 @@ function colourRemediation(path: string, input: string | null): string {
 }
 
 const SVG_REMEDIATION =
-	'Delete the constructs named above and commit the diagram again. Inline the artwork ' +
-	'instead of referencing it, and drop the anchor: a link inside a diagram is not ' +
-	'reachable through the img element the page renders it with anyway. This is refused ' +
-	'even though an SVG inside an img element cannot run script, because hexdocs prefetch ' +
-	"copies the file into the consuming site's public directory, Vite copies that into " +
-	'build/client, and the result is a directly navigable same-origin URL where the file ' +
-	"is a document and everything in it runs in the site's own origin.";
+	'Delete the constructs named above, or export the diagram again as plain SVG with editor ' +
+	'metadata removed, and commit it. An SVG is published only when every element is a ' +
+	'drawing element in the SVG namespace (shapes, text, gradients, patterns, clipping, ' +
+	'masks, markers, filters and style), every attribute is geometry, a presentation ' +
+	'attribute, id, class, role or ARIA, and every href and url() points at a fragment of ' +
+	'the same file. Scripts, foreign content, links, images, animation and any other ' +
+	'namespace are refused, and so is XML the check cannot reason about: a processing ' +
+	'instruction, a DOCTYPE with an internal subset, an entity XML does not define, or an ' +
+	'encoding other than UTF-8. Inline the artwork instead of referencing it: a link inside ' +
+	'a diagram is not reachable through the img element the page renders it with anyway. ' +
+	'This is refused even though an SVG inside an img element cannot run script, because ' +
+	"hexdocs prefetch copies the file into the consuming site's public directory, Vite " +
+	'copies that into build/client, and the result is a directly navigable same-origin URL ' +
+	"where the file is a document and everything in it runs in the site's own origin.";
 
 const DIMENSIONS_REMEDIATION =
 	'Re-export the file with a tool that writes a complete header, or convert it to PNG, ' +
@@ -1049,11 +935,11 @@ export function probeAsset(bytes: Uint8Array, path: string): AssetProbe {
 	}
 
 	if (ext === 'svg') {
-		const problems = svgProblems(UTF8.decode(bytes));
+		const problems = svgFileProblems(bytes);
 		if (problems.length > 0) {
 			return refuse(
 				'asset-svg-unsafe',
-				`${path} carries ${problems.join(', ')}. Published, this file is a same-origin document on the consuming site, not only an img source.`,
+				`${path} carries ${problems.join('; ')}. Published, this file is a same-origin document on the consuming site, not only an img source.`,
 				SVG_REMEDIATION,
 			);
 		}

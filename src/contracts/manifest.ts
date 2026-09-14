@@ -55,10 +55,13 @@ export const UTC_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
  * URL. Navigated to, that file is a document served as `image/svg+xml`, and any
  * `<script>` or `on*` handler in it runs in the site's own origin.
  *
- * So a vector asset is parsed at publish time and refused unless it is free of
- * `script`, `foreignObject`, `<a href>`, external references and every `on*`
- * attribute. The rule id is `asset-svg-unsafe`, it is a protected rule, and it is the
- * thing to grep for when a diagram is rejected.
+ * So a vector asset is parsed at publish time and refused unless every construct in it
+ * is on an allowlist: drawing elements in the SVG namespace, geometry and presentation
+ * attributes, and references to a fragment of the same file. It was a denylist of
+ * `script`, `foreignObject`, `<a href>`, external references and `on*` attributes until an
+ * XHTML `iframe` with `srcdoc` ran script through it, and `kit/src/compile/svg.ts` says
+ * why at its head. The rule id is `asset-svg-unsafe`, it is a protected rule, and it is
+ * the thing to grep for when a diagram is rejected.
  *
  * It stays in the list rather than being dropped because mermaid and math are both
  * deferred to `ast-2`, so a committed SVG is currently the only way to put a diagram
