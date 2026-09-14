@@ -17,13 +17,32 @@
 
 import { posix } from 'node:path';
 
+import { SOURCE_LOCALE } from '../../../src/contracts/locales.js';
+
 import type { LinkResolution, ImageResolution } from './types.js';
 
+/**
+ * Why a slug with a file in the tree is still not a link target.
+ *
+ * `draft` is a page held back from the bundle. `no-source-file` is a page with a file in
+ * some translation and none in the source locale, which gets no page record, because a
+ * page is published from its source-locale file.
+ */
+export type WithheldReason = 'draft' | 'no-source-file';
+
 export interface LinkTargets {
-	/** Every slug the project publishes, in the wire spelling. */
+	/** Every slug that gets a page record in the bundle, in the wire spelling. */
 	slugs: ReadonlySet<string>;
 	/** Old slug to current slug, from `redirectFrom`, so a moved page keeps its inbound links. */
 	redirects: ReadonlyMap<string, string>;
+	/**
+	 * The slugs the tree has a file for and `slugs` leaves out, with the reason.
+	 *
+	 * Only the message reads it. Without it a link to either kind of page said the project
+	 * has no page with that slug, which sends an author to check a path that is spelled
+	 * correctly, when the fix is to write the source file or to publish the draft.
+	 */
+	withheld: ReadonlyMap<string, WithheldReason>;
 	/** Site-relative asset path to what the bundle calls it and how big it is. */
 	assets: ReadonlyMap<string, { src: string; width: number; height: number }>;
 }
@@ -147,11 +166,31 @@ export function createLinkResolver(
 		const slug = resolved.slice(localeRoot.length + 1).replace(/\.md$/, '');
 		const target = targets.slugs.has(slug) ? slug : targets.redirects.get(slug);
 		if (target === undefined) {
+			const withheld = targets.withheld.get(slug);
+			if (withheld === 'no-source-file') {
+				return {
+					ok: false,
+					message: `"${href}" resolves to the slug "${slug}", which has no ${SOURCE_LOCALE} file, so the bundle carries no page for it.`,
+					remediation: `Write content/${SOURCE_LOCALE}/${slug}.md, or link a page that has one. A page is published from its source-locale file, and a site has no address for a slug that exists only as a translation.`,
+				};
+			}
+			if (withheld === 'draft') {
+				return {
+					ok: false,
+					message: `"${href}" resolves to the slug "${slug}", which is a draft, so the bundle carries no page for it.`,
+					remediation:
+						'Link it once it is published, or remove draft: true from its front matter if it is ready.',
+				};
+			}
 			return {
 				ok: false,
 				message: `"${href}" resolves to the slug "${slug}", which no page in this project has.`,
+				// There is no `hexdocs mv`: renaming across seven locales means rewriting
+				// inbound links, and this package has no markdown printer to do it with. This
+				// remediation named it anyway, so an author was sent to a command the CLI
+				// answers with "there is no command called".
 				remediation:
-					'Check the path, or run hexdocs mv if the page moved: it rewrites inbound links and adds the redirect.',
+					'Check the path. If the page moved, link its new path, and add the old slug to its redirectFrom so links elsewhere keep resolving.',
 			};
 		}
 

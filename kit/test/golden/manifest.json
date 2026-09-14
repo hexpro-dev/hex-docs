@@ -1183,10 +1183,10 @@
 			"terms": 1664
 		},
 		"es": {
-			"digest": "e11f479aa4ef27d8c1c02a498772328e5219dc2e7f04f26597f9217ea1efe8fa",
-			"bytes": 46052,
+			"digest": "1c97d561bdf28eac539bf1c69ca48c11d93f07e746240407368f9c1324507cac",
+			"bytes": 45943,
 			"records": 40,
-			"terms": 1435
+			"terms": 1434
 		},
 		"ja": {
 			"digest": "d898e01f4947ff02852fc67af7ff9365f59ea389915e56331025be2460fd4be2",
@@ -1685,8 +1685,8 @@
 		},
 		{
 			"key": "search/es.idx.json.gz",
-			"digest": "a674ac6a84720b78627f087d1e05132bf06d64835db96cafdcaeba47de521cd1",
-			"bytes": 11814
+			"digest": "15dbe3cece27d9320bf443f124084c48833a5b044b48f142722779db87b99fb5",
+			"bytes": 11751
 		},
 		{
 			"key": "search/fr.idx.json.gz",
@@ -1713,7 +1713,7 @@
 		"pages": 8,
 		"locales": 7,
 		"objects": 92,
-		"bytes": 264831
+		"bytes": 264768
 	},
 	"coverage": {
 		"en": {

@@ -45,7 +45,12 @@ import { isNavGroup, type NavItem } from '../../../src/contracts/nav.js';
 import { probeAsset } from './assets.js';
 import { readFrontMatter } from './frontmatter.js';
 import { compilePage, rawSnippetBody, type CompiledPageOutput } from './page.js';
-import { createImageResolver, createLinkResolver, type LinkTargets } from './links.js';
+import {
+	createImageResolver,
+	createLinkResolver,
+	type LinkTargets,
+	type WithheldReason,
+} from './links.js';
 import {
 	loadProject,
 	redirectCollisions,
@@ -217,19 +222,35 @@ export function buildBundle(appRoot: string, options: BuildOptions): BuildResult
 	const published = new Set(
 		[...project.pages.keys()].filter((slug) => options.includeDrafts === true || !drafts.has(slug)),
 	);
+	// The slugs that get a page record, and so the only slugs a site has a route row for.
+	// A page is published from its source-locale file, so a slug that exists only as a
+	// translation compiles, is linted, and is in no bundle. This set is computed once and
+	// both the link targets and the record loop below read it, because the two used to be
+	// built from different lists: the resolver took `published`, a link to a
+	// translation-only page resolved with no finding, and the bundle published a
+	// `hexdocs:page` token and an internal link to an address nothing serves.
+	const sourced = new Set(
+		[...published].filter((slug) => project.pages.get(slug)?.has(SOURCE_LOCALE) === true),
+	);
+	const withheld = new Map<string, WithheldReason>();
+	for (const slug of project.pages.keys()) {
+		if (sourced.has(slug)) continue;
+		withheld.set(slug, drafts.has(slug) ? 'draft' : 'no-source-file');
+	}
 	const targets: LinkTargets = {
-		// The published set, not every slug. A draft is excluded from the bundle and was
+		// The sourced set, not every slug. A draft is excluded from the bundle and was
 		// still a valid link target, so a published page could link to a page the bundle
 		// does not carry and `link-resolves` said nothing. The whole point of the rule is
 		// that a link either resolves in this bundle or is reported, and a draft is exactly
 		// the page most likely to be linked before it is ready. With `includeDrafts` the
 		// drafts are in the bundle and in this set, which is the case that has to keep
 		// working for a preview build.
-		slugs: published,
+		slugs: sourced,
 		// Filtered the same way and for the same reason: an old slug redirecting to a page
 		// held back as a draft is a link to something the bundle does not carry, and the
 		// manifest's own redirect table already drops exactly these.
-		redirects: new Map([...redirects].filter(([, to]) => published.has(to))),
+		redirects: new Map([...redirects].filter(([, to]) => sourced.has(to))),
+		withheld,
 		assets: assetTargets,
 	};
 
@@ -460,9 +481,12 @@ export function buildBundle(appRoot: string, options: BuildOptions): BuildResult
 	const objects: WrittenObject[] = [];
 	const pageRecords: Record<string, PageRecord> = {};
 
-	for (const slug of [...published].sort()) {
+	for (const slug of [...sourced].sort()) {
 		const compiled = pages.get(slug);
 		const source = compiled?.get(SOURCE_LOCALE);
+		// Unreachable for a slug in `sourced`, which has a source file and so a compiled
+		// source page. Kept as the narrowing, and as the refusal to write a record with no
+		// source page behind it if the two ever part.
 		if (compiled === undefined || source === undefined) continue;
 
 		const record: PageRecord = {
@@ -545,18 +569,31 @@ export function buildBundle(appRoot: string, options: BuildOptions): BuildResult
 		// be able to find them; they are marked `fallback` here and land in the index as
 		// `missing`, which is what that state is for.
 		const indexable: IndexablePage[] = [];
-		// Over `pageRecords` rather than over `published`, which is the same list minus the
+		// Over `pageRecords` rather than over `published`, which is the same list plus the
 		// slugs that got no record because they have no source-locale file. Indexing those
 		// put a result row in a translation's index for a page the bundle carries no payload
 		// for: the row rendered, the reader clicked it, and `prefetch` had downloaded
-		// nothing to render. Every other consumer of a slug already filters on
-		// `pageRecords`, and the manifest's own invariant says every slug that appears
-		// anywhere must name a page the bundle has; search was the one place that invariant
-		// was stated and not enforced, because it cannot see inside a gzipped index.
+		// nothing to render. The manifest's own invariant says every slug that appears
+		// anywhere must name a page the bundle has, and it can check only the nav and the
+		// redirects, because it cannot see inside a gzipped object. So the objects hold it
+		// by reading the same list: the records are built from `sourced`, the link targets
+		// are `sourced`, and this loop reads the records. `divergence.test.ts` adds a
+		// translation-only page and checks the French index, and every destination in every
+		// published object, for a slug with no record.
 		for (const slug of Object.keys(pageRecords).sort(compareSlugStrings)) {
 			const compiled = pages.get(slug);
 			const own = compiled?.get(locale);
-			if (own !== undefined) {
+			// A scaffolded file is indexed as the source page, because the source page is
+			// what a reader has to be served at that address. `rawLocale` in
+			// `src/site/serve.ts` already chooses the source locale for a record whose own
+			// state is `scaffolded`, and `hexdocs scaffold` writes the source's headings with
+			// a TODO under each, so indexing the locale's own page put "TODO" in that
+			// language's index under every heading and none of the prose the reader lands
+			// on. Decided on the page's own state and not the effective one, the rule
+			// `rawLocale` states: a real translation that transcludes a scaffolded snippet is
+			// still served, and indexed, in its own language, and its effective state is what
+			// marks the result as untrustworthy. Both land on `missing` in the index.
+			if (own !== undefined && pageStates.get(slug)?.get(locale) !== 'scaffolded') {
 				indexable.push({ page: own.page, state: own.page.translation.state });
 				continue;
 			}

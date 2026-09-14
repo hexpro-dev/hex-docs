@@ -2,12 +2,24 @@
  * `hexdocs page` / `docs_page`: one page, in one language, as text.
  *
  * Two things it is for. From a source tree it is how an agent reads a page before
- * editing it, and it returns the markdown that is actually published rather than the
- * markdown on disk: includes are expanded at compile time and leave no node behind, so
- * the file and the served document are different documents. From a bundle directory it
- * is the read-only published-docs interface: point it at what `hexdocs prefetch` wrote
- * and get the raw markdown of any page in any of the seven languages, with no compile
- * and no network.
+ * editing it, and it returns the markdown the bundle stores rather than the markdown on
+ * disk: includes are expanded at compile time and leave no node behind, so the file and
+ * the stored document are different documents. From a bundle directory it is the
+ * read-only published-docs interface: point it at what `hexdocs prefetch` wrote and get
+ * the raw markdown of any page in any of the seven languages, with no compile and no
+ * network.
+ *
+ * **It is not byte for byte what a reader downloads, and the description says so.** The
+ * bundle stores every link as `hexdocs:page/<slug>.md` and every image as
+ * `hexdocs:asset/<sha256>.<ext>` (`RAW_PAGE_LINK` and `RAW_ASSET_LINK`), and a site
+ * replaces them with addresses when it serves the file, because only the site knows the
+ * mount, the locale prefix and the version. This command has no site, so it returns the
+ * tokens. The description used to call the output "the document a reader gets", and an
+ * agent that believed it and copied a destination back into a source file would write a
+ * link `link-resolves` refuses, where a source file's links are relative to the file.
+ * `kit/test/commands/page.test.ts` asserts the tokens in the output and the sentence in
+ * the description together, so resolving the tokens here or dropping the scheme from the
+ * description turns that test red.
  *
  * The pagination is the part worth reading twice. It counts code points, not bytes and
  * not UTF-16 units, and it cuts at a paragraph break. A byte offset splits a Japanese or
@@ -33,9 +45,10 @@ import { BUNDLE_DIRECTORY, readBundle } from './pages.js';
 /**
  * What a window may be cut out of.
  *
- * `markdown` is what `<slug>.md` serves, includes expanded. `ast` is the compiled page
- * payload, byte for byte the JSON the bundle stores under `pages/<locale>/<slug>.json`,
- * which is what the renderer switches on.
+ * `markdown` is what the bundle stores for `<slug>.md`: includes expanded, and every
+ * destination still the token a site resolves when it serves the file. `ast` is the
+ * compiled page payload, byte for byte the JSON the bundle stores under
+ * `pages/<locale>/<slug>.json`, which is what the renderer switches on.
  */
 export const PAGE_FORMATS = ['markdown', 'ast'] as const;
 
@@ -196,7 +209,7 @@ export const page = defineCommand({
 	writes: 'nothing',
 	summary: 'Read one page in one language, as markdown or as the compiled AST.',
 	detail:
-		'From a source tree, returns the markdown that is actually published: transclusions are expanded, so this is the document a reader gets rather than the file on disk. With --bundle it reads a compiled bundle directory instead, which needs no compile and no network, and is how an agent reads published documentation it did not write. Long pages come back a window at a time: offsets count code points, a window ends at a paragraph break, and nextOffset is where the following call starts. A slug that does not exist is refused with the nearest matches, never an empty page.',
+		'From a source tree, returns the markdown the bundle stores for the page, which is not the file on disk: transclusions are expanded, and every link and image destination is a token the site replaces with an address when it serves the file. A page link reads hexdocs:page/<slug>.md and an image reads hexdocs:asset/<sha256>.<ext>. Do not copy either into a source file, where a link stays relative to the file it is written in and an image to the assets directory. With --bundle it reads a compiled bundle directory instead, which needs no compile and no network, and is how an agent reads published documentation it did not write. Long pages come back a window at a time: offsets count code points, a window ends at a paragraph break, and nextOffset is where the following call starts. A slug that does not exist is refused with the nearest matches, never an empty page.',
 	params: {
 		// `slug` is first and `root` is last because a required positional cannot sit
 		// behind an optional one: `hexdocs page guide/first-tag` has to work without the

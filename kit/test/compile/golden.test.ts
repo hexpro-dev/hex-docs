@@ -39,12 +39,10 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import { materialiseCorpus } from '../../../fixtures/index.js';
 import { LOCALES, type Locale } from '../../../src/contracts/locales.js';
-import { RAW_ASSET_LINK, RAW_PAGE_LINK } from '../../../src/contracts/manifest.js';
-import type { DocsProjectConfig } from '../../../src/contracts/project.js';
 import { buildBundle, type BuildResult } from '../../src/compile/build.js';
-import { highlight } from '../../src/compile/highlight/index.js';
-import { parseDocument } from '../../src/compile/markdown/index.js';
 import { canonicalJson, gunzipMember } from '../../src/compile/serialise.js';
+
+import { rawDestinations, unservedInternalLinks } from './destinations.js';
 
 const GOLDEN = fileURLToPath(new URL('../golden/', import.meta.url));
 const UPDATE = process.env.UPDATE_GOLDEN === '1';
@@ -188,66 +186,16 @@ describe('the compiled corpus', () => {
 	test('every destination in every raw object is one a served page can follow', () => {
 		// Every raw object in the bundle, not only the three goldened above, because a
 		// destination left relative is wrong from `llms-full.txt` on any page and the three
-		// goldens hold seven of the corpus's rewritten links. The destinations are read back
-		// with the compiler's own parser, which is what a markdown reader of the object sees:
-		// a pattern over the text would count a sample in a fence or a code span as a link.
-		// What the parser cannot see, a rewrite that reaches into code, is held by the code
-		// span case in `page.test.ts`.
-		const pages = new Set(Object.keys(result.manifest.pages));
-		const assets = new Set(result.manifest.assets.map((asset) => `${asset.sha256}.${asset.ext}`));
-		const offending: string[] = [];
-		const seen = { page: 0, asset: 0, other: 0 };
-
-		const check = (key: string, href: string): void => {
-			if (href.startsWith(RAW_PAGE_LINK)) {
-				const [path] = href.slice(RAW_PAGE_LINK.length).split('#');
-				const slug = (path as string).replace(/\.md$/, '');
-				if (!(path as string).endsWith('.md') || !pages.has(slug))
-					offending.push(`${key}: ${href}`);
-				seen.page += 1;
-			} else if (href.startsWith(RAW_ASSET_LINK)) {
-				if (!assets.has(href.slice(RAW_ASSET_LINK.length))) offending.push(`${key}: ${href}`);
-				seen.asset += 1;
-			} else if (
-				href.startsWith('#') ||
-				href.startsWith('https://') ||
-				href.startsWith('mailto:')
-			) {
-				seen.other += 1;
-			} else {
-				offending.push(`${key}: ${href}`);
-			}
-		};
-
-		const raws = result.objects.filter((object) => object.key.startsWith('raw/'));
-		// The half of the seam a site owns: it substitutes on `](` followed by the prefix and
-		// on nothing else, so every token has to sit exactly there. A token the parser reads
-		// back as a destination and the substitution does not find is served to a reader as
-		// `hexdocs:page/...`, so the two counts below have to agree.
-		let substitutable = 0;
-		for (const object of raws) {
-			const text = gunzipMember(object.bytes).toString('utf8');
-			substitutable +=
-				text.split(`](${RAW_PAGE_LINK}`).length - 1 + text.split(`](${RAW_ASSET_LINK}`).length - 1;
-			parseDocument(text, {
-				file: 'content/en/raw.md',
-				config: result.project.config as DocsProjectConfig,
-				services: {
-					highlight,
-					resolveLink: (href) => {
-						check(object.key, href);
-						return { ok: true, link: { type: 'link', kind: 'external', href: 'https://x' } };
-					},
-					resolveImage: (src) => {
-						check(object.key, src);
-						return { ok: true, src: 'assets/x.png', width: 1, height: 1 };
-					},
-					resolveInclude: () => ({ ok: true, blocks: [] }),
-				},
-			});
-		}
+		// goldens hold seven of the corpus's rewritten links. What the parser cannot see, a
+		// rewrite that reaches into code, is held by the code span case in `page.test.ts`.
+		//
+		// Over the corpus this cannot fail on a slug with no record, because the corpus links
+		// no such page. `divergence.test.ts` runs the same sweep over the perturbations that
+		// do, which is the half that holds the link resolver to the slugs that get a record.
+		const { offending, unresolved, seen, substitutable, raws } = rawDestinations(result);
 
 		expect(offending).toEqual([]);
+		expect(unresolved).toEqual([]);
 		expect(substitutable).toBe(seen.page + seen.asset);
 		// Counted, so a parse that stopped seeing links reads as a failure rather than as a
 		// bundle with nothing wrong in it. Measured over the corpus when this was written: 87
@@ -257,10 +205,22 @@ describe('the compiled corpus', () => {
 		const records = Object.values(result.manifest.pages).flatMap((page) =>
 			Object.keys(page.locales),
 		);
-		expect(raws.length).toBe(records.length);
+		expect(raws).toBe(records.length);
 		expect(seen.page).toBeGreaterThanOrEqual(80);
 		expect(seen.asset).toBeGreaterThanOrEqual(15);
 		expect(seen.other).toBeGreaterThanOrEqual(35);
+	});
+
+	test('every internal link in every page payload names a page with a record', () => {
+		// The renderer's half of the same seam. A link node naming a slug with no record
+		// renders as a working anchor to an address the site has no route row for.
+		const { offending, seen } = unservedInternalLinks(result);
+		expect(offending).toEqual([]);
+		// Every page payload has a raw object beside it, and over the corpus the two sweeps
+		// count the same page links from the two sides, one raw token per internal link node.
+		// Asserted as equal rather than floored, so a walk that stopped finding link nodes
+		// reads as a mismatch rather than as nothing wrong.
+		expect(seen).toBe(rawDestinations(result).seen.page);
 	});
 
 	test('the English term dictionary is what it was', () => {

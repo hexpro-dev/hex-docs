@@ -2050,7 +2050,7 @@ function sweepEnglishCorpus(appRoot: string): Map<string, SweptDocument> {
 		}
 	}
 
-	const targets = { slugs: new Set(project.pages.keys()), redirects, assets };
+	const targets = { slugs: new Set(project.pages.keys()), redirects, withheld: new Map(), assets };
 	const swept = new Map<string, SweptDocument>();
 
 	const documents = [

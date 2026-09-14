@@ -267,10 +267,21 @@ let corpus: MaterialisedCorpus | undefined;
 let result: BuildResult | undefined;
 const indexes = new Map<Locale, SearchIndex>();
 
-/** The compiled page a locale's index carries for a slug: its own, or the source fallback. */
+/**
+ * The compiled page a locale's index carries for a slug: the one a reader is served there.
+ *
+ * Its own page, unless it has none or its own state is `scaffolded`, and the source page
+ * otherwise. Read off the manifest's own state rather than the compiled page's effective
+ * one, which is the rule `rawLocale` serves raw markdown by. The corpus's scaffolded
+ * Spanish chip matrix is what makes the difference visible here: its file is the English
+ * text, but it transcludes the Spanish legend, so the two pages index different words and
+ * the glyph count below reads the legend from whichever one this returns.
+ */
 function pageFor(slug: string, locale: Locale): CompiledPage {
-	const compiled = (result as BuildResult).pages.get(slug);
-	const output = compiled?.get(locale) ?? compiled?.get(SOURCE_LOCALE);
+	const built = result as BuildResult;
+	const compiled = built.pages.get(slug);
+	const scaffolded = built.manifest.pages[slug]?.locales[locale]?.state === 'scaffolded';
+	const output = (scaffolded ? undefined : compiled?.get(locale)) ?? compiled?.get(SOURCE_LOCALE);
 	if (output === undefined)
 		throw new Error(`${slug} did not compile in ${locale} or in the source locale.`);
 	return output.page;
