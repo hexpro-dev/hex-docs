@@ -68,6 +68,19 @@ function countTsconfigs() {
  * @property {string} [note]
  */
 
+/**
+ * One line of `tsc --extendedDiagnostics`, which is noise once a step has failed.
+ *
+ * The same argument as the `[debug]` filter beside it, and it is not cosmetic. The problems
+ * under a failed row are the last 25 lines of output. Measured on node 22 with TypeScript
+ * 5.9: one invocation prints 26 of these after its errors, so a compile error did not
+ * merely compete for the window, it could never be inside it. The row went red and the
+ * reader was shown a memory figure instead of the file and the line. Narrow enough that a
+ * label and a number is all it matches, so an error, which carries a position and
+ * `error TSnnnn:` before its message, never is.
+ */
+const DIAGNOSTIC_LINE = /^[A-Za-z][A-Za-z ()/]*:\s+[\d.]+K?s?$/;
+
 /** Pulls "Tests  226 passed" out of vitest's summary. */
 export const countTests = (output) => Number(/Tests\s+(\d+)\s+passed/.exec(output)?.[1] ?? 0);
 
@@ -310,7 +323,7 @@ export function run(steps = STEPS) {
 					// failure gets read.
 					...output
 						.split('\n')
-						.filter((line) => !line.startsWith('[debug]'))
+						.filter((line) => !line.startsWith('[debug]') && !DIAGNOSTIC_LINE.test(line))
 						.join('\n')
 						.trimEnd()
 						.split('\n')

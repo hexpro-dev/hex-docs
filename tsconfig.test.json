@@ -5,7 +5,26 @@
 	"extends": "./tsconfig.json",
 	"compilerOptions": {
 		"types": ["node"],
+		// On, with `checkJs` left off, so the compiler reads the zero-dependency `.mjs`
+		// guards under `scripts/` for the JSDoc types they already carry and holds nothing
+		// in them to the compiler. Three test files write
+		// `import type { CheckResult } from '../scripts/lib/report.mjs'`, which resolves
+		// only when TypeScript is allowed to open that file, so this was always the
+		// intended arrangement; the flag was missing because no test was in the program to
+		// need it. The alternative, a `@ts-expect-error` over each guard import, types
+		// every one of those modules as `any`, and `CheckResult & { arms: string[] }` then
+		// collapses to `any` and takes the assertions in `test/infra.test.ts` with it.
+		"allowJs": true,
 		"noEmit": true
 	},
-	"include": ["test", "vitest.config.ts", "src", "fixtures"]
+	"include": ["test", "vitest.config.ts", "src", "fixtures"],
+	// Stated here rather than inherited, and the `test` entry is the reason. `exclude`
+	// is not merged by `extends`, it is replaced wholesale, so a config that sets only
+	// `include` takes the root's list verbatim, and that list excludes `test` because
+	// the root compiles the runtime half alone. Every file under `test/` was therefore
+	// named by `include` and then dropped by the inherited `exclude`, and this
+	// configuration compiled 48 files, none of them a test, while the ladder's
+	// typecheck row counted it as one of three. Put `test` back in this list and the
+	// row goes green over nothing again.
+	"exclude": ["node_modules", "kit", "dist", "coverage"]
 }

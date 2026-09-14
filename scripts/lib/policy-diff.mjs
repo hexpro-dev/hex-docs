@@ -390,7 +390,12 @@ export function diffStatement(sid, applied, expected) {
  *
  * Exported for `test/infra.test.ts` rather than for `check-stack.mjs`, which never names it.
  *
- * @param {Record<string, any>} document
+ * The parameter really is optional: a document S3 has never been given comes back
+ * undefined, and the empty list is the answer that keeps the caller on the comparison path
+ * rather than on an exception. Narrow this back to a required `Record` and the test that
+ * proves it stops compiling, which is the only thing holding the `?.` below in place.
+ *
+ * @param {Record<string, any> | undefined} document
  * @returns {Record<string, any>[]}
  */
 export function statementsOf(document) {
@@ -499,7 +504,11 @@ export function comparePolicy(appliedText, expectedText) {
 /**
  * A location inside a policy document, as a path a reader can find.
  *
- * @param {any[]} path
+ * The parameter really is optional, and the `?? []` below is what makes an absent path read
+ * as the document itself rather than as a crash inside a row that was reporting a problem.
+ * Narrow this back to a required array and the test that proves it stops compiling.
+ *
+ * @param {any[] | undefined} path
  */
 export function formatPath(path) {
 	let out = '';

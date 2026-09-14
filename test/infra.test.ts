@@ -69,11 +69,13 @@ import { basename, delimiter, join } from 'node:path';
 
 import { afterAll, describe, expect, test } from 'vitest';
 
-// @ts-expect-error -- a zero-dependency guard, written as .mjs like the others
+// Zero-dependency guards and the library they share, written as .mjs and typed by their
+// own JSDoc: `tsconfig.test.json` sets `allowJs` so the compiler reads them, and leaves
+// `checkJs` off so nothing in them is held to the compiler. Turn that flag off and
+// `CheckResult` below is `any`, `InvariantsRow` collapses with it, and the arm sweep
+// silently stops comparing anything.
 import { findTerraform, run as runInfra } from '../scripts/check-infra.mjs';
-// @ts-expect-error -- see above.
 import { run as runStack } from '../scripts/check-stack.mjs';
-// @ts-expect-error -- a zero-dependency library, written as .mjs like the guards it serves.
 import {
 	IAM_POLICY_SOURCE,
 	NO_CREDENTIALS,
@@ -1648,15 +1650,20 @@ describe('the one spelling of a policy statement', () => {
  *
  * One deny, spelled the way `infra/bucket-policy.tf` renders one, so that a mutation of a
  * single field below is the only difference between the two.
+ *
+ * `satisfies` rather than an annotation, and the reason is `BASE['Sid']`: an annotation of
+ * `Record<string, unknown>` erases the field types, so the Sid every case passes to
+ * `diffStatement` reads as `unknown` and the call is a type error. Still checked against the
+ * record shape, so a field that is not a policy field is still refused here.
  */
-const BASE: Record<string, unknown> = {
+const BASE = {
 	Sid: 'DenyInsecureTransport',
 	Effect: 'Deny',
 	Principal: '*',
 	Action: 's3:PutObject',
 	Resource: `${BUCKET_ARN}/*`,
 	Condition: { Bool: { 'aws:SecureTransport': 'false' } },
-};
+} satisfies Record<string, unknown>;
 
 interface FieldCase {
 	field: string;

@@ -1,27 +1,30 @@
 import {
 	copyFileSync,
+	existsSync,
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
 	rmSync,
+	statSync,
 	symlinkSync,
 	writeFileSync,
 } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import ts from 'typescript';
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 
-// @ts-expect-error -- zero-dependency .mjs guards, deliberately untyped.
+// Zero-dependency .mjs guards, typed by their own JSDoc: `tsconfig.test.json` sets
+// `allowJs` so the compiler reads them, and leaves `checkJs` off so nothing in them is
+// held to the compiler. Turn that flag off and every one of these is an implicit `any`,
+// and a guard whose signature changed under a test asserting its rows goes unnoticed.
 import { check, notRun, render, skipped } from '../scripts/lib/report.mjs';
-// @ts-expect-error -- see above.
 import { run as runImportGate } from '../scripts/check-imports.mjs';
-// @ts-expect-error -- see above.
 import { REQUIRED_DIRS, run as runHouseLint } from '../scripts/lint.mjs';
-// @ts-expect-error -- see above.
 import {
 	countExamined,
 	countTestFiles,
@@ -383,6 +386,32 @@ describe('the ladder runner', () => {
 		expect(row?.problems?.some((line) => line.includes('Tests  1 passed'))).toBe(true);
 	});
 
+	test('a failed typecheck names the file, because the diagnostics block cannot push it out', () => {
+		// Measured against the real thing rather than reasoned about. One invocation of
+		// `tsc --extendedDiagnostics` prints 26 labelled lines after its errors and the tail
+		// kept under a failed row is 25, so the compile error was not competing for the
+		// window, it could never be inside it: the row went red and showed the reader a
+		// memory figure instead of the file and the line. The count still reads the
+		// unfiltered output, so nothing the row measures moves.
+		const noise = Array.from(
+			{ length: 30 },
+			() =>
+				'Memory used:               414676K\nParse time:                  2.93s\nprintTime time:              0.00s',
+		).join('\n');
+		const output = `test/site/address.test.ts(22,37): error TS2322: not assignable.\n${noise}`;
+		const [row] = runLadder([
+			{
+				name: 'noisy',
+				argv: ['node', '-e', `process.stdout.write(${JSON.stringify(output)}); process.exit(2)`],
+				unit: 'configurations',
+				count: () => 1,
+			},
+		]) as CheckResult[];
+		expect(row?.state).toBe('FAIL');
+		expect(row?.problems?.some((line) => line.includes('address.test.ts(22,37)'))).toBe(true);
+		expect(row?.problems?.some((line) => line.startsWith('Memory used'))).toBe(false);
+	});
+
 	test('everything after a failure is NOT RUN, so the summary cannot read as a clean sweep', () => {
 		const rows = runLadder([failing, passing, passing]) as CheckResult[];
 		expect(rows.map((row) => row.state)).toEqual(['FAIL', 'NOT RUN', 'NOT RUN']);
@@ -575,6 +604,7 @@ describe('the git history check', () => {
 });
 
 describe('the typecheck step measures rather than asserts', () => {
+	const REPO = fileURLToPath(new URL('..', import.meta.url));
 	const manifest = JSON.parse(
 		readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
 	) as {
@@ -644,6 +674,58 @@ describe('the typecheck step measures rather than asserts', () => {
 		// A step that measured nothing reports zero, which the ladder turns into a
 		// failure rather than a pass.
 		expect(step?.count('no diagnostics here')).toBe(0);
+	});
+
+	/**
+	 * Every `.ts` and `.tsx` file under one path on disk, `node_modules` aside.
+	 *
+	 * Read off the filesystem rather than out of a configuration, because it is the number
+	 * the configuration is being compared against.
+	 */
+	const sourcesUnder = (root: string): string[] => {
+		if (!existsSync(root)) return [];
+		if (!statSync(root).isDirectory()) return /\.tsx?$/.test(root) ? [root] : [];
+		const found: string[] = [];
+		for (const entry of readdirSync(root, { withFileTypes: true })) {
+			if (entry.name === 'node_modules') continue;
+			const path = join(root, entry.name);
+			if (entry.isDirectory()) found.push(...sourcesUnder(path));
+			else if (/\.tsx?$/.test(entry.name)) found.push(path);
+		}
+		return found;
+	};
+
+	test('every configuration compiles the roots its own include names', () => {
+		// The hole the row above cannot see, and it was open for four steps. `extends`
+		// replaces `exclude` wholesale rather than merging it, so `tsconfig.test.json` set
+		// only `include` and took the root's list, which names `test`. Every file under
+		// `test/` was named by the include and then dropped by the inherited exclude: 48
+		// files compiled, not one of them a test, and the row counted the configuration as
+		// one of three and passed. A count of configurations cannot tell a full program
+		// from an empty one. Comparing each include root against the disk can.
+		for (const name of onDisk) {
+			const file = join(REPO, name);
+			const read = ts.readConfigFile(file, ts.sys.readFile);
+			expect(read.error, `${name} could not be read`).toBeUndefined();
+			const parsed = ts.parseJsonConfigFileContent(read.config, ts.sys, dirname(file));
+			expect(parsed.errors, `${name} did not parse`).toEqual([]);
+
+			const include = (read.config as { include?: string[] }).include ?? [];
+			expect(include.length, `${name} names no include roots`).toBeGreaterThan(0);
+			for (const entry of include) {
+				const root = resolve(dirname(file), entry);
+				// A root holding no TypeScript at all is not a gap. `kit/bin` holds one shell
+				// script and the entry is there for the day it holds a `.ts` beside it.
+				if (sourcesUnder(root).length === 0) continue;
+				const compiled = parsed.fileNames.filter(
+					(candidate) => candidate === root || candidate.startsWith(`${root}/`),
+				);
+				expect(
+					compiled.length,
+					`${name} includes ${entry}, which holds TypeScript, and compiles none of it`,
+				).toBeGreaterThan(0);
+			}
+		}
 	});
 });
 

@@ -29,7 +29,10 @@ import { dirname, join } from 'node:path';
 
 import { afterAll, describe, expect, test } from 'vitest';
 
-// @ts-expect-error -- a zero-dependency guard, written as .mjs like the others
+// A zero-dependency guard, written as .mjs like the others, typed by its own JSDoc:
+// `tsconfig.test.json` sets `allowJs` so the compiler reads it, and leaves `checkJs` off
+// so nothing in it is held to the compiler. Turn that flag off and this import is an
+// implicit `any` and the row assertions below stop being checked against anything.
 import { checkFirstRun, run_ as runSurface } from '../scripts/check-cli.mjs';
 import type { CheckResult } from '../scripts/lib/report.mjs';
 import { REPO_ROOT } from './support/golden.js';

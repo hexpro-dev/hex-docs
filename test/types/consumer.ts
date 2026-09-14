@@ -1,10 +1,10 @@
 /**
  * Type-level assertions about what a consumer hands this package. Compiled, never run.
  *
- * `test/render/consumer-types.test.ts` compiles this file with the TypeScript compiler and
- * fails on any diagnostic. It is compiled from a test rather than by `pnpm typecheck`
- * because `tsconfig.test.json` inherits `"exclude": [..., "test"]` from `tsconfig.json`, so
- * no file under `test/` is part of that typecheck at all.
+ * `pnpm typecheck` compiles this file, and `test/render/consumer-types.test.ts` compiles it
+ * again with the compiler API so the same program can be handed a link component that must
+ * be refused. The second half is why that test still exists: a positive control is a file
+ * that has to fail, and no configuration can assert that about itself.
  */
 
 import type { Link } from 'react-router';

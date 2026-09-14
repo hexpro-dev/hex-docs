@@ -155,7 +155,12 @@ describe('the length relationships, which are the only thing standing between a 
 
 	test('section identity is the (slug, anchor) pair and duplicates are caught', () => {
 		const broken = index();
-		broken.docs[1] = { ...(broken.docs[0] as never) };
+		// `noUncheckedIndexedAccess` types an element as possibly absent, so the first record
+		// is narrowed rather than cast. A cast to `never` types the spread as `never` and this
+		// case stops writing a duplicate at all, which is the whole thing it asserts.
+		const first = broken.docs[0];
+		if (first === undefined) throw new Error('the fixture index carries a first section');
+		broken.docs[1] = { ...first };
 		expect(validateSearchIndexShape(broken).some((p) => p.includes('twice'))).toBe(true);
 	});
 

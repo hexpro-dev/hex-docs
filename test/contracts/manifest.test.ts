@@ -400,9 +400,14 @@ describe('the derived fields, which the same file refuses to inline elsewhere', 
 	test.each(['pages', 'translated', 'stale', 'scaffolded'])(
 		'a wrong coverage.en.%s is recounted and reported',
 		(key) => {
-			const problems = validateManifestShape(
-				manifest({ coverage: { en: { ...(manifest().coverage.en as never), [key]: 7 } } }),
-			);
+			// `coverage` is a partial record, so the compiler cannot know the fixture carries
+			// `en`. Narrowed through a local and refused loudly rather than cast: a cast to
+			// `never` types the spread as `never` and the case compiles to nothing useful,
+			// which is what stood here while no file under `test/` was in any typecheck.
+			const en = manifest().coverage.en;
+			if (en === undefined) throw new Error('the fixture manifest carries coverage for en');
+
+			const problems = validateManifestShape(manifest({ coverage: { en: { ...en, [key]: 7 } } }));
 			expect(problems.some((p) => p.includes(`coverage.en.${key} is 7`))).toBe(true);
 		},
 	);

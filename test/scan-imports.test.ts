@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'vitest';
 
-// @ts-expect-error -- a zero-dependency .mjs guard, deliberately untyped.
+// A zero-dependency .mjs library, typed by its own JSDoc: `tsconfig.test.json` sets
+// `allowJs` so the compiler reads it, and leaves `checkJs` off so nothing in it is held to
+// the compiler. Turn that flag off and every helper below is an implicit `any`, and the
+// shapes this suite asserts about a scanned import stop being checked at all.
 import {
 	blankComments,
 	classifySpecifier,
@@ -39,7 +42,10 @@ describe('comment blanking', () => {
 	test('blanking preserves length, so reported line numbers stay true', () => {
 		const source = "/* four lines\n of\n comment\n here */\nimport { a } from 'react';";
 		expect(blankComments(source).length).toBe(source.length);
-		expect(scanImports(source)[0].line).toBe(5);
+		// Optional chaining rather than an assertion: a scan that found nothing reports
+		// `undefined` here and the assertion fails on the line number, which is the failure a
+		// reader wants. A `!` would throw before the expectation and name nothing.
+		expect(scanImports(source)[0]?.line).toBe(5);
 	});
 
 	test('an unterminated quote recovers at the newline rather than blanking the rest', () => {
@@ -94,7 +100,7 @@ describe('dynamic imports', () => {
 		// dependency gate entirely.
 		const found = scanImports('const m = await import(`./thing.js`);');
 		expect(found.map((r: { specifier: string }) => r.specifier)).toEqual(['./thing.js']);
-		expect(found[0].form).toBe('dynamic');
+		expect(found[0]?.form).toBe('dynamic');
 	});
 
 	test('a backtick static import is seen too', () => {

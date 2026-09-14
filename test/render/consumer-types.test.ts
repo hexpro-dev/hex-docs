@@ -2,11 +2,16 @@
  * What a consumer's templates pass this package typechecks without a cast or a wrapper,
  * checked by the compiler.
  *
- * A type-level claim with no runtime statement cannot fail a runtime test, and the obvious
- * home for it cannot fail the typecheck either: `tsconfig.test.json` extends `tsconfig.json`
- * and inherits its `exclude`, which lists `test`, so nothing under `test/` is compiled by
- * `pnpm typecheck`. So this test compiles `test/types/consumer.ts` itself, with the test
- * configuration's own options, and fails on any diagnostic in it.
+ * A type-level claim with no runtime statement cannot fail a runtime test, so this compiles
+ * `test/types/consumer.ts` with the test configuration's own options and fails on any
+ * diagnostic in it. `tsconfig.test.json` now compiles that file too, which is the belt to
+ * this braces, and it was not always so: the config inherited the root's `exclude`, which
+ * lists `test`, so for four steps nothing under `test/` was in any typecheck and this was
+ * the only thing compiling those assertions.
+ *
+ * What `pnpm typecheck` still cannot do is the half below it. A positive control is a file
+ * that has to *fail*, and a configuration that compiles it reports the failure as a failure
+ * of the run. Only a program built here can ask for a diagnostic and assert it arrived.
  *
  * The positive control is what makes a clean result mean something. A checker that could
  * not resolve `react-router`, or that was handed the wrong file, reports nothing for the
