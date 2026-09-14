@@ -196,6 +196,87 @@ describe('the rules a generator cannot enforce', () => {
 	});
 });
 
+/**
+ * The body of the one rule whose selector text is exactly `selector`.
+ *
+ * Exact and unique, so an assertion about a rule cannot be satisfied by a different rule
+ * that happens to contain the same declaration.
+ */
+function rule(selector: string): string {
+	const head = `\n${selector} {\n`;
+	const parts = CSS.split(head);
+	expect({ selector, rules: parts.length - 1 }).toEqual({ selector, rules: 1 });
+	return (parts[1] as string).slice(0, (parts[1] as string).indexOf('\n}'));
+}
+
+describe('the layout a host cannot take away', () => {
+	// What is asserted here is that each rule is present and says what it has to. What it
+	// does in a page is `scripts/check-paint.mjs`, which renders it under a sticky header and
+	// a preflight at two widths, and `test/paint.test.ts` deletes each of these rules in turn
+	// and watches the probe for it fail.
+
+	test('the skip link is clipped until focused, and nothing about hiding it rests on a transform', () => {
+		// Moved above the docs root with a transform, it was off-screen only when the root
+		// started at the top of the page, and in hex-web it sat on the site logo.
+		const hidden = rule('.hx-root .hx-sr,\n.hx-root .hx-skip:not(:focus)');
+		expect(hidden).toContain('clip-path: inset(50%)');
+		expect(hidden).toContain('inline-size: 1px');
+		expect(CSS).not.toContain('translateY(-120%)');
+		// The slide is the only transitioned property, and it is not the one that hides.
+		expect(rule('.hx-root .hx-skip')).toContain('transition: transform');
+		expect(hidden).not.toContain('transform');
+	});
+
+	test('a task item text flows on the marker line, and keeps a plain item spacing', () => {
+		expect(rule('.hx-root .hx-task + p')).toContain('display: inline');
+		expect(rule('.hx-root .hx-task + p + *')).toContain('margin-block-start: 1rem');
+		expect(rule('.hx-root li.hx-task-item')).toContain('margin-block-end: 1rem');
+		// It ties with the tight-list reset on specificity, so it has to come later.
+		expect(CSS.indexOf('\n.hx-root li.hx-task-item {')).toBeGreaterThan(
+			CSS.indexOf('\n.hx-root .hx-tight li {'),
+		);
+	});
+
+	test('an image states its display, inline in prose and a block in a figure', () => {
+		expect(rule('.hx-root .hx-image')).toContain('display: inline-block');
+		expect(rule('.hx-root .hx-image')).toContain('vertical-align: middle');
+		expect(rule('.hx-root .hx-figure .hx-image')).toContain('display: block');
+	});
+
+	test('the shell pads itself from the declared token and caps its own width', () => {
+		const layout = rule('.hx-root .hx-layout');
+		expect(layout).toContain(`padding-inline: ${t('shell-inset')}`);
+		expect(layout).toContain('margin-inline: auto');
+		expect(layout).toContain(
+			`max-inline-size: calc(${t('tree-size')} + ${t('measure')} + ${t('toc-size')} + 2 * ${t('gutter')} + 2 * ${t('shell-inset')})`,
+		);
+	});
+
+	test('every property the preflight resets and the docs depend on is stated', () => {
+		// One line each for what Tailwind's preflight, or kcalc-web's own base layer, would
+		// otherwise decide: the list markers, the heading weight and colour, the link colour
+		// and underline, the block margins of a quote and a figure, the font of the code in a
+		// fence and the margin that centres the search dialog.
+		expect(rule('.hx-root ul.hx-list')).toContain('list-style-type: disc');
+		expect(rule('.hx-root li ul.hx-list')).toContain('list-style-type: circle');
+		expect(rule('.hx-root ol.hx-list')).toContain('list-style-type: decimal');
+		for (const selector of ['.hx-root .hx-title', '.hx-root .hx-heading']) {
+			expect(rule(selector)).toContain('font-weight: 600');
+			expect(rule(selector)).toContain(`color: ${t('ink')}`);
+		}
+		expect(rule('.hx-root .hx-prose a,\n.hx-root .hx-banner a')).toContain(
+			'text-decoration: underline',
+		);
+		expect(rule('.hx-root .hx-meta a')).toContain('text-decoration: underline');
+		expect(rule('.hx-root .hx-breadcrumb a')).toContain('color: inherit');
+		expect(rule('.hx-root .hx-skip')).toContain('text-decoration: underline');
+		expect(rule('.hx-root blockquote')).toContain('margin-block: 0 1rem');
+		expect(rule('.hx-root .hx-figure')).toContain('margin-block: 0 1rem');
+		expect(rule('.hx-root .hx-pre code')).toContain('font: inherit');
+		expect(rule('.hx-search')).toContain('margin: auto');
+	});
+});
+
 describe('the generated-artifact script', () => {
 	test('writes the stylesheet where the contract says it goes', () => {
 		const target = mkdtempSync(join(tmpdir(), 'hexdocs-css-'));

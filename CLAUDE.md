@@ -781,7 +781,7 @@ only thing in it that can produce a colour is `t()`, which expands a name throug
 `tokenValue` and throws on a name the tables do not carry. That is the difference between
 detecting a hard-coded `#f2ede6` and being unable to write one.
 
-Three rules the generator cannot enforce, each asserted in
+Four rules the generator cannot enforce, each asserted in
 `kit/test/theme/stylesheet.test.ts`:
 
 **No `@layer`.** Measured against both consumers: hex-web's `app.css` declares none and has
@@ -796,6 +796,11 @@ build that shows it is the one nobody runs.
 first paint and flips in an effect, so a rule keyed off it is wrong for exactly the readers
 it is for. `@media (prefers-reduced-motion: reduce)` needs no JavaScript and is the gate.
 The attribute exists so a consumer's own effects can read the same answer.
+
+**State every property a host's base layer resets.** Unlayered beats layered only for the
+properties a rule states. Both consumers ship Tailwind v4's preflight in `@layer base`, and for
+anything this file leaves unstated the preflight still wins over the browser default the rule
+was written against. Step 8 measured what that meant; see the step 8 section.
 
 ### The palette is a separate table from the theme tokens
 
@@ -1720,6 +1725,44 @@ did not exist, for a property each was the only record of; those tests now exist
 - `wiring-routes` needs the consumer's dependencies installed, which they are at prebuild time.
 - Generated consumer files have to be measured under both consumers' eslint: hex-web lints `.mjs`
   with node globals, and kcalc gives `.mjs` none.
+
+### What the first browser pass over hex-web found in the stylesheet
+
+A headless pass over hex-web's production build found four layout defects, and none of them is
+visible on a blank page, which is where every earlier paint probe ran. The skip link was hidden
+with `translateY(-120%)` relative to the docs root, which is off-screen only when the root starts
+at the top of the page; under hex-web's 64px sticky header it sat on the logo. It is now the
+`.hx-sr` clip until `:focus`. A task marker is an inline box followed by a block paragraph, so the
+text always started a line lower; the paragraph after the marker is inline now, and two rules put
+back the spacing its end margin gave, one of which ties with `.hx-tight li` and must stay after it.
+The preflight made an inline icon a block. And hex-web's `main` is full-bleed, so the shell had no
+inline gutter: the layout now pads itself with `shell-inset`, a clamp that reaches 2rem at
+exactly 1280px, and caps its width at the three columns plus that padding, derived from the
+tokens rather than a token of its own.
+
+Rendering nine corpus pages in four languages bare and under hex-web's compiled base layer, and
+diffing the computed style of every element, found the rest: list markers, heading weight, link colour and
+underline outside prose (the browser's own blue, 2.05:1 on the ground, where nothing is stated),
+the block margins of a quote and a figure, and the `margin: auto` that centres a modal dialog, so
+the search dialog opened pinned to the corner. The same pass found a defect with no host at all:
+the browser's stylesheet gives `code` its own `font-family: monospace`, so the mono token never
+reached the text inside a fence. kcalc-web's own base layer also colours h1 to h4 with its ink,
+which on its paper world is 1.33:1 on this ground. After the fix, every element on those nine
+pages has the same height, line height and font size under the base layer as without it.
+
+`scripts/check-paint.mjs` reproduces the host rather than the package: a sticky header, a
+full-bleed `main`, the preflight rules that touch an emitted element in `@layer base`, phone and
+desktop widths, and one page measured both bare and hosted with every differing property named.
+Its markup is renderer output, held to it by `test/paint.test.ts`, which also deletes each rule in
+turn and asserts exactly that probe fails. Two things worth knowing before touching it:
+`Emulation.setDeviceMetricsOverride` must keep `mobile: false`, because a page with no viewport
+meta then lays out at 980px; and hit testing cannot judge the skip link, because the header's logo
+paints over the misplaced link and `elementFromPoint` answers "the header" for exactly that defect.
+
+Seen and not fixed, because it is not a host condition: the current tree and table-of-contents
+link and the selected search result draw their bar with `box-shadow: inset 2px 0 0`, which is
+physical and stays on the left in Arabic. A marked code line uses the same shadow and is right,
+because a fence is always `dir="ltr"`.
 
 ### What step 8 deliberately does not do
 

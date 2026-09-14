@@ -43,8 +43,8 @@
  * typography is most of what makes a docs page look like part of the site.
  *
  * The table below is data so the stylesheet's token names can be generated from it.
- * Two hand-maintained lists of twenty-four names is how the CSS and the TypeScript end
- * up one token apart.
+ * Two hand-maintained lists of two dozen names is how the CSS and the TypeScript end up
+ * one token apart.
  */
 
 export const TOKEN_PREFIX = '--hx-';
@@ -199,6 +199,16 @@ export const THEME_TOKENS: readonly ThemeToken[] = [
 	{ name: 'tree-size', host: null, fallback: '16rem', role: 'Sidebar width.' },
 	{ name: 'toc-size', host: null, fallback: '14rem', role: 'Table of contents width.' },
 	{ name: 'gutter', host: null, fallback: '2rem', role: 'Space between the three columns.' },
+	{
+		name: 'shell-inset',
+		host: null,
+		// A clamp rather than one length. A fixed 2rem takes a tenth of a phone screen, and a
+		// fixed 1rem beside a 16rem sidebar looks like a mistake. 2.5vw reaches the 2rem
+		// ceiling at exactly 1280px, where the three columns then fit at their intended
+		// sizes. A host that already pads its container can set this to 0.
+		fallback: 'clamp(1rem, 2.5vw, 2rem)',
+		role: 'Space between the shell and the inline edges of the container it is mounted in.',
+	},
 	{
 		name: 'sticky-offset',
 		host: null,

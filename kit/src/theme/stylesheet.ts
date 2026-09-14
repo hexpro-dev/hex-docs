@@ -14,11 +14,11 @@
  * the house rule pack are gated, so an edit to the checked-in CSS is caught rather than
  * being quietly correct until the next regeneration.
  *
- * ## Three rules the CSS itself has to keep, none of which a generator can enforce
+ * ## Four rules the CSS itself has to keep, none of which a generator can enforce
  *
  * No physical properties. `margin-left`, `text-align: left` and `border-inline` written as
  * `border-left` all look right in six languages and wrong in Arabic, and the build that
- * shows it is the one nobody runs. `scripts/check-render.mjs` scans for them.
+ * shows it is the one nobody runs. `kit/test/theme/stylesheet.test.ts` scans for them.
  *
  * No `@layer`. Measured against both consumers: hex-web's `app.css` declares no layer and
  * has no bare-element selectors, and kcalc's `@layer base` restyles `p` and `h4`. Any
@@ -29,6 +29,16 @@
  * No selector on `[data-reduced]`. The attribute is rendered `false` for the whole first
  * paint and flips in an effect, so a rule keyed off it is wrong for exactly the readers it
  * is for. `@media (prefers-reduced-motion: reduce)` needs no JavaScript and is the gate.
+ *
+ * State every property a host's base layer resets. Unlayered beats layered only for the
+ * properties a rule states; for everything else the host's `@layer base` still wins over
+ * the browser default this file was written against. Both consumers ship Tailwind v4's
+ * preflight there, which makes every img a block, strips list markers, heading weights
+ * and link underlines, gives `code` its own font and zeroes every margin, including the
+ * `margin: auto` that centres a modal dialog. Under hex-web's production CSS that was a
+ * sentence split around an inline icon, a search dialog pinned to the corner of the screen
+ * and numbered lists with no numbers. `scripts/check-paint.mjs` renders one page bare and
+ * under that base layer and fails on any property it measures that differs.
  */
 
 import { PALETTE, SCOPE_COLOUR as SCOPES, paletteValue } from '../../../src/contracts/palette.js';
@@ -166,8 +176,15 @@ const BASE = `.hx-root {
  * Visually hidden and still read. The clip-path form rather than \`display: none\`, which
  * removes the element from the accessibility tree, and rather than a negative offset,
  * which scrolls the page when the element is focused.
+ *
+ * The skip link is hidden the same way until it has focus. It used to be moved above the
+ * docs root with a transform, which is off-screen only when the root starts at the top of
+ * the page: in hex-web the root starts under a 64px sticky header, and the link sat on the
+ * site's logo on every page load, on a phone and on a desktop. A clip does not care where
+ * the root is.
  */
-.hx-root .hx-sr {
+.hx-root .hx-sr,
+.hx-root .hx-skip:not(:focus) {
 	position: absolute;
 	inline-size: 1px;
 	block-size: 1px;
@@ -180,25 +197,32 @@ const BASE = `.hx-root {
 }
 
 /*
- * The skip link is off-screen until focused, then it is the first thing in the page.
- * root.tsx already has one that reaches this shell; this one reaches the article past a
- * sidebar that can be fifty items long.
+ * Once focused, the skip link is shown whole at the top of the docs root, in line with the
+ * shell's inset and above the content. root.tsx already has one that reaches this shell;
+ * this one reaches the article past a sidebar that can be fifty items long.
+ *
+ * The underline is stated because a host's preflight sets \`text-decoration: inherit\` on
+ * every link. The short slide is decoration and nothing depends on it: the clip above is
+ * what hides and shows the link and it switches in one frame, so the reduced-motion gate
+ * at the foot of this file removes the slide without leaving the link half shown.
  */
 .hx-root .hx-skip {
 	position: absolute;
 	inset-block-start: 0;
-	inset-inline-start: 0;
+	inset-inline-start: ${t('shell-inset')};
 	z-index: 10;
 	padding: 0.75rem 1rem;
 	background: ${t('surface')};
 	color: ${t('ink')};
+	text-decoration: underline;
+	text-underline-offset: 0.2em;
+	border-end-start-radius: ${t('radius')};
 	border-end-end-radius: ${t('radius')};
-	transform: translateY(-120%);
 	transition: transform 120ms ${t('ease')};
 }
 
-.hx-root .hx-skip:focus {
-	transform: translateY(0);
+.hx-root .hx-skip:not(:focus) {
+	transform: translateY(-0.5rem);
 }
 
 /*
@@ -212,13 +236,33 @@ const BASE = `.hx-root {
 	border-radius: 2px;
 }`;
 
-const LAYOUT = `.hx-root .hx-layout {
+const LAYOUT = `/*
+ * The shell pads itself and caps its own width, because a host is not guaranteed to do
+ * either. hex-web's \`main\` is full-bleed, since its product pages are full-width bands, and
+ * with a column gap and nothing else the sidebar and the search box sat flush against the
+ * viewport on a desktop and body text ran to both edges of a phone.
+ *
+ * Padding on the layout rather than on the root, so the ambient wash and the backdrop slot
+ * stay full-bleed. A host that already pads its container gets both paddings, which is a
+ * wider margin rather than a broken page, and setting the \`shell-inset\` token to zero
+ * removes this one.
+ *
+ * The cap is the three columns at their intended sizes plus the padding, which counts
+ * because every box under the root is border-box. On a wide screen the columns then stay
+ * together in the middle, where without it the middle track grew and the table of contents
+ * drifted away from an article that stops at the measure. It is derived rather than a token
+ * of its own, so raising the measure widens the shell with it.
+ */
+.hx-root .hx-layout {
 	display: grid;
 	grid-template-columns: ${t('tree-size')} minmax(0, 1fr) ${t('toc-size')};
 	gap: ${t('gutter')};
 	align-items: start;
 	position: relative;
 	z-index: 1;
+	max-inline-size: calc(${t('tree-size')} + ${t('measure')} + ${t('toc-size')} + 2 * ${t('gutter')} + 2 * ${t('shell-inset')});
+	margin-inline: auto;
+	padding-inline: ${t('shell-inset')};
 }
 
 /*
@@ -270,11 +314,22 @@ const LAYOUT = `.hx-root .hx-layout {
 	pointer-events: none;
 }`;
 
-const PROSE = `.hx-root .hx-title {
+const PROSE = `/*
+ * Headings state their weight and their colour. Tailwind's preflight sets every heading's
+ * weight to \`inherit\`, so in hex-web the hierarchy rested on size alone and the CJK weight
+ * synthesis further down this file had nothing to synthesise. kcalc-web's own base layer
+ * colours h1 to h4 with its ink, and on its paper world that is #1f2c26 on this package's
+ * ground: 1.33:1. 600 rather than the browser's 700 to match every other title this file
+ * sets, and a face with only 400 and 700 cuts, which hex-web's display face is, renders 600
+ * from the 700 cut.
+ */
+.hx-root .hx-title {
 	font-family: ${t('font-display')};
 	font-size: 2rem;
+	font-weight: 600;
 	line-height: 1.2;
 	margin-block: 0 0.5rem;
+	color: ${t('ink')};
 }
 
 .hx-root .hx-meta {
@@ -285,9 +340,26 @@ const PROSE = `.hx-root .hx-title {
 	margin-block: 0 2rem;
 }
 
+/*
+ * The edit link keeps the metadata's colour and is told apart from the reading time beside
+ * it by its underline. Both are stated: a preflight sets them to \`inherit\`, and with no
+ * host at all an unstated link is the browser's own blue, 2.05:1 on the ground.
+ */
+.hx-root .hx-meta a {
+	color: inherit;
+	text-decoration: underline;
+	text-underline-offset: 0.2em;
+}
+
+.hx-root .hx-meta a:hover {
+	color: ${t('ink')};
+}
+
 .hx-root .hx-heading {
 	font-family: ${t('font-display')};
+	font-weight: 600;
 	line-height: 1.3;
+	color: ${t('ink')};
 	margin-block: 2rem 0.75rem;
 	/*
 	 * Not the site's scroll-padding. That helps a smooth scroll and does nothing for an
@@ -309,12 +381,23 @@ const PROSE = `.hx-root .hx-title {
 	margin-block: 0 1rem;
 }
 
-.hx-root .hx-prose a {
+/*
+ * A link in running text is underlined as well as coloured, and the underline is stated
+ * because a preflight sets \`text-decoration: inherit\` on every link. Without it a link was
+ * told apart by hue alone, and the link colour against body text measures 2.25:1, short of
+ * the 3:1 WCAG asks of a colour-only cue. The banner's one link is the same kind of link,
+ * and under a preflight it had lost both its colour and its underline to the sentence
+ * above it.
+ */
+.hx-root .hx-prose a,
+.hx-root .hx-banner a {
 	color: ${t('accent-link')};
+	text-decoration: underline;
 	text-underline-offset: 0.2em;
 }
 
-.hx-root .hx-prose a:hover {
+.hx-root .hx-prose a:hover,
+.hx-root .hx-banner a:hover {
 	color: ${t('accent-soft')};
 }
 
@@ -346,12 +429,40 @@ const PROSE = `.hx-root .hx-title {
 	padding-inline-start: 1.5rem;
 }
 
+/*
+ * List markers are stated because a preflight sets \`list-style: none\` on every ul and ol.
+ * Unstated, a numbered procedure lost its numbers and a bulleted list became a column of
+ * indented sentences. The nesting follows the browser's own sequence, so a page reads the
+ * same with a host around it and without one.
+ */
+.hx-root ul.hx-list {
+	list-style-type: disc;
+}
+
+.hx-root li ul.hx-list {
+	list-style-type: circle;
+}
+
+.hx-root li li ul.hx-list {
+	list-style-type: square;
+}
+
+.hx-root ol.hx-list {
+	list-style-type: decimal;
+}
+
 .hx-root .hx-tight li {
 	margin-block: 0;
 }
 
+/*
+ * The block margins of a quote and a figure are stated for the reason every other margin
+ * here is: a preflight zeroes them. A figure has no paragraph inside it to lend it an end
+ * margin, so under one the next paragraph sat against the image or the caption.
+ */
 .hx-root blockquote {
 	margin-inline: 0;
+	margin-block: 0 1rem;
 	padding-inline-start: 1rem;
 	border-inline-start: 3px solid ${t('edge')};
 	color: ${t('dim')};
@@ -363,7 +474,16 @@ const PROSE = `.hx-root .hx-title {
 	margin-block: 2rem;
 }
 
+/*
+ * An image states its display, because a preflight makes every img a block and an
+ * unlayered rule only overrides what it states. Unstated, the inline icon on the Arabic
+ * troubleshooting page split its sentence in two. In a paragraph an image sits on the
+ * middle of the line, the way an icon in a sentence should. In a figure it is a block, so
+ * the caption starts below it and not beside it.
+ */
 .hx-root .hx-image {
+	display: inline-block;
+	vertical-align: middle;
 	max-inline-size: 100%;
 	block-size: auto;
 	border-radius: ${t('radius')};
@@ -371,6 +491,11 @@ const PROSE = `.hx-root .hx-title {
 
 .hx-root .hx-figure {
 	margin-inline: 0;
+	margin-block: 0 1rem;
+}
+
+.hx-root .hx-figure .hx-image {
+	display: block;
 }
 
 .hx-root .hx-figure figcaption {
@@ -456,6 +581,30 @@ const PROSE = `.hx-root .hx-title {
 
 .hx-root .hx-task-item {
 	list-style: none;
+}
+
+/*
+ * A task item's text flows on the marker's line. The marker is an inline box and the
+ * paragraph after it is a block, so without this the text always started on the line
+ * below the checkbox. Only the paragraph directly after the marker goes inline, and
+ * anything after it in the same item stays a block.
+ *
+ * An inline box has no block margins, so the two rules after it put back the space that
+ * paragraph's own end margin used to give: above whatever follows it in the item, and
+ * below the item itself. Without them a task item sits closer to its neighbours than a
+ * plain item in the same list. The second one has to come after \`.hx-tight li\`, which
+ * it ties with on specificity.
+ */
+.hx-root .hx-task + p {
+	display: inline;
+}
+
+.hx-root .hx-task + p + * {
+	margin-block-start: 1rem;
+}
+
+.hx-root li.hx-task-item {
+	margin-block-end: 1rem;
 }
 
 .hx-root .hx-steps {
@@ -560,6 +709,16 @@ const CODE = `.hx-root .hx-fence {
 	line-height: 1.6;
 	color: ${t('code-ink')};
 	tab-size: 4;
+}
+
+/*
+ * The code element inside a fence takes the fence's font. The browser's own stylesheet
+ * gives \`code\` a font family, \`monospace\` alone, and a preflight gives it another, so
+ * without this the mono token never reached the text of a fence on any host: not the stack
+ * that covers the box-drawing characters, and not a consumer's override.
+ */
+.hx-root .hx-pre code {
+	font: inherit;
 }
 
 .hx-root .hx-pre.hx-wrap {
@@ -676,6 +835,20 @@ const CHROME = `.hx-root .hx-tree-list {
 	font-size: 0.875rem;
 }
 
+/*
+ * Breadcrumb links take the trail's colour and underline on hover. Stated rather than
+ * left to the host, for the same reason as the edit link.
+ */
+.hx-root .hx-breadcrumb a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.hx-root .hx-breadcrumb a:hover {
+	color: ${t('ink')};
+	text-decoration: underline;
+}
+
 .hx-root .hx-breadcrumb li + li::before {
 	content: '/';
 	margin-inline-end: 0.5rem;
@@ -749,9 +922,15 @@ const SEARCH = `.hx-root .hx-search-trigger {
 	font-size: 0.8125rem;
 }
 
+/*
+ * \`margin: auto\` is what centres a modal dialog, and it is the browser's default rather
+ * than anything this file said, until a preflight's \`* { margin: 0 }\` took it away. In
+ * hex-web the dialog opened pinned to the top corner of the screen.
+ */
 .hx-search {
 	inline-size: min(40rem, 92vw);
 	max-block-size: 70vh;
+	margin: auto;
 	padding: 0;
 	border: 1px solid ${t('control')};
 	border-radius: ${t('radius')};
