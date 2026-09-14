@@ -30,7 +30,7 @@ import { dirname, join } from 'node:path';
 import { afterAll, describe, expect, test } from 'vitest';
 
 // @ts-expect-error -- a zero-dependency guard, written as .mjs like the others
-import { run_ as runSurface } from '../scripts/check-cli.mjs';
+import { checkFirstRun, run_ as runSurface } from '../scripts/check-cli.mjs';
 import type { CheckResult } from '../scripts/lib/report.mjs';
 import { REPO_ROOT } from './support/golden.js';
 
@@ -65,8 +65,14 @@ const MUTABLE = [
  */
 const COPIED_TREES = ['kit/src'] as const;
 
-/** Linked: large, on no argv path, and nothing here mutates them. */
-const LINKED = ['kit/node_modules', 'src', 'fixtures'] as const;
+/**
+ * Linked: large, on no argv path, and nothing here mutates them.
+ *
+ * The kit's lockfile is here because the first-run row copies the kit out of this tree and
+ * installs it with `--frozen-lockfile`, which refuses outright without one. That row copies
+ * with links dereferenced, so it reads these files and never writes through them.
+ */
+const LINKED = ['kit/node_modules', 'kit/pnpm-lock.yaml', 'src', 'fixtures'] as const;
 
 const temporaries: string[] = [];
 
@@ -106,6 +112,7 @@ describe('against this repository', () => {
 			'json output',
 			'mcp handshake',
 			'launchers',
+			'first run',
 		]);
 		for (const row of rows) {
 			expect(row.state, `${row.name}: ${(row.problems ?? []).join('; ')}`).toBe('PASS');
@@ -184,6 +191,109 @@ describe('when the surface and the registry disagree', () => {
 		expect(mcp?.state).toBe('FAIL');
 		expect((mcp?.problems ?? []).join(' ')).toContain('docs_init');
 	}, 120_000);
+});
+
+describe('when the first-run install is wrong for a consuming workspace', () => {
+	/** Rewrites one line of the copied launcher, asserting the line was really there. */
+	function editLauncher(root: string, from: string, to: string): void {
+		const path = join(root, 'kit', 'bin', 'hexdocs');
+		const text = readFileSync(path, 'utf8');
+		expect(text.split(from).length, `the launcher no longer contains ${from}`).toBe(2);
+		writeFileSync(path, text.replace(from, to), 'utf8');
+	}
+
+	test('without --ignore-workspace it installs the workspace instead, and the row says so', async () => {
+		// The step 8 defect, reproduced. pnpm walks up from the kit to the workspace the site
+		// belongs to, installs that, and leaves the kit with no tsx to exec.
+		const root = copyRepo();
+		editLauncher(
+			root,
+			'pnpm install --ignore-workspace --frozen-lockfile --prod',
+			'pnpm install --frozen-lockfile --prod',
+		);
+
+		const rows = rowsBy((await runSurface(root)) as CheckResult[]);
+		const first = rows.get('first run');
+		expect(first?.state).toBe('FAIL');
+		const said = (first?.problems ?? []).join(' ');
+		expect(said).toContain('node_modules at the workspace root');
+		expect(said).toContain('no node_modules/.bin/tsx');
+		// And only that row: the others run a kit whose install already exists.
+		expect(rows.get('help')?.state).toBe('PASS');
+		expect(rows.get('launchers')?.state).toBe('PASS');
+	}, 180_000);
+
+	test('an install that announces itself on stderr is named, with what it added', async () => {
+		// The deploy's failure message is the tail of stderr. A first build after a submodule
+		// bump that printed install output there would bury the row that says why it failed.
+		const root = copyRepo();
+		editLauncher(
+			root,
+			'if [ ! -x "$KIT_DIR/node_modules/.bin/tsx" ]; then\n',
+			'if [ ! -x "$KIT_DIR/node_modules/.bin/tsx" ]; then\n\techo "hexdocs: installing" >&2\n',
+		);
+
+		const rows = rowsBy((await runSurface(root)) as CheckResult[]);
+		const first = rows.get('first run');
+		expect(first?.state).toBe('FAIL');
+		expect((first?.problems ?? []).join(' ')).toContain('more characters to stderr');
+		expect((first?.problems ?? []).join(' ')).toContain('hexdocs: installing');
+	}, 180_000);
+});
+
+describe('when the first run cannot be exercised on this machine', () => {
+	/**
+	 * Runs the row with some environment variables replaced, and puts them back.
+	 *
+	 * The row reads `CI` and hands its own environment to pnpm, so these are the two knobs a
+	 * machine without pnpm, or with a store that lacks the kit's packages, actually turns.
+	 */
+	function withEnv(
+		changes: Record<string, string | undefined>,
+		body: () => CheckResult,
+	): CheckResult {
+		const saved = Object.fromEntries(Object.keys(changes).map((key) => [key, process.env[key]]));
+		const apply = (values: Record<string, string | undefined>): void => {
+			for (const [key, value] of Object.entries(values)) {
+				if (value === undefined) delete process.env[key];
+				else process.env[key] = value;
+			}
+		};
+		apply(changes);
+		try {
+			return body();
+		} finally {
+			apply(saved);
+		}
+	}
+
+	test('no pnpm is a skip naming it, and the same state under CI is a failure', () => {
+		// Called directly rather than through the whole guard, because every other row needs
+		// node on PATH and this one is being handed a PATH with nothing on it.
+		const skipped = withEnv({ PATH: '/nonexistent', CI: undefined }, () =>
+			checkFirstRun(REPO_ROOT),
+		);
+		expect(skipped.state).toBe('SKIPPED');
+		expect(skipped.note ?? '').toContain('pnpm is not on PATH');
+
+		const failed = withEnv({ PATH: '/nonexistent', CI: 'true' }, () => checkFirstRun(REPO_ROOT));
+		expect(failed.state).toBe('FAIL');
+		expect((failed.problems ?? []).join(' ')).toContain('broken environment rather than a skip');
+	});
+
+	test('a store without the kit packages is a skip naming the command that fills it', () => {
+		// The install runs offline, so an empty store is the state a fresh machine is in. It is
+		// not the launcher's fault, and reporting it as one would send somebody into a shell
+		// script that is working.
+		const store = mkdtempSync(join(tmpdir(), 'hexdocs-empty-store-'));
+		temporaries.push(store);
+		const row = withEnv({ npm_config_store_dir: store, CI: undefined }, () =>
+			checkFirstRun(REPO_ROOT),
+		);
+		expect(row.state).toBe('SKIPPED');
+		expect(row.note ?? '').toContain('does not hold the kit dependencies');
+		expect(row.note ?? '').toContain('pnpm --dir kit install');
+	}, 180_000);
 });
 
 describe('when the launcher is not executable', () => {
