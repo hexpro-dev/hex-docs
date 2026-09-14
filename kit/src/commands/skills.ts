@@ -26,6 +26,7 @@ import { loadAllSkills, loadSkill } from '../skills/load.js';
 export const skills = defineCommand({
 	name: 'skills',
 	tool: 'docs_skills',
+	runs: [],
 	writes: 'nothing',
 	summary: 'Return the bundled hexdocs skills: the instructions for using this toolchain.',
 	detail:

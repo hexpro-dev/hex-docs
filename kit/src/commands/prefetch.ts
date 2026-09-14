@@ -87,7 +87,8 @@ import { raw, type RawFinding } from '../compile/types.js';
 import { bundleManifestSchema } from '../contracts/bundle.schema.js';
 import { docsSiteConfigSchema, versionTableProblems } from '../contracts/config.schema.js';
 import { defineCommand, type Ctx, type Writer } from '../registry/command.js';
-import { checkFindings, s3Client, type S3Client } from '../s3/client.js';
+import { checkFindings } from '../compile/lint/checks.js';
+import { s3Client, type S3Client } from '../s3/client.js';
 
 import { bucketOf, regionOf, rootOf } from './common.js';
 import { PREFETCH_PARAMS, PREFETCH_POSITIONALS } from './prefetch-params.js';

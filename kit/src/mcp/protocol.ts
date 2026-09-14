@@ -65,7 +65,7 @@ export interface ToolDescriptor {
 		readonly readOnlyHint: true;
 		readonly destructiveHint: false;
 		readonly idempotentHint: true;
-		readonly openWorldHint: false;
+		readonly openWorldHint: boolean;
 	};
 }
 

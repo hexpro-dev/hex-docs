@@ -268,6 +268,7 @@ function table(header: readonly string[], rows: readonly (readonly string[])[]):
 export const pages = defineCommand({
 	name: 'pages',
 	tool: 'docs_pages',
+	runs: ['git.head', 'git.head-date', 'git.is-shallow', 'git.log-walk'],
 	writes: 'nothing',
 	summary: 'List every page with its translation state in every language.',
 	detail:

@@ -206,6 +206,7 @@ export type PageResult = {
 export const page = defineCommand({
 	name: 'page',
 	tool: 'docs_page',
+	runs: ['git.head', 'git.head-date', 'git.is-shallow', 'git.log-walk'],
 	writes: 'nothing',
 	summary: 'Read one page in one language, as markdown or as the compiled AST.',
 	detail:

@@ -411,6 +411,7 @@ export function patchFor(
 export const label = defineCommand({
 	name: 'label',
 	tool: 'docs_label',
+	runs: ['aws.head-object', 'gh.api', 'git.merge-base-is-ancestor'],
 	writes: 'nothing',
 	summary: 'Check that a commit is safe to label as a version, and return the edit.',
 	detail:

@@ -120,6 +120,7 @@ export function filterEnvelope(
 export const check = defineCommand({
 	name: 'check',
 	tool: 'docs_check',
+	runs: ['git.head', 'git.head-date', 'git.is-shallow', 'git.log-walk'],
 	writes: 'nothing',
 	summary: 'Check a documentation tree: structure, house style, links, nav and translations.',
 	detail:

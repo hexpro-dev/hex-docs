@@ -883,4 +883,17 @@ export const CHECK_DEFINITIONS = {
 			'A file the git walk has no date for cannot be graded against its source, and the timestamp fields it would fill are required by the bundle schema. Without this the page compiles to a payload its own schema rejects, and the failure arrives downstream as a digest mismatch naming nothing.',
 		unit: 'files',
 	},
+
+	// -------------------------------------------------------------------------
+	// the MCP server
+	// -------------------------------------------------------------------------
+
+	'mcp-path-outside-project': {
+		id: 'mcp-path-outside-project',
+		category: 'config',
+		title: 'Keep a tool call inside the project the server was started in.',
+		consequence:
+			'Over MCP a root and a site are chosen by the model rather than typed by a person. docs_verify_install and docs_doctor run the consuming site binary at node_modules/.bin/react-router, which loads that directory route config, and git, which runs whatever hooks and fsmonitor command the repository config names. Pointed outside the project, that is code a directory the model named decides, run from a tool a client may approve on its annotations.',
+		unit: 'paths',
+	},
 } as const satisfies Record<CheckId, CheckDefinition>;

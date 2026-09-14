@@ -640,6 +640,7 @@ function scaffoldWorkflow(input: KindInput): CommandOutput {
 export const scaffold = defineCommand({
 	name: 'scaffold',
 	tool: 'docs_scaffold',
+	runs: [],
 	writes: 'nothing',
 	summary: 'Return the files a repository needs, for the agent to apply. Writes nothing.',
 	detail:

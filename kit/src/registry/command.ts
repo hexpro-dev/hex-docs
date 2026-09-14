@@ -13,6 +13,7 @@ import { z } from 'zod';
 
 import type { CheckRow, DiagnosticEnvelope } from '../../../src/contracts/diagnostics.js';
 import type { JsonValue } from '../compile/serialise.js';
+import type { ReadRecipeId } from '../exec/recipes.js';
 import type { Exec } from '../exec/run.js';
 import type { SkillId } from '../skills/ids.js';
 
@@ -145,15 +146,39 @@ interface CommandBase<P extends Params> {
 }
 
 /**
+ * What a tool may run, which a tool-less command does not declare.
+ *
+ * Every recipe the command can cause to start, by either route: through `Ctx.exec`, or
+ * through `kit/src/compile/git.ts`, which calls `runRecipe` directly for the four commit
+ * date reads. `ReadRecipeId` rather than `RecipeId`, so a tool that declared a fetch or a
+ * write would not typecheck.
+ *
+ * Two things read it, and both are why it is a declaration rather than something inferred.
+ * The MCP server runs, through `Ctx.exec`, nothing a tool did not list here, so a tool that
+ * starts reaching a new recipe fails loudly in its first transcript rather than quietly
+ * widening what the server does. And `openWorldHint` is derived from it, so the annotation
+ * a client may approve a call on says what the tool can reach rather than what somebody
+ * once believed. The git reads in `compile/git.ts` never pass the server's gate, which is
+ * why they are listed anyway: the annotation has to count them.
+ */
+interface ToolDeclaration {
+	readonly tool: string;
+	readonly writes: 'nothing';
+	readonly runs: readonly ReadRecipeId[];
+}
+
+/**
  * A command exposed over MCP cannot declare that it writes.
  *
  * The union is the enforcement: `{ tool: 'docs_publish', writes: 'network' }` has no
  * type to be. `Ctx.write === null` under MCP is the runtime half, and the import-graph
  * walk is the third. Three independent closures on one fact, because this is the
- * boundary that lets the server need no write audit, no path-safety story and no undo.
+ * boundary that lets the server need no write audit and no undo. It is not a path-safety
+ * story: a tool that writes nothing can still run a binary in a directory it was pointed
+ * at, which is what `kit/src/mcp/confine.ts` answers.
  */
 export type Command<P extends Params = Params> =
-	| (CommandBase<P> & { readonly tool: string; readonly writes: 'nothing' })
+	| (CommandBase<P> & ToolDeclaration)
 	| (CommandBase<P> & { readonly tool: null; readonly writes: Writes });
 
 export function defineCommand<const P extends Params>(command: Command<P>): Command<P> {
@@ -192,7 +217,7 @@ interface AnyCommandBase {
 
 /** The same union, so a writer with a tool name is still unrepresentable after erasure. */
 export type AnyCommand =
-	| (AnyCommandBase & { readonly tool: string; readonly writes: 'nothing' })
+	| (AnyCommandBase & ToolDeclaration)
 	| (AnyCommandBase & { readonly tool: null; readonly writes: Writes });
 
 /**

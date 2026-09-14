@@ -28,6 +28,7 @@ import { describe, expect, test } from 'vitest';
 
 import {
 	ALL_RECIPES,
+	FETCH_RECIPES,
 	HOLE,
 	READ_RECIPES,
 	WRITE_RECIPES,
@@ -45,7 +46,6 @@ import { ExecRefusal, NO_EXEC, runRecipe } from '../../src/exec/run.js';
  * subset and the new recipe would ship unnamed.
  */
 const READ_IDS = [
-	'aws.get-object',
 	'aws.head-object',
 	'aws.list-objects',
 	'aws.list-objects-page',
@@ -58,6 +58,15 @@ const READ_IDS = [
 	'git.merge-base-is-ancestor',
 	'react-router.routes',
 ].sort();
+
+/**
+ * The one recipe that writes a local file, at a path its caller chooses.
+ *
+ * It sat among the reads until step 8, which put it in the MCP server's recipe set under a
+ * comment saying that context could not write. Its own table is what lets a tool's `runs`,
+ * typed `ReadRecipeId[]`, be unable to name it.
+ */
+const FETCH_IDS = ['aws.get-object'];
 
 const WRITE_IDS = ['aws.put-object', 'aws.put-object-gzip'].sort();
 
@@ -199,11 +208,35 @@ describe('the recipe tables', () => {
 		expect(ids(WRITE_RECIPES)).toEqual(WRITE_IDS);
 	});
 
-	test('no id is in both tables, and ALL_RECIPES is their union', () => {
-		// A merge of two records silently prefers the second on a collision, so an id added
-		// to both tables would take its write template into the read half of the boundary.
-		expect(READ_IDS.filter((id) => WRITE_IDS.includes(id))).toEqual([]);
-		expect(allIds).toEqual([...READ_IDS, ...WRITE_IDS].sort());
+	test('the fetch ids are exactly these, in both directions', () => {
+		expect(ids(FETCH_RECIPES)).toEqual(FETCH_IDS);
+	});
+
+	test('no id is in two tables, and ALL_RECIPES is their union', () => {
+		// A merge of records silently prefers the later one on a collision, so an id added to
+		// two tables would take the later template into the earlier half of the boundary.
+		const everyId = [...READ_IDS, ...FETCH_IDS, ...WRITE_IDS];
+		expect(everyId.filter((id, index) => everyId.indexOf(id) !== index)).toEqual([]);
+		expect(allIds).toEqual([...everyId].sort());
+	});
+
+	test('a fetch recipe declares the hole it writes to, and nothing else declares one', () => {
+		// `outputHole` is what the MCP server's recipe set is tested against, so a recipe that
+		// writes a file without declaring it would pass that test. The fetch table is the only
+		// place such a recipe may live, and every entry there has to say which hole it is.
+		for (const id of FETCH_IDS as RecipeId[]) {
+			const declared = recipeOf(id).outputHole;
+			expect(declared, `${id} declares no output hole`).toBeTypeOf('number');
+			expect(declared as number).toBeLessThan(holeCount(id));
+		}
+		const elsewhere = allIds.filter(
+			(id) => !FETCH_IDS.includes(id) && recipeOf(id).outputHole !== undefined,
+		);
+		expect(elsewhere).toEqual([]);
+		// get-object takes the path positionally, straight after the key, which is the whole
+		// reason the declaration cannot be read out of the template.
+		expect(recipeOf('aws.get-object').argv[6]).toBe(HOLE);
+		expect(recipeOf('aws.get-object').outputHole).toBe(2);
 	});
 
 	test('every recipe argv is exactly the pinned template, in both directions', () => {
@@ -323,17 +356,20 @@ describe('no recipe can mutate a repository', () => {
 
 	test('every aws recipe is an s3api call, and only the write table says put-object', () => {
 		const readOps = new Set<string>();
+		const fetchOps = new Set<string>();
 		const writeOps = new Set<string>();
 		for (const id of allIds) {
 			const recipe = recipeOf(id);
 			if (recipe.bin !== 'aws') continue;
 			expect(recipe.argv[0], `${id} does not open with s3api`).toBe('s3api');
-			(READ_IDS.includes(id) ? readOps : writeOps).add(recipe.argv[1] as string);
+			const ops = READ_IDS.includes(id) ? readOps : FETCH_IDS.includes(id) ? fetchOps : writeOps;
+			ops.add(recipe.argv[1] as string);
 		}
-		// Both directions on both halves: an operation added to either set fails, and an
+		// Both directions on every half: an operation added to any set fails, and an
 		// operation that left one fails too. `rm`, `delete-object` and `sync` are absent
 		// because they are unrepresentable, not because they are filtered.
-		expect([...readOps].sort()).toEqual(['get-object', 'head-object', 'list-objects-v2']);
+		expect([...readOps].sort()).toEqual(['head-object', 'list-objects-v2']);
+		expect([...fetchOps].sort()).toEqual(['get-object']);
 		expect([...writeOps].sort()).toEqual(['put-object']);
 	});
 
@@ -570,6 +606,6 @@ describe('NO_EXEC', () => {
 			expect(thrown, `NO_EXEC ran ${id}`).toBeInstanceOf(ExecRefusal);
 			expect((thrown as Error).message).toContain(`"${id}"`);
 		}
-		expect(allIds.length).toBe(READ_IDS.length + WRITE_IDS.length);
+		expect(allIds.length).toBe(READ_IDS.length + FETCH_IDS.length + WRITE_IDS.length);
 	});
 });

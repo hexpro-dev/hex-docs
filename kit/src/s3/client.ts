@@ -18,17 +18,6 @@
  * change to `kit/src/exec/run.ts` and not to this file.
  */
 
-import type { Finding } from '../../../src/contracts/diagnostics.js';
-import { CHECK_IDS } from '../../../src/contracts/lint.js';
-import { DEFAULT_AUDIENCE } from '../../../src/contracts/frontmatter.js';
-import {
-	DEFAULT_BUDGETS,
-	DOCS_CONFIG_VERSION,
-	PLAIN_CODE_LANGUAGE,
-	type DocsProjectConfig,
-} from '../../../src/contracts/project.js';
-import { runLint } from '../compile/lint/run.js';
-import type { RawFinding } from '../compile/types.js';
 import type { Exec, RunResult } from '../exec/run.js';
 import { ExecRefusal } from '../exec/run.js';
 
@@ -444,67 +433,4 @@ export function s3Client(exec: Exec, auth: S3Auth, cwd: string): S3Client {
 			return calls;
 		},
 	};
-}
-
-// ---------------------------------------------------------------------------
-// Reporting
-// ---------------------------------------------------------------------------
-
-/**
- * The project config `runLint` is given when there is no project to read one from.
- *
- * `publish` is handed a compiled bundle directory and `prefetch` is handed a consuming
- * website: neither contains a `docs/site/docs.json`, and neither should, because the
- * thing they are reporting on is a bucket. Every value below is a placeholder, and
- * `checkFindings` is what makes that safe: `severityFor` in `runLint` pins a `CheckId`
- * to `error` before it reads the config at all, so a config that decides nothing cannot
- * decide anything wrongly.
- */
-const NO_PROJECT_CONFIG: DocsProjectConfig = {
-	docs: DOCS_CONFIG_VERSION,
-	project: 'unknown',
-	productName: 'unknown',
-	repo: 'unknown/unknown',
-	defaultAudience: DEFAULT_AUDIENCE,
-	headingIds: 'slug',
-	sections: [],
-	i18n: { locales: ['en'], sourceLocale: 'en', parity: 'graceful' },
-	budgets: DEFAULT_BUDGETS,
-	code: { languages: [PLAIN_CODE_LANGUAGE] },
-	toc: { enabled: true, maxDepth: 3, minHeadings: 3 },
-	lint: { extends: 'house', maxDisables: 0 },
-};
-
-/**
- * Raw findings to reportable ones, for the two commands that talk to a bucket.
- *
- * It exists so nothing here hand assembles a `Finding`. Severity, category and
- * consequence are the registry's to decide, and a literal written at a call site is how
- * a check ends up with a consequence sentence nobody wrote and a category nothing groups
- * by. `kit/src/compile/bundle.ts` still builds two of them by hand, which predates this
- * and is the shape not to copy.
- *
- * The refusal is the load-bearing half. This function must only ever be handed a
- * `CheckId`, because a `LintRuleId` would resolve its severity against
- * `NO_PROJECT_CONFIG`, which is a config nobody wrote, and the answer would be that
- * rule's house default presented as if a project had chosen it. Refusing by name is
- * cheap and the alternative is silent.
- *
- * It lives in this module because `publish` and `prefetch` are its only two callers and
- * they have no other module in common. It is not an S3 concern; a third caller is the
- * signal to move it.
- */
-export function checkFindings(entries: readonly RawFinding[], kitVersion: string): Finding[] {
-	const checks = new Set<string>(CHECK_IDS);
-	for (const entry of entries) {
-		if (!checks.has(entry.rule)) {
-			throw new Error(
-				`checkFindings was given "${entry.rule}", which is not a CheckId. Its severity would ` +
-					`be resolved against a placeholder project config, so the report would state a ` +
-					`severity no project chose.`,
-			);
-		}
-	}
-	return runLint(entries, { config: NO_PROJECT_CONFIG, disables: [], kitVersion }).envelope
-		.findings;
 }

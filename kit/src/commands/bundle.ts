@@ -228,6 +228,7 @@ function coverageLine(manifest: BundleManifest): string {
 export const bundle = defineCommand({
 	name: 'bundle',
 	tool: 'docs_bundle',
+	runs: [],
 	writes: 'nothing',
 	summary: 'Verify a compiled bundle, describe what is in it, and diff it against another.',
 	detail:
