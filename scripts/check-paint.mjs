@@ -520,9 +520,9 @@ const SIDES = `(() => {
  * together with that probe's for every bar defect, and the two would never say anything apart.
  */
 const SIDE_EXPECTATIONS = {
-	'sides-rtl': { mark: 'left', bar: 'right' },
-	'sides-fallback': { mark: 'right', bar: undefined },
-	'sides-ltr': { mark: 'right', bar: 'left' },
+	'sides-rtl': { mark: 'right', bar: 'right' },
+	'sides-fallback': { mark: 'left', bar: undefined },
+	'sides-ltr': { mark: 'left', bar: 'left' },
 };
 
 /**
@@ -685,7 +685,7 @@ export const PROBES = [
 		sample: true,
 		body: shell({ prose: FRAGMENTS.status, dir: 'rtl', current: true }),
 		expression: SIDES,
-		why: 'In Arabic the inline-end half of a partial mark is its left half, and the inline-start edge of a current link, where the bar goes, is its right edge.',
+		why: 'In Arabic the inline-start half of a partial mark, the filled one, is its right half, and the inline-start edge of a current link, where the bar goes, is its right edge.',
 	},
 	{
 		id: 'sides-fallback',
@@ -1085,7 +1085,7 @@ export function sideProblems(measured) {
 			const right = same(pixels['mark right'], fill);
 			if (left !== (wanted.mark === 'left') || right !== (wanted.mark === 'right')) {
 				problems.push(
-					`The partial status mark in the ${id} probe is filled on ${which(left, right, 'half', 'halves')}, where its inline-end half is the ${wanted.mark}. ${why}`,
+					`The partial status mark in the ${id} probe is filled on ${which(left, right, 'half', 'halves')}, where its inline-start half is the ${wanted.mark}. ${why}`,
 				);
 			}
 		}

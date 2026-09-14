@@ -500,11 +500,11 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 			edit: (css) =>
 				once(
 					css,
-					'.hx-root .hx-status-half:dir(rtl) { background: linear-gradient(to left, transparent 50%, currentColor 50%); }\n',
+					'.hx-root .hx-status-half:dir(rtl) { background: linear-gradient(to left, currentColor 50%, transparent 50%); }\n',
 					'',
 				),
 			expect: [
-				'The partial status mark in the sides-rtl probe is filled on the right half, where its inline-end half is the left.',
+				'The partial status mark in the sides-rtl probe is filled on the left half, where its inline-start half is the right.',
 			],
 		},
 		{
@@ -512,7 +512,7 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 			edit: (css) =>
 				once(css, '.hx-root .hx-status-half:dir(rtl) {', '.hx-root:dir(rtl) .hx-status-half {'),
 			expect: [
-				'The partial status mark in the sides-fallback probe is filled on the left half, where its inline-end half is the right.',
+				'The partial status mark in the sides-fallback probe is filled on the right half, where its inline-start half is the left.',
 			],
 		},
 		{
@@ -544,7 +544,7 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 			edit: (css) =>
 				once(
 					css,
-					'.hx-root .hx-status-half { background: linear-gradient(to right, transparent 50%, currentColor 50%); }\n.hx-root .hx-status-half:dir(rtl) { background: linear-gradient(to left, transparent 50%, currentColor 50%); }',
+					'.hx-root .hx-status-half { background: linear-gradient(to right, currentColor 50%, transparent 50%); }\n.hx-root .hx-status-half:dir(rtl) { background: linear-gradient(to left, currentColor 50%, transparent 50%); }',
 					'.hx-root .hx-status-half { background: linear-gradient(to inline-end, currentColor 50%, transparent 50%); }',
 				),
 			expect: [

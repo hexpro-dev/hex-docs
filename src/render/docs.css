@@ -441,9 +441,12 @@
  * `:dir(rtl)` is on the mark itself rather than on the docs root. An Arabic page serving
  * the English fallback carries `dir="ltr"` on its article, and a mark inside it reads left
  * to right; a selector on the root's direction fills the wrong half there.
+ *
+ * The inline-start half is the filled one, which is what the original declaration said: its
+ * colour stop came first along the line. A mark reads as progress from where a line begins.
  */
-.hx-root .hx-status-half { background: linear-gradient(to right, transparent 50%, currentColor 50%); }
-.hx-root .hx-status-half:dir(rtl) { background: linear-gradient(to left, transparent 50%, currentColor 50%); }
+.hx-root .hx-status-half { background: linear-gradient(to right, currentColor 50%, transparent 50%); }
+.hx-root .hx-status-half:dir(rtl) { background: linear-gradient(to left, currentColor 50%, transparent 50%); }
 
 .hx-root .hx-status-bar {
 	border: 0;
