@@ -113,6 +113,17 @@ export function derives(source: string, needle: string): boolean {
 }
 
 /**
+ * A static import and a re-export from another module, each capturing `type` and the specifier.
+ *
+ * One spelling for the two readers below, so what counts as an import when a specifier is
+ * checked is what counts as one when a statement is removed.
+ */
+const MODULE_STATEMENTS = [
+	/\bimport\s+(type\s+)?(?:[\w*${}\s,]+?\s+from\s+)?["']([^"']+)["']/g,
+	/\bexport\s+(type\s+)?(?:\*(?:\s+as\s+[\w$]+)?|\{[^}]*\})\s*from\s+["']([^"']+)["']/g,
+] as const;
+
+/**
  * Every module specifier a file imports for its value, in source order.
  *
  * A whole-statement `import type` or `export type` is left out, because it is erased before
@@ -124,17 +135,31 @@ export function derives(source: string, needle: string): boolean {
 export function valueImportSpecifiers(source: string): string[] {
 	const text = stripComments(source);
 	const found: { at: number; specifier: string }[] = [];
-	const statements = [
-		/\bimport\s+(type\s+)?(?:[\w*${}\s,]+?\s+from\s+)?["']([^"']+)["']/g,
-		/\bexport\s+(type\s+)?(?:\*(?:\s+as\s+[\w$]+)?|\{[^}]*\})\s*from\s+["']([^"']+)["']/g,
-	];
-	for (const pattern of statements) {
+	for (const pattern of MODULE_STATEMENTS) {
 		for (const match of text.matchAll(pattern)) {
 			if (match[1] !== undefined || match.index === undefined) continue;
 			found.push({ at: match.index, specifier: match[2] ?? '' });
 		}
 	}
 	return found.sort((a, b) => a.at - b.at).map((entry) => entry.specifier);
+}
+
+/**
+ * The source with its comments and its import and re-export statements removed.
+ *
+ * For a scan asking whether a file names an address in its code. The sitemap's hand-listing
+ * arm is that scan, and the import its own instruction prints, `import { DOCS } from
+ * "~/lib/docs.server";`, contains `/docs`. Over the whole text a mount at `/docs`, `/doc` or
+ * `/lib/docs` matched that line on a correctly wired site, and the row could not be turned
+ * green by any edit to the file: removing the import fails the arm that requires it. A
+ * specifier is a module and never an address, so nothing a hand-written list could say is
+ * lost by dropping the statement. Dynamic `import()` is not a statement and is left in.
+ */
+export function withoutModuleStatements(source: string): string {
+	return MODULE_STATEMENTS.reduce(
+		(text, pattern) => text.replace(pattern, ''),
+		stripComments(source),
+	);
 }
 
 /** Whether a module exports `headers`, declared or through an export list. */

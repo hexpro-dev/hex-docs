@@ -24,6 +24,7 @@
  * passed, because detection proposes the real one for each.
  */
 
+import { spawnSync } from 'node:child_process';
 import {
 	cpSync,
 	mkdirSync,
@@ -49,7 +50,7 @@ import {
 import type { CheckId } from '../../../src/contracts/lint.js';
 import { bucketOf } from '../../src/commands/common.js';
 import { install } from '../../src/commands/install.js';
-import { runRecipe } from '../../src/exec/run.js';
+import { runRecipe, type Exec } from '../../src/exec/run.js';
 import { fileWriter } from '../../src/io/write.js';
 import { invoke } from '../../src/registry/command.js';
 import { runConsumerChecks } from '../../src/wiring/checks.js';
@@ -64,7 +65,10 @@ import {
 import { MACHINE_ROUTES_SPREAD, ROOT_DECISION } from '../../src/wiring/instructions.js';
 import { parseJsonc } from '../../src/wiring/needles.js';
 import { prebuildFragment } from '../../src/wiring/prebuild.js';
+import { readRouteTable } from '../../src/wiring/route-table.js';
 import type { SiteDescriptor } from '../../src/wiring/site.js';
+
+import { modelExec } from './route-loader.js';
 
 const KIT_VERSION = '@hex-pro/docs-kit@0.0.0-test';
 
@@ -106,6 +110,7 @@ async function runInstall(
 	repo: Repo,
 	write: boolean,
 	extra: { bucket?: string } = {},
+	exec: Exec = runRecipe,
 ): Promise<{
 	result: InstallResult;
 	rows: readonly { id: string; status: string; note: string | null }[];
@@ -117,7 +122,7 @@ async function runInstall(
 		{
 			cwd: repo.root,
 			kitVersion: KIT_VERSION,
-			exec: runRecipe,
+			exec,
 			write: fileWriter(),
 			now: () => new Date(0),
 			log: () => {},
@@ -589,6 +594,39 @@ describe('install run twice', () => {
 });
 
 // ---------------------------------------------------------------------------
+// The first install, before any site config exists
+// ---------------------------------------------------------------------------
+
+describe('a first install, whose route table loads and has no docs rows to hold', () => {
+	// The state every first install is in. `install` runs before `hexdocs scaffold site`, so
+	// no config validates yet, and a site with its dependencies installed loads its route
+	// table because nothing in it imports the server module. `PRESENT.routes` compared that
+	// table against zero docs rows, found nothing wrong and answered true, so the largest
+	// by-hand edit, and the only one whose code differs per consumer, was reported unchanged
+	// and never printed, while the by-hand row listed the others as all that was left.
+	//
+	// Every other test in this file runs with no React Router binary, where the table is
+	// unread and the predicate was already false, which is why none of them could see this.
+	test.each(CONSUMER_SHAPES)('%s: the routes insertions are printed and named', async (shape) => {
+		const repo = copy(shape);
+		write(repo, `${repo.site}/node_modules/.bin/react-router`, '#!/bin/sh\nexit 70\n');
+		const exec = modelExec(() => []);
+		expect(
+			readRouteTable(descriptorFor(repo), exec).kind,
+			'the table does not load, so this is the unread state and proves nothing',
+		).toBe('loaded');
+
+		const { result, rows, lines } = await runInstall(repo, false, {}, exec);
+		const routes = result.edits.find((edit) => edit.id === 'routes');
+		expect(routes?.state).toBe('by-hand');
+		expect(routes?.instruction ?? '').toContain('declare the docs routes from DOCS_ROUTES');
+		expect(lines.join('\n')).toContain(MACHINE_ROUTES_SPREAD.split('\n')[0] as string);
+		const byHand = rows.find((row) => row.id === 'install-by-hand');
+		expect(byHand?.note ?? '').toMatch(/: [a-z, -]*\broutes\b/);
+	});
+});
+
+// ---------------------------------------------------------------------------
 // A refusal aborts one edit and nothing else
 // ---------------------------------------------------------------------------
 
@@ -744,6 +782,57 @@ describe('a prebuild that already names the guard', () => {
 			expect(outcome?.instruction ?? '').toContain("Unknown option '--root'");
 		},
 	);
+
+	test.each(
+		CONSUMER_SHAPES.flatMap((shape) => ['', '   '].map((value) => [shape, value] as const)),
+	)(
+		'%s: a prebuild of %j is replaced, and the shell can parse what is written',
+		async (shape, value) => {
+			// Appending gave ` && <fragment>`, which `sh` refuses as a syntax error, so every build
+			// stopped in prebuild on a package.json `install` reported as written and the row passed.
+			// `sh -n` is the shell's own reading, which is the one that decides.
+			const repo = copy(shape);
+			const packageFile = `${repo.site}/package.json`;
+			const parsed = parseJsonc(read(repo, packageFile)) as { scripts: Record<string, string> };
+			parsed.scripts['prebuild'] = value;
+			write(repo, packageFile, `${JSON.stringify(parsed, null, '\t')}\n`);
+
+			const { result } = await runInstall(repo, true);
+			expect(result.edits.find((edit) => edit.id === 'prebuild-hook')?.state).toBe('written');
+			const prebuild = (parseJsonc(read(repo, packageFile)) as { scripts: Record<string, string> })
+				.scripts['prebuild'] as string;
+			const site = descriptorFor(repo);
+			expect(prebuild).toBe(prebuildFragment(site));
+			expect(spawnSync('sh', ['-n', '-c', prebuild]).status).toBe(0);
+		},
+	);
+
+	test('the appended shape is refused by the predicate, so neither install nor the row accepts it', () => {
+		const repo = copy('glob-workspace');
+		const site = descriptorFor(repo);
+		const text = JSON.stringify({ scripts: { prebuild: ` && ${prebuildFragment(site)}` } });
+		expect(PRESENT.prebuildHook(text, site)).toBe(false);
+	});
+
+	test('a prebuild ending in a comment is refused rather than appended after', async () => {
+		// `sh -c 'a # note && <prefetch> && node scripts/check-docs.mjs'` runs `a` and exits 0:
+		// the append would be written, read as wired, and never run.
+		const repo = copy('glob-workspace');
+		const packageFile = `${repo.site}/package.json`;
+		write(
+			repo,
+			packageFile,
+			read(repo, packageFile).replace(
+				'"../../common/copy-assets.sh"',
+				'"../../common/copy-assets.sh # temporarily"',
+			),
+		);
+		const before = read(repo, packageFile);
+		expect(before).toContain('# temporarily');
+		const { result } = await runInstall(repo, true);
+		expect(result.edits.find((edit) => edit.id === 'prebuild-hook')?.state).toBe('refused');
+		expect(read(repo, packageFile)).toBe(before);
+	});
 
 	test('with --bucket, the fragment carries the bucket and the predicate accepts it', async () => {
 		const repo = copy('literal-workspace');
@@ -1153,6 +1242,35 @@ test('the editor settings are printed as a note and never become an edit', async
 	expect(result.notes[0]).toContain(`${repo.mount}/.claude/skills`);
 	expect(lines.join('\n')).toContain(result.notes[0] as string);
 	expect(result.edits.some((edit) => edit.file.includes('.claude'))).toBe(false);
+});
+
+describe('a root that does not hold the site', () => {
+	// Run from inside the site with `--site apps/front`, which is the directory the generated
+	// prebuild runs from. Every generated module's applier accepts a missing file, so install
+	// used to write five of them into `apps/front/apps/front/` and a `.mcp.json` into the real
+	// site directory, printing repository-relative paths that looked correct.
+	test.each(
+		CONSUMER_SHAPES.flatMap((shape) => [true, false].map((write) => [shape, write] as const)),
+	)('%s, write %s: refuses before planning and writes nothing', async (shape, write) => {
+		const repo = copy(shape);
+		const before = snapshot(repo.root);
+		const inside: Repo = { ...repo, root: join(repo.root, repo.site) };
+		const { result, rows, lines } = await runInstall(inside, write);
+		expect(rows.map((row) => [row.id, row.status])).toEqual([['install-scope', 'not-run']]);
+		expect(rows[0]?.note ?? '').toContain('--site is relative to the repository root');
+		expect(lines.join('\n')).toContain('nothing was planned or applied');
+		expect((result as unknown as { wrote: boolean }).wrote).toBe(false);
+		expect(snapshot(repo.root)).toEqual(before);
+	});
+
+	test('a site with its package and no app directory is still planned', async () => {
+		// The other side of the test: one of the two is enough to be a site, and a site missing
+		// its app directory is what the edits report rather than a wrong root.
+		const repo = copy('literal-workspace');
+		rmSync(join(repo.root, repo.site, 'app'), { recursive: true, force: true });
+		const { rows } = await runInstall(repo, false);
+		expect(rows.map((row) => row.id)).toEqual(['install-writes', 'install-by-hand']);
+	});
 });
 
 test('install with --write in a context that has no writer reports not-run and writes nothing', async () => {

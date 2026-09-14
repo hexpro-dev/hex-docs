@@ -46,13 +46,9 @@ const PAGES: DocsRouteRow[] = [
 	{ path: '/app/docs/guide', file: 'routes/docs.tsx', kind: 'page' },
 ];
 
-/**
- * A machine row carrying the id the row contract names. Built through a spread rather than
- * written as a literal, so it compiles against a row type that has not grown `id` yet.
- */
+/** A machine row carrying the id the row contract names. */
 function machine(path: string): DocsRouteRow {
-	const id = { id: `docs:${path}` };
-	return { path, file: 'routes/docs.machine.tsx', kind: 'machine', ...id };
+	return { path, file: 'routes/docs.machine.tsx', kind: 'machine', id: `docs:${path}` };
 }
 
 const MACHINES: DocsRouteRow[] = [

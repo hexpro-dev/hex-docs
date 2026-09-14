@@ -40,6 +40,8 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { CONSUMER_ROOT, materialiseCorpus } from '../../../fixtures/index.js';
 import {
 	CONSUMER_SHAPES,
+	GLOB_WORKSPACE,
+	LITERAL_WORKSPACE,
 	MOUNT_OF,
 	SITE_OF,
 	materialiseConsumerWithConfig,
@@ -64,6 +66,10 @@ import {
 	MACHINE_ROUTES_SPREAD,
 	PAGE_TUPLES_SPREAD,
 	ROOT_DECISION,
+	rootChanges,
+	routesChanges,
+	sitemapChanges,
+	type Change,
 } from '../../src/wiring/instructions.js';
 import { parseJsonc } from '../../src/wiring/needles.js';
 import { validConfigs } from '../../src/wiring/site.js';
@@ -271,9 +277,10 @@ interface Outcome {
 	/**
 	 * Rows other than the claimed one that this mutation legitimately moves.
 	 *
-	 * Declared rather than tolerated. The one entry that needs it is the invalid site
-	 * config: every address on this mount is derived from that file, so a config that does
-	 * not validate takes the sitemap's source away with it.
+	 * Declared rather than tolerated. The two entries that need it are the invalid and the
+	 * missing site config: every address on this mount is derived from that file, so a config
+	 * that does not validate takes the sitemap's source and the routes row's docs rows away
+	 * with it.
 	 */
 	readonly also?: readonly CheckId[];
 }
@@ -825,7 +832,19 @@ const MUTATIONS: readonly Mutation[] = [
 		outcome: () => ({
 			status: 'fail',
 			message: /is not a valid site config/,
-			also: ['wiring-sitemap'],
+			also: ['wiring-sitemap', 'wiring-routes'],
+		}),
+	},
+	{
+		name: 'there is no site config at all',
+		check: 'wiring-routes',
+		why: 'The state of every first install, since install runs before hexdocs scaffold site. With no config there are no docs rows, and the routes row used to pass here having compared a loaded table against nothing, while the install predicate it shares called the routes edit unchanged and never printed it.',
+		apply: (repo) => remove(repo, `${repo.site}/app/docs/fixture-app.docs.json`),
+		outcome: () => ({
+			status: 'not-run',
+			message: null,
+			note: /No valid site config under app\/docs, so there are no docs route rows/,
+			also: ['wiring-root-seo', 'wiring-sitemap'],
 		}),
 	},
 
@@ -1017,6 +1036,42 @@ beforeAll(async () => {
 	}
 });
 
+describe('every change install prints for a hand-edited file is in the wired baseline', () => {
+	// `apply-instructions.ts` says the baseline is wired by the same text a person gets, and
+	// every row in this file is measured against that baseline, so a printed change the
+	// baseline skipped is one nothing here can see. There was one: `root.tsx` was printed four
+	// changes and the baseline applied three, and the fourth was checked by no row either.
+	// Each line of each printed change has to be in the wired file, trimmed, because a paste
+	// is indented to wherever it lands.
+	const UNWIRED = { 'glob-workspace': GLOB_WORKSPACE, 'literal-workspace': LITERAL_WORKSPACE };
+	const PRINTED: readonly (readonly [string, (text: string) => Change[]])[] = [
+		['app/routes.ts', (text) => routesChanges(text)],
+		['app/root.tsx', () => rootChanges()],
+		['app/routes/sitemap[.]xml.tsx', (text) => sitemapChanges(text)],
+	];
+
+	test.each(
+		CONSUMER_SHAPES.flatMap((shape) =>
+			PRINTED.map(([file, changes]) => [shape, file, changes] as const),
+		),
+	)('%s: %s', (shape, file, changes) => {
+		const path = `${SITE_OF[shape]}/${file}`;
+		const original = UNWIRED[shape].find((entry) => entry.path === path)?.contents;
+		expect(original, `${path} is not in the unwired fixture`).toBeDefined();
+		const printed = changes(original as string);
+		expect(printed.length).toBeGreaterThan(0);
+		const wired = read(copy(shape), path);
+		const missing = printed.flatMap((change) =>
+			change.code
+				.split('\n')
+				.map((line) => line.trim())
+				.filter((line) => line !== '' && !wired.includes(line))
+				.map((line) => `${change.where}: ${line}`),
+		);
+		expect(missing, 'printed to a person and not applied by the baseline').toEqual([]);
+	});
+});
+
 describe('a fully wired consumer passes every row', () => {
 	test.each(CONSUMER_SHAPES)('%s', (shape) => {
 		const rows = rowsOf(copy(shape));
@@ -1112,6 +1167,64 @@ describe('editor settings are not part of whether a site is wired', () => {
 			.filter((row) => row.status !== baseline.get(row.id) || row.findings.length > 0)
 			.map((row) => `${row.id}: ${row.status}`);
 		expect(moved).toEqual([]);
+	});
+});
+
+describe('a base path the sitemap import contains is not a hand-listed address', () => {
+	// The hand-listing arm used to read the whole sitemap, and the import that arm's own row
+	// requires, `import { DOCS } from "~/lib/docs.server";`, contains `/doc`, `/docs` and
+	// `/lib/docs`. A site mounted at any of them failed `wiring-sitemap` with every edit in
+	// place, `install` reported the sitemap unchanged, and the one edit that cleared the
+	// finding, deleting the import, failed the arm that requires it. The scan reads the file
+	// with its module statements removed now.
+	const BASE_PATHS = ['/docs', '/doc', '/lib/docs'] as const;
+
+	function mountAt(repo: Repo, basePath: string): void {
+		editJson(repo, `${repo.site}/app/docs/fixture-app.docs.json`, (value) => {
+			value['basePath'] = basePath;
+		});
+	}
+
+	test.each(CONSUMER_SHAPES.flatMap((shape) => BASE_PATHS.map((path) => [shape, path] as const)))(
+		'%s mounted at %s passes every row',
+		(shape, basePath) => {
+			const repo = copy(shape);
+			mountAt(repo, basePath);
+			const rows = rowsOf(repo);
+			expect(
+				rows
+					.filter((row) => row.status !== 'pass')
+					.map(
+						(row) => `${row.id}: ${row.status} ${row.findings.map((f) => f.message).join(' | ')}`,
+					),
+			).toEqual([]);
+			expect(rows).toHaveLength(CONSUMER_CHECK_IDS.length);
+		},
+	);
+
+	// And the direction the fix must not cost. A quote in front of the base path was the
+	// other proposed fix, and two of these three put something else directly before it: a
+	// template literal after an origin and a full URL. Each is a hand-written address that
+	// advertises hidden pages and fallback translations.
+	const HAND_LISTED = [
+		['a quoted path', 'const extra = ["/docs/reference/api"];'],
+		['a template literal after an origin', 'const extra = [`${ORIGIN}/docs/reference/api`];'],
+		['a full URL', 'const extra = ["https://example.com/docs/guide"];'],
+	] as const;
+
+	test.each(
+		CONSUMER_SHAPES.flatMap((shape) =>
+			HAND_LISTED.map(([name, line]) => [shape, name, line] as const),
+		),
+	)('%s mounted at /docs, with %s, fails the sitemap row', (shape, _name, line) => {
+		const repo = copy(shape);
+		mountAt(repo, '/docs');
+		edit(repo, sitemapFile(repo), (text) => `${text}\n${line}\n`);
+		const row = rowsOf(repo).find((candidate) => candidate.id === 'wiring-sitemap');
+		expect(row?.status).toBe('fail');
+		expect(row?.findings.map((finding) => finding.message)).toEqual([
+			`${sitemapFile(repo)} names \`/docs\` directly.`,
+		]);
 	});
 });
 

@@ -8,8 +8,12 @@
  * of those is a case below, and each names the arm of `readPrebuild` it proves.
  *
  * Everything runs over an in-memory descriptor. The predicate reads the script table and the
- * descriptor's path arithmetic and nothing else, so no fixture tree is needed to show it.
+ * descriptor's path arithmetic and nothing else, so no fixture tree is needed to show it. The
+ * one process spawned is `sh -n`, which parses a script without running it, for the arm whose
+ * whole claim is what the shell refuses.
  */
+
+import { spawnSync } from 'node:child_process';
 
 import { describe, expect, test } from 'vitest';
 
@@ -96,6 +100,22 @@ describe('splitScript', () => {
 		expect(splitScript('echo "$(a && b)"')).toBeNull();
 		// Single quotes do not substitute, so that one is readable.
 		expect(splitScript("echo '$(a && b)'")).not.toBeNull();
+	});
+
+	test('a comment is refused, because the shell drops everything after it', () => {
+		// `sh -c 'true # note && echo ran'` prints nothing. Split as three commands, a guard
+		// after the comment read as wired and never ran.
+		expect(splitScript(`../../common/copy-assets.sh # temporarily && ${PREFETCH}`)).toBeNull();
+		expect(splitScript(`# first && ${PREFETCH}`)).toBeNull();
+		expect(splitScript(`a &&# b`)).toBeNull();
+		// A `#` that does not start a word, or is quoted or escaped, is not a comment.
+		expect(splitScript('a#b && c')?.map((segment) => segment.text)).toEqual(['a#b', 'c']);
+		expect(splitScript('echo "# not" && c')?.map((segment) => segment.text)).toEqual([
+			'echo "# not"',
+			'c',
+		]);
+		expect(splitScript("echo '# not' && c")).not.toBeNull();
+		expect(splitScript('echo \\# not && c')).not.toBeNull();
 	});
 });
 
@@ -295,10 +315,54 @@ describe('every arm refuses what it exists to refuse', () => {
 		);
 	});
 
+	test('an operator with no command on one side, which the shell refuses as a syntax error', () => {
+		// The shape `install` wrote into an empty prebuild: ` && <fragment>`. Every build then
+		// exited 2 in prebuild, and the empty first segment matched nothing here, so the row
+		// passed it.
+		// Each shape is put to `sh -n` as well, so the arm is held to the shell's own reading
+		// in both directions rather than to a list of what somebody believed a syntax error is.
+		const shellParses = (script: string): boolean =>
+			spawnSync('sh', ['-n', '-c', script]).status === 0;
+		const dangling = /has no command on one side of `(&&|\|\||\||&)`/;
+		for (const prebuild of [
+			` && ${PREFETCH} && ${GUARD}`,
+			`   && ${PREFETCH} && ${GUARD}`,
+			`${PREFETCH} && ${GUARD} &&`,
+			`${PREFETCH} && && ${GUARD}`,
+			`| ${PREFETCH} && ${GUARD}`,
+			`& ${PREFETCH} && ${GUARD}`,
+		]) {
+			expect([prebuild, shellParses(prebuild)]).toEqual([prebuild, false]);
+			refuses({ prebuild }, dangling);
+		}
+		// Not a syntax error, and not reported as one. The split turns a newline into `;`, so
+		// a chain continued onto the next line after `&&` has an empty segment in it, and a
+		// trailing `&` runs the chain in the background, which another arm reports.
+		for (const prebuild of [
+			`${PREFETCH} &&\n${GUARD}`,
+			`${PREFETCH} && ${GUARD} &`,
+			`${PREFETCH} && ${GUARD}\n`,
+		]) {
+			expect([prebuild, shellParses(prebuild)]).toEqual([prebuild, true]);
+			expect([
+				prebuild,
+				problems({ prebuild }).filter((problem) => dangling.test(problem)),
+			]).toEqual([prebuild, []]);
+		}
+		// And not for a script that does not name the guard, which fails loudly on its own.
+		expect(
+			problems({ prebuild: `${PREFETCH} && ${GUARD}`, build: ' && react-router build' }),
+		).toEqual([]);
+	});
+
 	test('a script only a shell could split, when it names the guard', () => {
 		refuses(
 			{ prebuild: `x=$(${PREFETCH}) && ${GUARD}` },
-			/holds an open quote or a command substitution/,
+			/holds an open quote, a command substitution or a comment/,
+		);
+		refuses(
+			{ prebuild: `../../common/copy-assets.sh # temporarily && ${PREFETCH} && ${GUARD}` },
+			/holds an open quote, a command substitution or a comment/,
 		);
 		// And not when it does not: an unrelated script is not this check's business.
 		expect(

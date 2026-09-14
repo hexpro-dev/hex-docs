@@ -27,7 +27,7 @@ import { dirname, join } from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
-import { LITERAL_WORKSPACE } from '../../../fixtures/consumers.js';
+import { GLOB_WORKSPACE, LITERAL_WORKSPACE } from '../../../fixtures/consumers.js';
 import { CHECK_IDS, LINT_RULE_IDS } from '../../../src/contracts/lint.js';
 import { CHECK_STATES } from '../../../src/contracts/diagnostics.js';
 import { detectSite, memoryFiles } from '../../src/wiring/detect.js';
@@ -95,21 +95,33 @@ describe('the template names nothing it would have to be kept up to date with', 
 		expect(TEMPLATE).toContain('report.exitCode');
 	});
 
-	test('it declares the node globals it uses, because a zero-warning eslint gives an .mjs none', () => {
-		// kcalc's front package lints `scripts/` with `--max-warnings 0`, and its base config
-		// declares node globals for ts, tsx, js and jsx only. Read from the fixture's copy of
-		// that config, so the reason this directive exists is asserted rather than remembered:
-		// the day the glob grows `mjs`, this test says the directive is no longer needed.
-		const base = LITERAL_WORKSPACE.find((file) => file.path === 'config/eslint.config.js');
-		const globbed = /files:\s*\["\*\*\/\*\.\{([a-z,]+)\}"\]/.exec(base?.contents ?? '')?.[1] ?? '';
-		expect(globbed.split(',').sort()).toEqual(['js', 'jsx', 'ts', 'tsx']);
+	test('it imports the node globals it uses, because the two consumers lint an .mjs in opposite ways', () => {
+		// Read from the fixtures' copies of both base configs, so the reason is asserted rather
+		// than remembered. kcalc declares node globals for ts, tsx, js and jsx only, so a bare
+		// `console` in an `.mjs` is `no-undef` there. hex-web declares them for mjs too, so a
+		// `global` directive comment naming them is `no-redeclare` there. The step 8 shim carried
+		// that directive and was measured by one consumer's eslint only, which is how it came to
+		// fail hex-web's config in a scripts directory that otherwise lints clean. The day either
+		// glob changes, this says which half of the reasoning moved.
+		const globbed = (files: typeof LITERAL_WORKSPACE): string[] => {
+			const base = files.find((file) => file.path === 'config/eslint.config.js');
+			const list = /files:\s*\["\*\*\/\*\.\{([a-z,]+)\}"\]/.exec(base?.contents ?? '')?.[1] ?? '';
+			return list.split(',').sort();
+		};
+		expect(globbed(LITERAL_WORKSPACE)).toEqual(['js', 'jsx', 'ts', 'tsx']);
+		expect(globbed(GLOB_WORKSPACE)).toEqual(['cjs', 'js', 'jsx', 'mjs', 'ts', 'tsx']);
 
-		// Measured with kcalc's own eslint over this template: seventeen no-undef errors
-		// without the line and none with it. What is asserted here is the shape that makes
-		// that true: the line sits directly under the shebang and names exactly the globals
-		// the file reaches for.
+		// So there is no directive of any spelling, and every node global the code reaches for
+		// is a module binding imported from its own `node:` module, which neither rule reads.
+		// Measured with each consumer's own eslint over this template: exit 0 under both, where
+		// the directive gave hex-web two `no-redeclare` errors and no binding at all gives kcalc
+		// seventeen `no-undef` errors.
+		expect(TEMPLATE).not.toMatch(/\/\*\s*(?:global|globals|eslint-env)\b/);
 		const lines = TEMPLATE.split('\n');
-		expect(lines.slice(0, 2)).toEqual(['#!/usr/bin/env node', '/* global console, process */']);
+		expect(lines[0]).toBe('#!/usr/bin/env node');
+		const imported = [...TEMPLATE.matchAll(/^import (\w+) from "node:(\w+)";$/gm)]
+			.filter((match) => match[1] === match[2])
+			.map((match) => match[1] as string);
 		const NODE_GLOBALS = [
 			'console',
 			'process',
@@ -124,12 +136,16 @@ describe('the template names nothing it would have to be kept up to date with', 
 			'URL',
 		];
 		const code = lines
-			.slice(2)
+			.slice(1)
 			.join('\n')
+			.replace(/^import [^;]*;$/gm, '')
 			.replace(/\/\*[\s\S]*?\*\//g, '')
 			.replace(/\/\/.*$/gm, '');
 		const used = NODE_GLOBALS.filter((name) => new RegExp(`(?<![\\w.$])${name}\\b`).test(code));
 		expect(used.sort()).toEqual(['console', 'process']);
+		// Both directions: a use with no import is `no-undef` on kcalc, and an import with no
+		// use is `@typescript-eslint/no-unused-vars` on both, measured.
+		expect(imported.sort()).toEqual(used);
 	});
 
 	test('it is pure ASCII', () => {

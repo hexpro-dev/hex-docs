@@ -54,7 +54,7 @@ import {
 	tsconfigPathEntries,
 	type EditContext,
 } from './edits.js';
-import { stripComments, parseJsonc } from './needles.js';
+import { parseJsonc, withoutModuleStatements } from './needles.js';
 import { prebuildFragment, readPrebuild } from './prebuild.js';
 import { readRouteTable, routeTableProblems } from './route-table.js';
 import {
@@ -692,6 +692,16 @@ const routes: WiringProbe = {
 		} else if (table.kind === 'unread') {
 			if (findings.length === 0) return notRunRow(id, unitOf(id), table.why);
 			note = table.why;
+		} else if (rows.length === 0) {
+			// No valid site config, so no docs rows, and a loaded table compared against nothing
+			// has proved nothing about where docs routes are declared. This row used to pass here
+			// counting the server module and the two route modules, which are files and not
+			// route rows. `wiring-root-seo` names the missing or invalid config; this says why
+			// the table was not compared.
+			const why =
+				'No valid site config under app/docs, so there are no docs route rows to look for in the table. Scaffold one with `hexdocs scaffold site`, or fix the one `wiring-root-seo` names.';
+			if (findings.length === 0) return notRunRow(id, unitOf(id), why);
+			note = why;
 		} else {
 			examined += rows.length;
 			if (!PRESENT.routes(null, site, editContext(ctx))) {
@@ -798,7 +808,13 @@ const sitemap: WiringProbe = {
 		// A hand-listed docs address in this file is the failure `DOCS.sitemap()` exists to
 		// prevent: a hand-written list cannot know which pages are hidden or which
 		// translations are fallbacks, so it advertises both.
-		const stripped = stripComments(text);
+		//
+		// Read with the import statements gone, because the import the arm above requires
+		// contains `/docs`, and a mount at `/docs` failed here on a wired site with no edit
+		// that could clear it. Any character may stand before the base path, which is why the
+		// fix is not a quote in front of it: a template literal after an origin and a full URL
+		// both put a hand-listed address somewhere other than just inside a quote.
+		const stripped = withoutModuleStatements(text);
 		for (const config of configs) {
 			if (stripped.includes(config.basePath)) {
 				findings.push(

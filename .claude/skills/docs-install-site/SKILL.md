@@ -28,6 +28,10 @@ Without `--write` this prints every edit it would make and every one it leaves t
 the whole plan before applying it. The dry run is produced by the same code path as the real
 run, so what it prints is what would happen.
 
+Run it from the repository root, or pass the root as the first argument, because `--site` is
+relative to the root. Run from inside the site directory, `install` finds no site at that
+path, plans nothing and says so in a `NOT RUN` row.
+
 ## 3. Apply the mechanical edits
 
 ```hexdocs-cli
@@ -84,10 +88,18 @@ hexdocs scaffold site --site apps/front --project hex-nfc --commit <sha> --versi
 
 ## 5. Fill in the pages
 
+`pages` starts empty, and `sync` is what fills it. Do not maintain it by hand.
+
 ```hexdocs-cli
 hexdocs prefetch --site apps/front
 hexdocs sync --site apps/front --project hex-nfc
 ```
+
+The first `prefetch` after a scaffold exits 3. It extracts the bundle and then fails its last
+row, `prefetch-skew`, because the bundle carries pages the empty list does not name. Leave
+the row alone and run `sync` next: it reads the bundle `prefetch` has just extracted, so it
+cannot go first, and the following `prefetch`, which the site's own prebuild runs, passes. A
+release that adds a page fails the same row until `sync` runs again.
 
 `sync` writes `pages`, `hidden`, `redirects` and the per-version digests, and touches nothing
 else. The route rows are derived from those lists, so they have to be a build input.

@@ -94,10 +94,16 @@ is not in `deploy.config.json`'s `hash.extra_dirs`. Change detection is hash bas
 project directories, so a change inside an unlisted submodule leaves the hash identical.
 `wiring-deploy-hash-dirs` is the row.
 
-**A mistyped docs URL returns a page with a canonical pointing at itself.** The slug list
-in `<project>.docs.json` is stale. `root.tsx` renders the canonical and all eight hreflang
-alternates from that list, above the meta outlet, and a child route can append tags but
-never delete them. Run `hexdocs sync`.
+**A sidebar link leads to the site's own 404, or a page removed from the bundle still has a
+docs route that answers 404.** The slug list in `<project>.docs.json` is behind the bundle.
+A slug the bundle carries and `pages` does not has no route row at all, so the sidebar and
+prev and next link to an address nothing routes. A slug `pages` lists and the bundle does
+not keeps its route row, and that route's loader answers 404. Neither ships a wrong
+canonical. `root.tsx` decides a matched docs route's canonical, alternates and robots tag
+through `docsSeoFromMatches`, and a docs 404 gets `noindex` with no canonical and no
+alternates. An address no route matches is not in `LOCALISED_PATHS` either, because docs
+addresses never join that list. `prefetch-skew` fails the site's prebuild in both directions
+and names up to three slugs each way. Run `hexdocs sync`.
 
 **`hexdocs check` reports nothing at all and exits 3 with one `NOT RUN` row.** The tree is
 not in a git repository, or has no commits. That is a refusal rather than a fallback on

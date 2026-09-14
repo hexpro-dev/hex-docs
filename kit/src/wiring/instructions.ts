@@ -237,8 +237,19 @@ export const ROOT_DECISION = [
 
 export const ROOT_PREFIXED_FILTER = 'PREFIXED_LANGUAGES.filter(named).map(';
 
-export const ROOT_DEFAULT_GATE = '{named(DEFAULT_LANGUAGE) && (';
-
+/**
+ * Three changes, and the fourth that used to be printed is gone rather than made optional.
+ *
+ * It wrapped the `hrefLang={DEFAULT_LANGUAGE}` and `x-default` links in
+ * `named(DEFAULT_LANGUAGE)`, for "a docs page that has no English", and that page cannot reach
+ * this code with its links written. Root writes alternates only when `docsSeo.indexable` is
+ * true; a manifest record exists only for a slug whose English source compiled; English's
+ * state is always `source`, its own and its effective one alike, and `indexableLanguages`
+ * never drops `source`. `DEFAULT_LANGUAGE` is `en` in both consumers, so the wrapper was true in
+ * every state that renders the links, a root without it rendered the same bytes, no check read
+ * it, and the wired fixture never applied it. A required edit that changes nothing is an
+ * instruction a person follows for no reason.
+ */
 export function rootChanges(): Change[] {
 	return [
 		{
@@ -251,13 +262,8 @@ export function rootChanges(): Change[] {
 		},
 		{
 			where:
-				'In the alternates, filter the prefixed languages, in place of `PREFIXED_LANGUAGES.map(`',
+				'And in the alternates, filter the prefixed languages, in place of `PREFIXED_LANGUAGES.map(`',
 			code: ROOT_PREFIXED_FILTER,
-		},
-		{
-			where:
-				'And wrap both the `hrefLang={DEFAULT_LANGUAGE}` link and the `x-default` link, so neither is written for a docs page that has no English',
-			code: `${ROOT_DEFAULT_GATE}\n\t<link ... />\n)}`,
 		},
 	];
 }
