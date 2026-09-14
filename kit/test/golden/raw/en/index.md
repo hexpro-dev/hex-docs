@@ -27,7 +27,7 @@ stops with `Tag is permanently locked` instead of reporting success.
 Supported hardware: iPhone 7 or later, running iOS 16 or later.\
 Supported tags: ISO 14443 Type A chips formatted for NDEF.
 
-The [Chip support matrix](reference/chip-support.md) lists every chip
+The [Chip support matrix](hexdocs:page/reference/chip-support.md) lists every chip
 the reader has been tested against and how much writable memory each
 one has. An NTAG213 holds 132 bytes, which is a short URL and very
 little else.
@@ -52,7 +52,7 @@ failed write is safe to retry.
 
 ## Where to go next
 
-Start with [Scan your first tag](guide/first-tag.md), which covers one
+Start with [Scan your first tag](hexdocs:page/guide/first-tag.md), which covers one
 read and one write on a blank NTAG215. If a tag will not read at all,
 re-check [what you need](#what-you-need) first. Most failures are a
 chip the reader cannot address rather than a fault in the tag.

@@ -30,7 +30,7 @@ failed write is safe to retry.
 Not every tag answers. MIFARE Classic tags stay silent on iPhone
 because the reader does not speak their protocol, and some access
 control tags answer only after a password exchange. The
-[Chip support matrix](../reference/chip-support.md) lists the chips
+[Chip support matrix](hexdocs:page/reference/chip-support.md) lists the chips
 that have been tested against version 1.0.
 
 ## Read the tag
@@ -70,7 +70,7 @@ anything to the Library.
 ::::
 
 :::figure[The Scan sheet, waiting for a tag to come within range]
-![The Scan sheet waiting for a tag](../../../assets/scan-screen.png)
+![The Scan sheet waiting for a tag](hexdocs:asset/b9922ff72601d007f508e4b11a31c7cd3215b8115dfd0ab2da6a584f98bbacb7.png)
 :::
 
 :::warning[A partial read looks like a success]
@@ -92,7 +92,7 @@ Saved tags land in the Library, newest first, with the chip type and
 the time of the read under the name. Tapping one opens Tag detail,
 which shows the raw bytes beside the decoded records.
 
-![A completed read listing three NDEF records](../../../assets/scan-screen.png)
+![A completed read listing three NDEF records](hexdocs:asset/b9922ff72601d007f508e4b11a31c7cd3215b8115dfd0ab2da6a584f98bbacb7.png)
 
 Renaming a tag changes only what you see in the Library. Nothing is
 written back to the tag itself unless you use the Write sheet, which is
@@ -109,5 +109,5 @@ starts reporting what it is doing:
 5. The session ends with "Tag lost before the read finished".
 
 A read that reaches the fifth attempt twice in a row is usually the
-tag, not the phone. [When a scan does not work](troubleshooting.md)
+tag, not the phone. [When a scan does not work](hexdocs:page/guide/troubleshooting.md)
 walks through the causes in the order worth checking them.

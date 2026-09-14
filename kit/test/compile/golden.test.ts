@@ -39,7 +39,11 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import { materialiseCorpus } from '../../../fixtures/index.js';
 import { LOCALES, type Locale } from '../../../src/contracts/locales.js';
+import { RAW_ASSET_LINK, RAW_PAGE_LINK } from '../../../src/contracts/manifest.js';
+import type { DocsProjectConfig } from '../../../src/contracts/project.js';
 import { buildBundle, type BuildResult } from '../../src/compile/build.js';
+import { highlight } from '../../src/compile/highlight/index.js';
+import { parseDocument } from '../../src/compile/markdown/index.js';
 import { canonicalJson, gunzipMember } from '../../src/compile/serialise.js';
 
 const GOLDEN = fileURLToPath(new URL('../golden/', import.meta.url));
@@ -179,6 +183,84 @@ describe('the compiled corpus', () => {
 			expect(output, `${slug} should compile in en`).toBeDefined();
 			expectGolden(`raw/en/${slug}.md`, output?.raw ?? '');
 		}
+	});
+
+	test('every destination in every raw object is one a served page can follow', () => {
+		// Every raw object in the bundle, not only the three goldened above, because a
+		// destination left relative is wrong from `llms-full.txt` on any page and the three
+		// goldens hold seven of the corpus's rewritten links. The destinations are read back
+		// with the compiler's own parser, which is what a markdown reader of the object sees:
+		// a pattern over the text would count a sample in a fence or a code span as a link.
+		// What the parser cannot see, a rewrite that reaches into code, is held by the code
+		// span case in `page.test.ts`.
+		const pages = new Set(Object.keys(result.manifest.pages));
+		const assets = new Set(result.manifest.assets.map((asset) => `${asset.sha256}.${asset.ext}`));
+		const offending: string[] = [];
+		const seen = { page: 0, asset: 0, other: 0 };
+
+		const check = (key: string, href: string): void => {
+			if (href.startsWith(RAW_PAGE_LINK)) {
+				const [path] = href.slice(RAW_PAGE_LINK.length).split('#');
+				const slug = (path as string).replace(/\.md$/, '');
+				if (!(path as string).endsWith('.md') || !pages.has(slug))
+					offending.push(`${key}: ${href}`);
+				seen.page += 1;
+			} else if (href.startsWith(RAW_ASSET_LINK)) {
+				if (!assets.has(href.slice(RAW_ASSET_LINK.length))) offending.push(`${key}: ${href}`);
+				seen.asset += 1;
+			} else if (
+				href.startsWith('#') ||
+				href.startsWith('https://') ||
+				href.startsWith('mailto:')
+			) {
+				seen.other += 1;
+			} else {
+				offending.push(`${key}: ${href}`);
+			}
+		};
+
+		const raws = result.objects.filter((object) => object.key.startsWith('raw/'));
+		// The half of the seam a site owns: it substitutes on `](` followed by the prefix and
+		// on nothing else, so every token has to sit exactly there. A token the parser reads
+		// back as a destination and the substitution does not find is served to a reader as
+		// `hexdocs:page/...`, so the two counts below have to agree.
+		let substitutable = 0;
+		for (const object of raws) {
+			const text = gunzipMember(object.bytes).toString('utf8');
+			substitutable +=
+				text.split(`](${RAW_PAGE_LINK}`).length - 1 + text.split(`](${RAW_ASSET_LINK}`).length - 1;
+			parseDocument(text, {
+				file: 'content/en/raw.md',
+				config: result.project.config as DocsProjectConfig,
+				services: {
+					highlight,
+					resolveLink: (href) => {
+						check(object.key, href);
+						return { ok: true, link: { type: 'link', kind: 'external', href: 'https://x' } };
+					},
+					resolveImage: (src) => {
+						check(object.key, src);
+						return { ok: true, src: 'assets/x.png', width: 1, height: 1 };
+					},
+					resolveInclude: () => ({ ok: true, blocks: [] }),
+				},
+			});
+		}
+
+		expect(offending).toEqual([]);
+		expect(substitutable).toBe(seen.page + seen.asset);
+		// Counted, so a parse that stopped seeing links reads as a failure rather than as a
+		// bundle with nothing wrong in it. Measured over the corpus when this was written: 87
+		// page links, 17 images and 40 external, mailto or same-page destinations, across one
+		// raw object per page record. The floors sit under those so a corpus edit does not
+		// need this line, and above zero by enough that a parse which lost a kind fails.
+		const records = Object.values(result.manifest.pages).flatMap((page) =>
+			Object.keys(page.locales),
+		);
+		expect(raws.length).toBe(records.length);
+		expect(seen.page).toBeGreaterThanOrEqual(80);
+		expect(seen.asset).toBeGreaterThanOrEqual(15);
+		expect(seen.other).toBeGreaterThanOrEqual(35);
 	});
 
 	test('the English term dictionary is what it was', () => {

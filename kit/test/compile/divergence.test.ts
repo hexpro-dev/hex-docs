@@ -262,6 +262,38 @@ describe('a snippet a locale does not have', () => {
 	});
 });
 
+describe('a link and an image in a snippet', () => {
+	test('reach the raw markdown of every page that includes the snippet, rewritten', () => {
+		// A snippet's destinations have the snippet's line numbers, and the page's parse
+		// never sees them, so a rewrite taken only from the page's own parse would leave a
+		// transcluded link relative in every page that includes it. The corpus has no link
+		// in a snippet, which is why this perturbation exists.
+		const repo = corpus();
+		const snippet = site(repo, 'snippets/en/safety-note.md');
+		writeFileSync(
+			snippet,
+			`${readFileSync(snippet, 'utf8')}\nSee [the matrix](reference/chip-support.md#ntag-21x) and ![the sheet](../../assets/scan-screen.png).\n`,
+		);
+		commit(repo, 'link from a snippet');
+
+		const result = build(repo);
+		const including = [...result.pages]
+			.filter(([, byLocale]) => byLocale.get('en')?.page.snippets.includes('safety-note'))
+			.map(([slug]) => slug);
+		expect(including.length).toBeGreaterThan(1);
+		const asset = result.manifest.assets.find((entry) => entry.ext === 'png');
+		for (const slug of including) {
+			const raw = objectText(result, rawKey(SOURCE_LOCALE as Locale, slug));
+			expect(raw, slug).toContain('[the matrix](hexdocs:page/reference/chip-support.md#ntag-21x)');
+			expect(raw, slug).toContain(`![the sheet](hexdocs:asset/${asset?.sha256}.png)`);
+		}
+		// Linted once as its own file, so no link finding names the snippet.
+		expect(
+			result.lint.envelope.findings.filter((finding) => finding.rule === 'link-resolves'),
+		).toEqual([]);
+	});
+});
+
 describe('a fence that documents the authoring syntax', () => {
 	test('is not rewritten in the raw markdown', () => {
 		// `rawMarkdown` walked the source lines with no block state, so both of its rewrites

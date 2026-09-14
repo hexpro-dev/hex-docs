@@ -22,7 +22,11 @@ import {
 	SNIPPET_ID_PATTERN,
 	SNIPPET_INCLUDE_NAME,
 } from '../../../src/contracts/source.js';
-import type { HeadingRecord } from '../../../src/contracts/manifest.js';
+import {
+	RAW_ASSET_LINK,
+	RAW_PAGE_LINK,
+	type HeadingRecord,
+} from '../../../src/contracts/manifest.js';
 import type { CompiledPage, PageHeading } from '../../../src/contracts/page.js';
 import type { DocsProjectConfig } from '../../../src/contracts/project.js';
 import { countWords } from '../../../src/search/tokenise.js';
@@ -37,6 +41,7 @@ import {
 	type ParseServices,
 	type ParsedDocument,
 	type RawFinding,
+	type ResolvedDestination,
 } from './types.js';
 
 export interface CompilePageOptions {
@@ -56,7 +61,11 @@ export interface CompilePageOptions {
 	 */
 	sourceHeadingIds?: readonly string[];
 	translation: TranslationRecord;
-	/** Snippet body text by id, for the markdown served at `<slug>.md`. */
+	/**
+	 * Snippet body text by id, for the markdown served at `<slug>.md`, already in its raw
+	 * form: see `rawSnippetBody`. Spliced in verbatim, because a snippet's destinations
+	 * carry the snippet's own line numbers and this page's parse has none of them.
+	 */
 	snippetBodies?: ReadonlyMap<string, string>;
 	origins?: NodeOrigins;
 }
@@ -284,15 +293,111 @@ function collectHeadings(blocks: readonly Block[], into: Heading[]): void {
 /** As `blocks.ts` reads a fence: three or more of one character, and the info string. */
 const FENCE = /^(`{3,}|~{3,})(.*)$/;
 
+/** The one comment shape this toolchain accepts, and the one the raw markdown strips. */
+const WHOLE_LINE_COMMENT = /^\s*<!--[\s\S]*-->\s*$/;
+
+/**
+ * The destination a raw object carries in place of what the author typed.
+ *
+ * A page is its wire slug with `.md`, which is the address of the page's own raw object
+ * under a docs mount, and an asset is its bundle filename. Both are prefixed rather than
+ * resolved, because the absolute form needs the locale prefix, the mount and the version
+ * label, and none of the three is known until a site serves the object.
+ */
+export function rawDestination(target: ResolvedDestination['target']): string {
+	if (target.kind === 'page') return `${RAW_PAGE_LINK}${target.slug}.md`;
+	return `${RAW_ASSET_LINK}${target.src.slice(target.src.lastIndexOf('/') + 1)}`;
+}
+
+/**
+ * `body` with every recorded destination replaced by its raw form, and nothing else
+ * changed.
+ *
+ * Each destination is one insertion and its removals. Edits run right to left within a
+ * line, so an earlier edit never moves the columns of a later one, and at one column a
+ * removal runs before the insertion, so the token lands in front of what is left rather
+ * than being removed with the path. A removal that falls outside its line, or overlaps
+ * another edit, is thrown over rather than applied: every range comes from the parse of
+ * this exact text, so either means the parse and the text disagree, and applying it would
+ * publish a link spliced into whatever the characters there really are.
+ */
+export function rewriteDestinations(
+	body: string,
+	firstLine: number,
+	destinations: readonly ResolvedDestination[],
+): string {
+	const lines = body.split('\n');
+	const edits = destinations
+		.flatMap((destination) => [
+			{ ...destination.at, length: 0, text: rawDestination(destination.target) },
+			...destination.remove.map((range) => ({ ...range, text: '' })),
+		])
+		.sort((a, b) => a.line - b.line || b.column - a.column || b.length - a.length);
+
+	let previous: { line: number; column: number } | undefined;
+	for (const edit of edits) {
+		const index = edit.line - firstLine;
+		const line = lines[index];
+		const from = edit.column - 1;
+		const overlaps =
+			previous !== undefined &&
+			previous.line === edit.line &&
+			edit.column + edit.length > previous.column;
+		if (line === undefined || from < 0 || from + edit.length > line.length || overlaps) {
+			throw new Error(
+				`rewriteDestinations: an edit at line ${edit.line}, column ${edit.column}, length ${edit.length} ` +
+					`does not fit the text it was parsed from. The raw markdown and the page payload would disagree about where this link goes.`,
+			);
+		}
+		lines[index] = `${line.slice(0, from)}${edit.text}${line.slice(from + edit.length)}`;
+		previous = edit;
+	}
+	return lines.join('\n');
+}
+
+/**
+ * One snippet's body as the raw markdown splices it in: destinations rewritten, the
+ * authoring comments removed, and the whole trimmed.
+ *
+ * The comments matter here and not only in `rawMarkdown`. That function strips them from
+ * a page's own body and then splices this text in verbatim for each `::include`, so a
+ * suppression comment written in a snippet reached the published `<slug>.md` and the
+ * `llms-full.txt` of every page including it, while never appearing in a page payload.
+ *
+ * A comment becomes a blank line rather than disappearing, so a paragraph is not silently
+ * joined to the one below it. Given no destinations it is also how the build reads a
+ * snippet to compare two locales for `scaffolded`, so the comment stripping and the
+ * trimming are written once for both.
+ */
+export function rawSnippetBody(
+	body: string,
+	firstLine: number,
+	destinations: readonly ResolvedDestination[],
+): string {
+	return rewriteDestinations(body, firstLine, destinations)
+		.split('\n')
+		.map((line) => (WHOLE_LINE_COMMENT.test(line) ? '' : line))
+		.join('\n')
+		.trim();
+}
+
 /**
  * The markdown served at `<slug>.md`, and concatenated into `llms-full.txt`.
  *
- * Not the source file. Three differences, each because the address is read by an agent
+ * Not the source file. Four differences, each because the address is read by an agent
  * rather than by an editor: the title is an `h1` at the top, because the front matter
  * that carried it is not published; `::include` is expanded, because a fragment
- * reference is meaningless to a reader who cannot fetch it; and the authoring comments
- * are already gone, stripped by the parse, because a suppression comment on a published
- * page is a leak of the process onto the product.
+ * reference is meaningless to a reader who cannot fetch it; the authoring comments are
+ * already gone, stripped by the parse, because a suppression comment on a published
+ * page is a leak of the process onto the product; and every destination that resolved
+ * to a page or an asset is in its raw form, because the author's relative path is only
+ * right from the source tree. `llms-full.txt` joins every page under one address, so a
+ * relative link from a page two directories down resolves to nothing there, and an
+ * image's path into `docs/site/assets/` is not an address anywhere.
+ *
+ * The rewrite is applied from the parse's own ranges before the line walk, so it follows
+ * the parser's idea of what is a link. Code spans and fences are never touched because
+ * the parser never recorded a destination inside one, not because this walk skips them.
  *
  * Built from the source lines rather than from the tree, which is what makes the fence
  * tracking necessary rather than decorative. Both rewrites used to fire anywhere on the
@@ -309,8 +414,13 @@ function rawMarkdown(
 	const lines: string[] = [`# ${title}`, ''];
 	// The marker that opened the current fence, or undefined outside one.
 	let fence: string | undefined;
+	const body = rewriteDestinations(
+		parsed.frontMatter.body,
+		parsed.frontMatter.bodyLine,
+		parsed.destinations,
+	);
 
-	for (const line of parsed.frontMatter.body.split('\n')) {
+	for (const line of body.split('\n')) {
 		const trimmed = line.trim();
 		if (fence !== undefined) {
 			lines.push(line);
@@ -334,7 +444,7 @@ function rawMarkdown(
 		// built from the source rather than from the tree. Without it a suppression comment
 		// reaches `<slug>.md` and `llms-full.txt` while never appearing in a page payload,
 		// which is the half of the leak nobody would think to look for.
-		if (/^\s*<!--[\s\S]*-->\s*$/.test(line)) continue;
+		if (WHOLE_LINE_COMMENT.test(line)) continue;
 
 		// Read with the contract's own leaf-directive grammar rather than a second
 		// hand-copied spelling of it, so a change to the directive syntax cannot leave this

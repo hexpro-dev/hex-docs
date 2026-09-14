@@ -19,7 +19,14 @@ import { MAX_NAV_DEPTH } from '../../../src/contracts/nav.js';
 import type { DocsProjectConfig } from '../../../src/contracts/project.js';
 import { buildBundle } from '../../src/compile/build.js';
 import { highlight } from '../../src/compile/highlight/index.js';
-import { compilePage } from '../../src/compile/page.js';
+import {
+	compilePage,
+	rawDestination,
+	rawSnippetBody,
+	rewriteDestinations,
+} from '../../src/compile/page.js';
+import { createImageResolver, createLinkResolver } from '../../src/compile/links.js';
+import { RAW_ASSET_LINK, RAW_PAGE_LINK } from '../../../src/contracts/manifest.js';
 import { deriveHeadingId, slugifyHeading } from '../../src/compile/markdown/blocks.js';
 import type { ParseServices } from '../../src/compile/types.js';
 
@@ -46,6 +53,7 @@ interface CompileOptions {
 	front?: Record<string, string>;
 	snippetBodies?: Map<string, string>;
 	locale?: 'en' | 'ja';
+	services?: ParseServices;
 }
 
 function compile(body: string, options: CompileOptions = {}) {
@@ -65,7 +73,7 @@ function compile(body: string, options: CompileOptions = {}) {
 			id: 'guide/example',
 			text,
 		},
-		services: services(),
+		services: options.services ?? services(),
 		translation: { state: 'source', sourceUpdated: '2026-01-05T09:00:00Z' },
 		...(options.sourceHeadingIds === undefined
 			? {}
@@ -240,6 +248,175 @@ describe('the markdown served at <slug>.md', () => {
 		);
 		expect(output.raw).not.toContain('hexdocs-disable');
 		expect(output.parsed.disables.length).toBe(1);
+	});
+});
+
+describe('where a link in <slug>.md goes', () => {
+	const ASSET = `assets/${'c'.repeat(64)}.png`;
+
+	/**
+	 * The real resolvers over a small project, so what is rewritten is decided by the same
+	 * code that decides it in a build, and the page under test sits two directories down
+	 * where a relative path is most obviously wrong from anywhere else.
+	 */
+	function real(): ParseServices {
+		const targets = {
+			slugs: new Set(['guide/first-tag', 'guide/troubleshooting', 'reference/chip-support']),
+			redirects: new Map([['guide/old-name', 'guide/first-tag']]),
+			assets: new Map([['assets/scan-screen.png', { src: ASSET, width: 4, height: 4 }]]),
+		};
+		const file = 'content/en/guide/example.md';
+		return {
+			highlight,
+			resolveLink: createLinkResolver(file, targets),
+			resolveImage: createImageResolver(file, targets),
+			resolveInclude: () => ({ ok: true, blocks: [] }),
+		};
+	}
+
+	const rawOf = (body: string): string =>
+		compile(body, { services: real() }).raw.split('\n').slice(2).join('\n').trimEnd();
+
+	test('a page link becomes the page token and keeps the anchor the author typed', () => {
+		expect(rawOf('See [the matrix](../reference/chip-support.md#ntag-21x).')).toBe(
+			`See [the matrix](${RAW_PAGE_LINK}reference/chip-support.md#ntag-21x).`,
+		);
+	});
+
+	test('only the destination changes: the label, the title and the text around it do not', () => {
+		expect(
+			rawOf(
+				'A *[linked phrase](first-tag.md "The first scan")* and ![a tag](../../../assets/scan-screen.png \'A tag\') here.',
+			),
+		).toBe(
+			`A *[linked phrase](${RAW_PAGE_LINK}guide/first-tag.md "The first scan")* and ![a tag](${RAW_ASSET_LINK}${'c'.repeat(64)}.png 'A tag') here.`,
+		);
+	});
+
+	test('a link through a redirect goes to the page it redirects to', () => {
+		expect(rawOf('[Old](old-name.md)')).toBe(`[Old](${RAW_PAGE_LINK}guide/first-tag.md)`);
+	});
+
+	test('the token always follows the paren, whatever the author put between them', () => {
+		// A site substitutes on `](` followed by the prefix and on nothing else, so a token
+		// behind a kept `<`, a space or a line break is never substituted and reaches a
+		// reader as `hexdocs:page/...`. The angle brackets go, the escape in the path goes
+		// with the path, and the fragment after it stays exactly as typed, escape included.
+		expect(
+			rawOf(
+				'[One](<first-tag.md#step>), [two](first\\-tag.md\\#step), [three]( <first-tag.md>) and [four](\nfirst-tag.md "T").',
+			),
+		).toBe(
+			`[One](${RAW_PAGE_LINK}guide/first-tag.md#step), [two](${RAW_PAGE_LINK}guide/first-tag.md\\#step), [three](${RAW_PAGE_LINK}guide/first-tag.md) and [four](${RAW_PAGE_LINK}guide/first-tag.md\n "T").`,
+		);
+	});
+
+	test('a link in a heading, a table cell, a list, a quote and a callout body is rewritten', () => {
+		const body = [
+			'## See [the fix](troubleshooting.md)',
+			'',
+			'| Page | Where |',
+			'| --- | --- |',
+			'| Matrix | [here](../reference/chip-support.md) |',
+			'',
+			'- A [list item](first-tag.md)',
+			'',
+			'> A [quote](first-tag.md)',
+			'',
+			':::note[Read this]',
+			'Body and [this](first-tag.md).',
+			':::',
+		].join('\n');
+		const raw = rawOf(body);
+		expect(raw).not.toMatch(/\]\((?!hexdocs:)/);
+		expect(raw.match(/hexdocs:page\//g)?.length).toBe(5);
+	});
+
+	test('external, mailto, same-page and unresolved destinations are left as typed', () => {
+		const body =
+			'[Site](https://example.com/a.md), [mail](mailto:docs@example.com), [up](#what-you-need) and [gone](nowhere.md).';
+		expect(rawOf(body)).toBe(body);
+	});
+
+	test('a link written in a code span or a fence is never rewritten', () => {
+		// The mutation this holds is a rewrite that reads the lines rather than the parse. A
+		// pattern over the text finds `](first-tag.md)` inside backticks as readily as outside
+		// them, and a page documenting its own link syntax would then publish a sample that
+		// no longer shows what to type.
+		const body = [
+			'Write `[the guide](first-tag.md)` to link a page, and [this](first-tag.md) is one.',
+			'',
+			'```markdown',
+			'[the guide](first-tag.md)',
+			'![a tag](../../../assets/scan-screen.png)',
+			'```',
+		].join('\n');
+		const raw = rawOf(body);
+		expect(raw).toContain('`[the guide](first-tag.md)`');
+		expect(raw).toContain(
+			'\n[the guide](first-tag.md)\n![a tag](../../../assets/scan-screen.png)\n',
+		);
+		expect(raw).toContain(`[this](${RAW_PAGE_LINK}guide/first-tag.md) is one.`);
+	});
+
+	test('a snippet body carries its own rewrites, and its comments are still removed', () => {
+		const parsed = compile('Before.\n\n[x](first-tag.md)\n\n<!-- a note -->\nAfter.', {
+			services: real(),
+		}).parsed;
+		expect(
+			rawSnippetBody(parsed.frontMatter.body, parsed.frontMatter.bodyLine, parsed.destinations),
+		).toBe(`Before.\n\n[x](${RAW_PAGE_LINK}guide/first-tag.md)\n\n\nAfter.`);
+	});
+
+	test('the asset token is the bundle filename, not the path the key sits under', () => {
+		expect(rawDestination({ kind: 'asset', src: ASSET })).toBe(
+			`${RAW_ASSET_LINK}${'c'.repeat(64)}.png`,
+		);
+		expect(rawDestination({ kind: 'page', slug: 'guide/index' })).toBe(
+			`${RAW_PAGE_LINK}guide/index.md`,
+		);
+	});
+
+	test('a destination folded across a wrap between wide characters is rewritten once', () => {
+		// No joiner is inserted between two wide characters, so the path runs on into the
+		// next line and has a removal on each. The token goes after the paren and both halves
+		// of the path are removed, which keeps the line count.
+		const services = real();
+		const output = compile('[\u6307\u5357](\u6307\n\u5357.md)', {
+			services: {
+				...services,
+				resolveLink: (href, title) =>
+					href === '\u6307\u5357.md'
+						? { ok: true, link: { type: 'link', kind: 'internal', slug: 'guide/first-tag' } }
+						: services.resolveLink(href, title),
+			},
+		});
+		expect(output.parsed.destinations[0]?.remove.length).toBe(2);
+		expect(output.raw.split('\n').slice(2).join('\n').trimEnd()).toBe(
+			`[\u6307\u5357](${RAW_PAGE_LINK}guide/first-tag.md\n)`,
+		);
+	});
+
+	test('an edit that does not fit the text is thrown over rather than applied', () => {
+		// Every edit comes from a parse of the same text, so a misfit is a disagreement
+		// between the two, and applying it would splice a link into whatever is really there.
+		const target = { kind: 'page', slug: 'guide/first-tag' } as const;
+		const token = `${RAW_PAGE_LINK}guide/first-tag.md`;
+		const at = (column: number, remove: [number, number][], line = 1) => ({
+			at: { line, column },
+			remove: remove.map(([from, length]) => ({ line, column: from, length })),
+			target,
+		});
+		expect(() => rewriteDestinations('short', 1, [at(3, [[3, 9]])])).toThrow(/does not fit/);
+		expect(() => rewriteDestinations('short', 1, [at(1, [[1, 1]], 2)])).toThrow(/does not fit/);
+		expect(() => rewriteDestinations('short', 1, [at(7, [])])).toThrow(/does not fit/);
+		expect(() => rewriteDestinations('abcdefgh', 1, [at(1, [[1, 4]]), at(3, [[3, 4]])])).toThrow(
+			/does not fit/,
+		);
+		// At one column the removal runs first, so the token is not removed with the path.
+		expect(rewriteDestinations('(ab) (cd)', 1, [at(2, [[2, 2]]), at(7, [[7, 2]])])).toBe(
+			`(${token}) (${token})`,
+		);
 	});
 });
 

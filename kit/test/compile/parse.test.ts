@@ -71,6 +71,7 @@ import {
 	type ParseServices,
 	type ProseSegment,
 	type RawFinding,
+	type ResolvedDestination,
 } from '../../src/compile/types.js';
 import { createImageResolver, createLinkResolver } from '../../src/compile/links.js';
 import { highlight } from '../../src/compile/highlight/index.js';
@@ -184,6 +185,7 @@ interface ParsedBody {
 	problems: RawFinding[];
 	prose: ProseSegment[];
 	includes: string[];
+	destinations: ResolvedDestination[];
 	origins: NodeOrigins;
 }
 
@@ -199,6 +201,7 @@ function parseBody(
 	const problems: RawFinding[] = [];
 	const prose: ProseSegment[] = [];
 	const includes: string[] = [];
+	const destinations: ResolvedDestination[] = [];
 	const origins: NodeOrigins = new WeakMap();
 	const blocks = parseBlocks(toLines(source), {
 		file: FILE,
@@ -208,9 +211,10 @@ function parseBody(
 		problems,
 		prose,
 		includes,
+		destinations,
 		includeDepth: options.includeDepth ?? 0,
 	});
-	return { blocks, problems, prose, includes, origins };
+	return { blocks, problems, prose, includes, destinations, origins };
 }
 
 interface ParsedInline {
@@ -1686,6 +1690,132 @@ describe('the three titles a house rule could not see', () => {
 		// hyphens in a slug as punctuation an author has to justify.
 		const { prose } = parseBody('See [the guide](guide/first-tag.md "A title").');
 		expect(prose.some((segment) => segment.folded.text.includes('first-tag.md'))).toBe(false);
+	});
+});
+
+describe('where a resolved destination sits in the source', () => {
+	// The raw markdown removes exactly these characters and writes the token where `at`
+	// says, so a range one column out publishes a link with a stray character in it, and a
+	// range that covers the fragment publishes a link that has lost its anchor. Each case
+	// slices the source line by the recorded range and compares the characters, which is
+	// the property the rewrite depends on, rather than a column number that could be right
+	// by coincidence. The character before `at` is asserted to be the `(` every time.
+	const sliced = (source: string, body: ParsedBody): string[][] => {
+		const lines = source.split('\n');
+		return body.destinations.map((destination) => {
+			const { line, column } = destination.at;
+			expect((lines[line - 1] as string)[column - 2]).toBe('(');
+			return destination.remove.map((range) =>
+				(lines[range.line - 1] as string).slice(range.column - 1, range.column - 1 + range.length),
+			);
+		});
+	};
+
+	test.each([
+		[
+			'a paragraph, on its second line',
+			'Text on line one\nsee [x](first-tag.md) now.',
+			[['first-tag.md']],
+		],
+		[
+			'a link with a fragment, which stays out of the range',
+			'See [x](first-tag.md#step-one).',
+			[['first-tag.md']],
+		],
+		['a link with a title', 'See [x](first-tag.md "A title").', [['first-tag.md']]],
+		[
+			'the angle bracket spelling, both brackets removed and the fragment kept',
+			'See [x](<first-tag.md#step-one>).',
+			[['<first-tag.md', '>']],
+		],
+		[
+			'a space after the paren, removed with the path',
+			'See [x](  first-tag.md).',
+			[['  first-tag.md']],
+		],
+		[
+			'a destination on the line after its paren',
+			'See [x](\nfirst-tag.md) now.',
+			[['first-tag.md']],
+		],
+		['an image, the whole destination', 'A ![tag](scan.png "Title") here.', [['scan.png']]],
+		['a heading', '## Read [x](first-tag.md) first', [['first-tag.md']]],
+		['a quote', '> Read [x](first-tag.md).', [['first-tag.md']]],
+		['a list item continuation', '- One\n  and [x](first-tag.md).', [['first-tag.md']]],
+		['a table cell', '| A | B |\n| --- | --- |\n| one | ![tag](scan.png) |', [['scan.png']]],
+		[
+			'a step inside a steps container, two containers deep',
+			'::::steps\n:::step[First]\nOpen [x](first-tag.md).\n:::\n::::',
+			[['first-tag.md']],
+		],
+		['a figure container', ':::figure[Caption]\n![tag](scan.png)\n:::', [['scan.png']]],
+		[
+			'an image inside a link label',
+			'[![tag](scan.png)](first-tag.md)',
+			[['scan.png'], ['first-tag.md']],
+		],
+	])('%s', (_label, source, expected) => {
+		expect(sliced(source, parseBody(source))).toEqual(expected);
+	});
+
+	test('the targets are the page slug and the asset key the resolvers returned', () => {
+		const body = parseBody('[x](first-tag.md#step-one) and ![tag](scan.png).');
+		expect(body.destinations.map((destination) => destination.target)).toEqual([
+			{ kind: 'page', slug: 'guide/first-tag' },
+			{ kind: 'asset', src: 'assets/abc.png' },
+		]);
+	});
+
+	test('an escaped fragment marker still starts the fragment, as the resolver reads it', () => {
+		// `readDestination` resolves the escape before `splitFragment` splits on the `#`, so
+		// the resolver sees a fragment and the range has to stop at the backslash, or the
+		// rewrite would swallow it and publish `#step-one` with its escape gone.
+		const source = 'See [x](first-tag.md\\#step-one).';
+		expect(sliced(source, parseBody(source))).toEqual([['first-tag.md']]);
+	});
+
+	test.each([
+		['an external link', '[x](https://example.com/first-tag.md)'],
+		['a mailto link', '[x](mailto:docs@example.com)'],
+		['a same-page anchor', '[x](#step-one)'],
+		['a link that resolves to nothing', '[x](nowhere.md)'],
+		['an image that resolves to nothing', '![x](nowhere.png)'],
+		['a link in a code span', '`[x](first-tag.md)`'],
+		['a link in a fence', '```text\n[x](first-tag.md)\n```'],
+	])('%s records nothing', (_label, source) => {
+		expect(parseBody(source).destinations).toEqual([]);
+	});
+
+	test('a document keeps its own destinations and not those of a snippet it includes', () => {
+		// The include's blocks come back from a separate parse whose ranges are the
+		// snippet file's lines, so recording them here would point at lines of this file
+		// that hold something else.
+		const document = parseDocument(
+			'---\ntitle: T\ndescription: D.\n---\n\n::include[safety-note]\n\n[x](first-tag.md)\n',
+			{
+				file: FILE,
+				config: CONFIG,
+				services: stubServices({
+					resolveInclude: () => {
+						const snippet = parseDocument('[y](first-tag.md)\n', {
+							file: 'snippets/en/safety-note.md',
+							config: CONFIG,
+							services: stubServices(),
+							includeDepth: 1,
+						});
+						expect(snippet.destinations.length).toBe(1);
+						return { ok: true, blocks: snippet.blocks };
+					},
+				}),
+			},
+		);
+		expect(document.destinations).toEqual([
+			{
+				at: { line: 8, column: 5 },
+				remove: [{ line: 8, column: 5, length: 12 }],
+				target: { kind: 'page', slug: 'guide/first-tag' },
+			},
+		]);
 	});
 });
 

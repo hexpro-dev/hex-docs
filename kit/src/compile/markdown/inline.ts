@@ -37,6 +37,7 @@ import {
 	type NodeOrigins,
 	type ParseServices,
 	type RawFinding,
+	type ResolvedDestination,
 } from '../types.js';
 import { BREAK_SENTINEL, sliceFolded } from './fold.js';
 
@@ -85,6 +86,15 @@ export interface InlineResult {
 	 * problem and keeps the title's real line and column.
 	 */
 	titles: FoldedText[];
+	/**
+	 * Every destination that resolved to a page or an asset, with its source ranges.
+	 *
+	 * Only those two kinds. An external link, a `mailto:` and a same-page `#anchor` already
+	 * mean the same thing from every address a page is served at, and a destination that
+	 * did not resolve is a `link-resolves` error that stops the publish, so rewriting it
+	 * would only disguise the literal the author needs to find.
+	 */
+	destinations: ResolvedDestination[];
 }
 
 const PUNCTUATION = /[!"#$%&'()*+,\-./:;<=>?@[\]^_`{|}~\\]/;
@@ -166,6 +176,23 @@ function closingBracket(text: string, open: number): number | undefined {
 
 interface Destination {
 	href: string;
+	/** The `(` the destination opens with, which the raw form is written straight after. */
+	open: number;
+	/**
+	 * Where the destination's own characters sit: after an opening `<` and before a
+	 * closing `>` when it has them, and never including a title.
+	 */
+	hrefRange: [number, number];
+	/** The closing `>` of the angle bracket spelling, when that is the spelling. */
+	bracketClose: number | undefined;
+	/**
+	 * Where the fragment starts, when there is one: the `#` that `splitFragment` in
+	 * `links.ts` will split `href` on, or the backslash in front of it when it was typed
+	 * escaped, because the escape is resolved before that split and the split cannot tell.
+	 * Recorded during the one scan that resolves escapes, since a second scan of the raw
+	 * characters would have to agree with this one about every escape to find it.
+	 */
+	fragmentAt: number | undefined;
 	title: string | undefined;
 	/**
 	 * Where the title's text sits, excluding the quotes.
@@ -199,16 +226,25 @@ function readDestination(text: string, open: number): Destination | undefined {
 	while (isBlank(text[cursor])) cursor += 1;
 
 	let href = '';
+	let hrefRange: [number, number];
+	let bracketClose: number | undefined;
+	let fragmentAt: number | undefined;
 	if (text[cursor] === '<') {
 		const end = text.indexOf('>', cursor);
 		if (end === -1) return undefined;
 		href = text.slice(cursor + 1, end);
+		hrefRange = [cursor + 1, end];
+		bracketClose = end;
+		const hash = href.indexOf('#');
+		fragmentAt = hash === -1 ? undefined : cursor + 1 + hash;
 		cursor = end + 1;
 	} else {
+		const start = cursor;
 		let depth = 0;
 		while (cursor < text.length) {
 			const character = text[cursor] as string;
 			if (character === '\\') {
+				if (text[cursor + 1] === '#' && fragmentAt === undefined) fragmentAt = cursor;
 				href += text[cursor + 1] ?? '';
 				cursor += 2;
 				continue;
@@ -219,9 +255,11 @@ function readDestination(text: string, open: number): Destination | undefined {
 				if (depth === 0) break;
 				depth -= 1;
 			}
+			if (character === '#' && fragmentAt === undefined) fragmentAt = cursor;
 			href += character;
 			cursor += 1;
 		}
+		hrefRange = [start, cursor];
 	}
 
 	while (isBlank(text[cursor])) cursor += 1;
@@ -239,7 +277,7 @@ function readDestination(text: string, open: number): Destination | undefined {
 	}
 
 	if (text[cursor] !== ')') return undefined;
-	return { href, title, titleRange, end: cursor + 1 };
+	return { href, open, hrefRange, bracketClose, fragmentAt, title, titleRange, end: cursor + 1 };
 }
 
 /** The literal text of a label, with escapes resolved. Alt text is a string, not nodes. */
@@ -263,6 +301,45 @@ export function parseInline(folded: FoldedText, context: InlineContext): InlineR
 	const { text } = folded;
 	const proseRanges: [number, number][] = [];
 	const titles: FoldedText[] = [];
+	const destinations: ResolvedDestination[] = [];
+
+	/**
+	 * Records a resolved destination: where its raw form goes, and what the author's
+	 * spelling of the path occupied.
+	 *
+	 * The raw form is written straight after the `(`, and everything from there to the end
+	 * of the path is removed, with the closing `>` of the angle bracket spelling. That puts
+	 * the token immediately after `](` in every spelling this parser accepts, which is the
+	 * one pattern a site substitutes on (`RAW_PAGE_LINK` says so). Keeping the author's
+	 * `<` or a space after the `(` would leave a token the substitution never finds, and it
+	 * would be served to a reader as `hexdocs:page/...`. What survives after the path is a
+	 * fragment and a title, byte for byte. Dropping the brackets is safe for the fragment
+	 * because a fragment that needed them, one holding a space or a parenthesis, names no
+	 * heading id, and `anchor-resolves` reports it, as an error unless a project lowered it.
+	 *
+	 * The removal goes through `sliceFolded`, the one function that already maps a folded
+	 * range back to source lines, so a destination crossing a wrap gets a range per line
+	 * rather than one range whose length runs off the end of the first. The insertion point
+	 * is taken from the `(` itself rather than from the offset after it, because that
+	 * offset can be a joiner, which `positionAt` places on the next line.
+	 */
+	const recordDestination = (
+		destination: Destination,
+		pathEnd: number,
+		target: ResolvedDestination['target'],
+	): void => {
+		const paren = positionAt(folded, context.file, destination.open);
+		const spans: [number, number][] = [[destination.open + 1, pathEnd]];
+		if (destination.bracketClose !== undefined) {
+			spans.push([destination.bracketClose, destination.bracketClose + 1]);
+		}
+		const remove = sliceFolded(folded, spans).runs.map((run) => ({
+			line: run.line,
+			column: run.column,
+			length: run.length,
+		}));
+		destinations.push({ at: { line: paren.line, column: paren.column + 1 }, remove, target });
+	};
 	// One per call, because it is keyed by offsets into this `text` and nothing else.
 	const emphasisCache: EmphasisCache = new Map();
 
@@ -384,6 +461,10 @@ export function parseInline(folded: FoldedText, context: InlineContext): InlineR
 							...(destination.title === undefined ? {} : { title: destination.title }),
 						};
 						push(image, cursor);
+						recordDestination(destination, destination.hrefRange[1], {
+							kind: 'asset',
+							src: resolved.src,
+						});
 						// The alt text is prose a reader hears, so it is scanned like any other
 						// prose. Its range is the label's, which is why it is added here rather
 						// than by the text path that never sees it. The title is the same case,
@@ -424,6 +505,12 @@ export function parseInline(folded: FoldedText, context: InlineContext): InlineR
 					if (resolved.ok) {
 						const link = { ...resolved.link, children } as Link;
 						push(link, cursor);
+						if (resolved.link.kind === 'internal') {
+							recordDestination(destination, destination.fragmentAt ?? destination.hrefRange[1], {
+								kind: 'page',
+								slug: resolved.link.slug,
+							});
+						}
 					} else {
 						context.problems.push(
 							raw('link-resolves', at(cursor), null, resolved.message, {
@@ -515,7 +602,7 @@ export function parseInline(folded: FoldedText, context: InlineContext): InlineR
 	};
 
 	const nodes = parse(0, text.length);
-	return { nodes, prose: sliceFolded(folded, proseRanges), titles };
+	return { nodes, prose: sliceFolded(folded, proseRanges), titles, destinations };
 }
 
 interface EmphasisMatch {

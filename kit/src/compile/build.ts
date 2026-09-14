@@ -44,7 +44,7 @@ import { isNavGroup, type NavItem } from '../../../src/contracts/nav.js';
 
 import { probeAsset } from './assets.js';
 import { readFrontMatter } from './frontmatter.js';
-import { compilePage, type CompiledPageOutput } from './page.js';
+import { compilePage, rawSnippetBody, type CompiledPageOutput } from './page.js';
 import { createImageResolver, createLinkResolver, type LinkTargets } from './links.js';
 import { loadProject, type LoadedProject, type SourceDocument } from './project.js';
 import { parseDocument } from './markdown/index.js';
@@ -60,6 +60,7 @@ import {
 	type DisableComment,
 	type NodeOrigins,
 	type ParseServices,
+	type ParsedDocument,
 	type ProseSegment,
 	type RawFinding,
 } from './types.js';
@@ -252,6 +253,52 @@ export function buildBundle(appRoot: string, options: BuildOptions): BuildResult
 		snippetStates.set(id, states);
 	}
 
+	// ---- snippets, parsed once each --------------------------------------------
+	// Parsed here, before any page, because two things need the parse and one of them is
+	// the compile below: a snippet's raw text is spliced into every including page's
+	// `<slug>.md`, and its destinations can only be rewritten from its own parse, whose
+	// line numbers are the snippet file's. The lint further down reads the same parses, so
+	// a snippet is still parsed on its own exactly once. It resolves as if it sat at
+	// `content/<locale>/`, the same as the per-page parse, so the ranges and the targets
+	// recorded here are the ones every including page would have recorded.
+	const snippetParses: { locale: Locale; document: SourceDocument; parsed: ParsedDocument }[] = [];
+	const rawSnippets = new Map<Locale, Map<string, string>>();
+	for (const [id, byLocale] of project.snippets) {
+		for (const [locale, document] of byLocale) {
+			const origins: NodeOrigins = new WeakMap();
+			const parsed = parseDocument(document.text, {
+				file: document.file,
+				config,
+				origins,
+				includeDepth: 1,
+				services: pageServices({
+					file: `content/${locale}/_snippet.md`,
+					locale,
+					project,
+					targets,
+					origins,
+					config,
+					onInclude: () => undefined,
+				}),
+			});
+			snippetParses.push({ locale, document, parsed });
+			// This locale only, with no fallback to the source. `resolveInclude` refuses the
+			// same fallback and its remediation says why: it would inject English into a
+			// translated page while the page still read `current`, which is the failure the
+			// per-locale snippet tree exists to prevent. The raw markdown used to do exactly
+			// what the AST half refuses, so one address published a Japanese page and an
+			// English fragment inside it. An absent snippet leaves the `::include` line
+			// literal, which matches what the resolver does and what `snippet-resolves`
+			// already reports.
+			const bodies = rawSnippets.get(locale) ?? new Map<string, string>();
+			bodies.set(
+				id,
+				rawSnippetBody(parsed.frontMatter.body, parsed.frontMatter.bodyLine, parsed.destinations),
+			);
+			rawSnippets.set(locale, bodies);
+		}
+	}
+
 	// ---- compile ------------------------------------------------------------
 	const pages = new Map<string, Map<Locale, CompiledPageOutput>>();
 	const pageStates = new Map<string, Map<Locale, TranslationState>>();
@@ -294,7 +341,7 @@ export function buildBundle(appRoot: string, options: BuildOptions): BuildResult
 				...(sourceOutput === undefined
 					? {}
 					: { sourceHeadingIds: sourceOutput.headings.map((heading) => heading.id) }),
-				snippetBodies: snippetBodies(project, locale),
+				snippetBodies: rawSnippets.get(locale) ?? new Map(),
 			});
 
 			// The state is finalised after the compile, because it depends on two things the
@@ -367,41 +414,23 @@ export function buildBundle(appRoot: string, options: BuildOptions): BuildResult
 	// ---- snippets, linted once each -------------------------------------------
 	const snippetDisables: DisableComment[] = [];
 	const snippetSpans: BlockSpan[] = [];
-	for (const byLocale of project.snippets.values()) {
-		for (const [locale, document] of byLocale) {
-			const origins: NodeOrigins = new WeakMap();
-			const parsed = parseDocument(document.text, {
-				file: document.file,
-				config,
-				origins,
-				includeDepth: 1,
-				services: pageServices({
-					file: `content/${locale}/_snippet.md`,
+	for (const { locale, document, parsed } of snippetParses) {
+		findings.push(...parsed.problems);
+		snippetDisables.push(...parsed.disables);
+		snippetSpans.push(...proseSpans(parsed.prose));
+		for (const rule of Object.values(PROSE_RULES)) {
+			findings.push(
+				...rule(parsed.prose, {
+					file: document.file,
 					locale,
-					project,
-					targets,
-					origins,
-					config,
-					onInclude: () => undefined,
+					sourceLocale: SOURCE_LOCALE,
+					project: config,
+					denyList: project.denyList,
+					sourceLines: sourceLines(document.text),
+					pageKind: 'article',
+					isDraft: false,
 				}),
-			});
-			findings.push(...parsed.problems);
-			snippetDisables.push(...parsed.disables);
-			snippetSpans.push(...proseSpans(parsed.prose));
-			for (const rule of Object.values(PROSE_RULES)) {
-				findings.push(
-					...rule(parsed.prose, {
-						file: document.file,
-						locale,
-						sourceLocale: SOURCE_LOCALE,
-						project: config,
-						denyList: project.denyList,
-						sourceLines: sourceLines(document.text),
-						pageKind: 'article',
-						isDraft: false,
-					}),
-				);
-			}
+			);
 		}
 	}
 
@@ -708,45 +737,17 @@ function proseSpans(segments: readonly ProseSegment[]): BlockSpan[] {
 }
 
 /**
- * One snippet's body, with the front matter and the authoring comments removed.
+ * One snippet's body, with the front matter and the authoring comments removed, as the
+ * scaffolded comparison reads it.
  *
- * The comments matter here and not only in `rawMarkdown`. That function strips them from
- * a page's own body and then splices this text in verbatim for each `::include`, so a
- * suppression comment written in a snippet reached the published `<slug>.md` and the
- * `llms-full.txt` of every page including it, while never appearing in a page payload.
- * `lint.ts` states as a property that no suppression ever reaches a bundle and the corpus
- * has only ever carried one, in a page, so the include path was the untested half of it.
- *
- * A comment becomes a blank line rather than disappearing, matching `stripComments`, so a
- * paragraph is not silently joined to the one below it.
+ * The same function the raw markdown splices a snippet in with, so the comment stripping
+ * and the trimming this comparison sees are the ones `<slug>.md` gets. It is given no
+ * destinations, so the comparison stays over what the two files say, exactly as it was
+ * before the raw markdown rewrote any link.
  */
 function snippetBody(document: SourceDocument): string {
-	return readFrontMatter(document.text, document.file)
-		.body.split('\n')
-		.map((line) => (WHOLE_LINE_COMMENT.test(line) ? '' : line))
-		.join('\n')
-		.trim();
-}
-
-/** The one comment shape this toolchain accepts, and the one `rawMarkdown` strips. */
-const WHOLE_LINE_COMMENT = /^\s*<!--[\s\S]*-->\s*$/;
-
-function snippetBodies(project: LoadedProject, locale: Locale): Map<string, string> {
-	const bodies = new Map<string, string>();
-	for (const [id, byLocale] of project.snippets) {
-		// This locale only, with no fallback to the source. `resolveInclude` refuses the
-		// same fallback and its remediation says why: it would inject English into a
-		// translated page while the page still read `current`, which is the failure the
-		// per-locale snippet tree exists to prevent. The raw markdown used to do exactly
-		// what the AST half refuses, so one address published a Japanese page and an
-		// English fragment inside it. An absent snippet leaves the `::include` line
-		// literal, which matches what the resolver does and what `snippet-resolves`
-		// already reports.
-		const document = byLocale.get(locale);
-		if (document === undefined) continue;
-		bodies.set(id, snippetBody(document));
-	}
-	return bodies;
+	const front = readFrontMatter(document.text, document.file);
+	return rawSnippetBody(front.body, front.bodyLine, []);
 }
 
 /** Services for a parse whose problems are wanted but whose links are not resolved. */
