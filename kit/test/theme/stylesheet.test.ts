@@ -557,7 +557,15 @@ function rule(selector: string): string {
 	const head = `\n${selector} {\n`;
 	const parts = CSS.split(head);
 	expect({ selector, rules: parts.length - 1 }).toEqual({ selector, rules: 1 });
-	return (parts[1] as string).slice(0, (parts[1] as string).indexOf('\n}'));
+	const body = (parts[1] as string).slice(0, (parts[1] as string).indexOf('\n}'));
+	// A rule emptied of its only declaration starts with its own closing brace, so the slice
+	// above reads on to the next rule's. The desktop Pages rule then read the whole phone block,
+	// which says `display: none` several times, and its assertion passed with the line deleted.
+	expect({ selector, readsPastItsBrace: /[{}]/.test(body) }).toEqual({
+		selector,
+		readsPastItsBrace: false,
+	});
+	return body;
 }
 
 describe('the layout a host cannot take away', () => {
@@ -665,14 +673,19 @@ describe('the phone layout', () => {
 	// rows a thumb can hit and an article on the first screen is `scripts/check-paint.mjs`,
 	// whose phone probes `test/paint.test.ts` breaks one rule at a time.
 	//
-	// Not every phone declaration is held by either. Measured by deleting each declaration and
-	// rule in turn, 52 of 122 changed nothing any test reads: the look of the Pages chip and the
-	// tree panel (ground, border, radius, text colour, padding), the size and weight of the
-	// bar's link, the bar's top rule and stacking order, the alignment and padding inside a row,
-	// the chevrons' turn when a disclosure opens, the hidden `/` hint, Safari's marker reset,
-	// and declarations another rule already makes true in the hosts the probes reproduce. A
-	// change to any of those needs a look in a browser at 390px and 768px, in English and in
-	// Arabic, with each disclosure open and closed.
+	// Not every phone declaration is held by either. Measured by deleting each of the 176
+	// declarations and rules in the phone section in turn (142 declarations, 34 rules) and
+	// running both suites: 42 turned no test red, and 18 more only broke a search string in
+	// `test/paint.test.ts` rather than failing a probe. The 42 are the look of the Pages chip and
+	// the tree panel (ground, border, radius, text colour, inline padding, font size), the font
+	// size of the bar's link and heading, the label's caption colour and display, the summaries'
+	// colour and cursor, the flex alignment inside the bar, its link and its label, the rows'
+	// flex display and inline padding, the article's end margin, the top row's block margins and
+	// the search trigger's sizing in it, the chevron's turn back while the outline is open, the
+	// hidden `/` hint, Safari's marker reset, and declarations another rule already makes true in
+	// the hosts the probes reproduce, such as the static rail's and outline's `max-block-size` and
+	// `overflow`. A change to any of those needs a look in a browser at 390px and 768px, in
+	// English and in Arabic, with each disclosure open and closed.
 
 	test('is one media query, after every rule it overrides', () => {
 		// The phone rules for the rows and the search dialog tie with rules in CHROME and
