@@ -82,12 +82,18 @@ export function filterEnvelope(
 	//
 	// `page` is the right next call because the finding has already been read: what an
 	// agent needs is the text around it, in the locale it is about.
+	//
+	// An empty result from a filter that dropped nothing is a clean run, not an empty
+	// filter: `check` sends every run through here, filtered or not, so without this arm a
+	// tree with no findings at all told an agent to widen a filter it never passed.
 	const nextAction: NextAction =
 		first === undefined
-			? {
-					kind: 'none',
-					why: 'Nothing matched this filter. That is not the same as nothing being wrong: widen it, or run `hexdocs check` with no filter.',
-				}
+			? dropped === 0
+				? envelope.nextAction
+				: {
+						kind: 'none',
+						why: 'Nothing matched this filter. That is not the same as nothing being wrong: widen it, or run `hexdocs check` with no filter.',
+					}
 			: {
 					kind: 'command',
 					argv: [

@@ -139,6 +139,22 @@ describe('filterEnvelope', () => {
 		expect(none.nextAction.why).toContain('not the same as nothing being wrong');
 	});
 
+	test('a clean run is not reported as an empty filter', () => {
+		// `check` filters every run, including one with no filter flags, so a tree with no
+		// findings reached the "nothing matched this filter" arm and told an agent to widen
+		// a filter it never passed.
+		const clean: DiagnosticEnvelope = {
+			...envelope(false),
+			findings: [],
+			summary: { errors: 0, warnings: 0, infos: 0, passing: 12 },
+			nextAction: { kind: 'none', why: 'Nothing to do.' },
+		};
+		const result = filterEnvelope(clean, () => true);
+
+		expect(result.nextAction).toEqual({ kind: 'none', why: 'Nothing to do.' });
+		expect(result.nextAction.why).not.toContain('filter');
+	});
+
 	test('truncated is re-derived: a filter that dropped something clears it', () => {
 		// `truncated` published on a filtered list is a claim about a different list. The
 		// original said "there were more findings after these three"; after a filter that
