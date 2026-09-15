@@ -174,6 +174,74 @@ describe('the custom events', () => {
 	});
 });
 
+/**
+ * A stand-in `IntersectionObserver` and a way to hand it entries.
+ *
+ * `top` is the heading's distance from the top of the viewport. A negative one has scrolled
+ * past; a positive one that is not intersecting is below the band, which is the only state
+ * the spy forgets a heading in.
+ */
+function stubObserver(): {
+	ready: () => Promise<void>;
+	report: (id: string, isIntersecting: boolean, top: number) => void;
+} {
+	const observers: { callback: IntersectionObserverCallback }[] = [];
+	vi.stubGlobal(
+		'IntersectionObserver',
+		class {
+			constructor(public callback: IntersectionObserverCallback) {
+				observers.push({ callback });
+			}
+			observe(): void {}
+			disconnect(): void {}
+		},
+	);
+	return {
+		ready: () => waitFor(() => expect(observers.length).toBeGreaterThan(0)),
+		report: (id, isIntersecting, top) => {
+			act(() => {
+				observers.at(-1)?.callback(
+					[
+						{
+							target: { id } as Element,
+							isIntersecting,
+							boundingClientRect: { top } as DOMRectReadOnly,
+						} as IntersectionObserverEntry,
+					],
+					{} as IntersectionObserver,
+				);
+			});
+		},
+	};
+}
+
+const currentTocHref = (): string | null | undefined =>
+	document.querySelector('.hx-toc-link[aria-current]')?.getAttribute('href');
+
+describe('the heading the table of contents marks', () => {
+	test('is the last one the reader has passed, and goes back when they scroll up', async () => {
+		// Two entries, so accumulation is what is under test. The observer keeps every
+		// heading that has passed, and a spy that named the first of them marked the page's
+		// first heading for the whole read, which one entry at a time can never show.
+		const observer = stubObserver();
+		const page = await data('en', 'guide/troubleshooting');
+		render(<DocsPage {...page} />);
+		await observer.ready();
+		const [first, second] = page.page.headings.map((heading) => heading.id);
+		expect(second).toBeDefined();
+
+		expect(currentTocHref()).toBeUndefined();
+		observer.report(first as string, false, -40);
+		await waitFor(() => expect(currentTocHref()).toBe(`#${first}`));
+		observer.report(second as string, true, 60);
+		await waitFor(() => expect(currentTocHref()).toBe(`#${second}`));
+		// Back below the band: the spy forgets it, and the reader is in the first section again.
+		observer.report(second as string, false, 800);
+		await waitFor(() => expect(currentTocHref()).toBe(`#${first}`));
+		expect(document.querySelectorAll('.hx-toc-link[aria-current]').length).toBe(1);
+	});
+});
+
 describe('reduced motion', () => {
 	test('is read from the media query and stamped on the root', async () => {
 		reduced = true;

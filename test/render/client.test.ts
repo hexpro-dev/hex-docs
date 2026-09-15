@@ -7,19 +7,23 @@ import { UI_STRINGS } from '../../src/ui/strings.js';
 import { goldenPage } from '../support/golden.js';
 
 describe('which heading the reader is in', () => {
-	test('is the first in document order among the ones whose tops have passed', () => {
+	test('is the last in document order among the ones whose tops have passed', () => {
 		// Not the topmost visible heading. On a page of short sections several are visible
-		// at once, and the one the reader means is the one they have scrolled past.
+		// at once, and the one the reader means is the one they have scrolled past most
+		// recently. The observer keeps every heading whose top has gone above the bottom of
+		// its band, so the set it hands over is a prefix of the document: the first of it is
+		// the page's first heading for the whole read, and the last is where the reader is.
 		const order = ['a', 'b', 'c'];
-		expect(activeHeading(order, new Set(['b', 'c']))).toBe('b');
+		expect(activeHeading(order, new Set(['a', 'b']))).toBe('b');
+		expect(activeHeading(order, new Set(['b', 'c']))).toBe('c');
 		expect(activeHeading(order, new Set(['c']))).toBe('c');
 	});
 
 	test('follows the document order, not the order the observer reported', () => {
 		// `IntersectionObserver` batches entries and the order it delivers them in is not
 		// the document's. Reading the observer's order would make the active heading flicker
-		// between two while scrolling.
-		expect(activeHeading(['a', 'b', 'c'], new Set(['c', 'a', 'b']))).toBe('a');
+		// between two while scrolling: the last one reported here is `b`.
+		expect(activeHeading(['a', 'b', 'c'], new Set(['c', 'a', 'b']))).toBe('c');
 	});
 
 	test('is nothing before the reader has passed any heading', () => {

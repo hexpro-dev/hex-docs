@@ -140,12 +140,18 @@ export function useNavigationAnnounce(
  * means by "where I am", which is the last heading whose top has gone past rather than the
  * topmost visible one. On a page of short sections those are different headings, and the
  * difference is invisible in a screenshot.
+ *
+ * The last, in document order. `useHeadingSpy` keeps every heading that has passed, so
+ * `passed` is a prefix of the page, and this used to return the first match: the page's
+ * first heading, marked current for the whole read on every page with more than one.
  */
 export function activeHeading(
 	order: readonly string[],
 	passed: ReadonlySet<string>,
 ): string | undefined {
-	return order.find((id) => passed.has(id));
+	let current: string | undefined;
+	for (const id of order) if (passed.has(id)) current = id;
+	return current;
 }
 
 /**
