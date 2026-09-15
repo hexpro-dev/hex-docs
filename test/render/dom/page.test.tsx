@@ -22,6 +22,7 @@ import { DOCS_EVENT_NAMES } from '../../../src/contracts/theme.js';
 import type { Locale } from '../../../src/contracts/locales.js';
 import type { CompiledPage } from '../../../src/contracts/page.js';
 import type { DocsSiteConfig } from '../../../src/contracts/site.js';
+import type { DocsLinkComponent } from '../../../src/render/context.js';
 import { DocsPage } from '../../../src/render/page.js';
 import { IDS } from '../../../src/site/ids.js';
 import type { DocsPageData } from '../../../src/site/route.js';
@@ -419,40 +420,45 @@ describe('the heading the table of contents marks', () => {
 });
 
 describe('hydrating over a disclosure the reader already opened', () => {
-	test('keeps it open, and React says nothing about it', async () => {
-		// Both disclosures work before the script arrives, so a reader on a slow connection
-		// can open one before hydration. React never passes `open`, so it has nothing to
-		// reconcile, and the navigation effect does nothing on the first commit, so nothing
-		// closes it either. Rendered to a string and hydrated, which is the real sequence.
-		const page = await data('en', 'guide/troubleshooting');
-		const container = document.createElement('div');
-		container.innerHTML = renderToString(<DocsPage {...page} />);
-		document.body.appendChild(container);
-		const tree = container.querySelector('.hx-tree-disclosure') as HTMLDetailsElement;
-		const toc = container.querySelector('.hx-toc-disclosure') as HTMLDetailsElement;
-		tree.open = true;
+	test.each(['tree', 'toc'] as const)(
+		'keeps the %s open, and React says nothing about it',
+		async (name) => {
+			// Both disclosures work before the script arrives, so a reader on a slow connection
+			// can open either before hydration. React never passes `open`, so it has nothing to
+			// reconcile, and the navigation effect does nothing on the first commit, so nothing
+			// closes it either. Rendered to a string and hydrated, which is the real sequence. Each
+			// disclosure carries its own `suppressHydrationWarning`, so each is opened here.
+			const page = await data('en', 'guide/troubleshooting');
+			const container = document.createElement('div');
+			container.innerHTML = renderToString(<DocsPage {...page} />);
+			document.body.appendChild(container);
+			const tree = container.querySelector('.hx-tree-disclosure') as HTMLDetailsElement;
+			const toc = container.querySelector('.hx-toc-disclosure') as HTMLDetailsElement;
+			(name === 'tree' ? tree : toc).open = true;
 
-		// Every console.error is recorded, not only hydration's: a mismatch React reports about
-		// `open` is the defect, and it arrives through this call in development builds.
-		const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-		let root: Root | undefined;
-		try {
-			await act(async () => {
-				root = hydrateRoot(container, <DocsPage {...page} />);
-			});
-			await waitFor(() =>
-				expect((container.querySelector('.hx-search-trigger') as HTMLButtonElement).disabled).toBe(
-					false,
-				),
-			);
-			expect(container.querySelector('.hx-tree-disclosure')).toBe(tree);
-			expect([tree.open, toc.open]).toEqual([true, false]);
-			expect(errors.mock.calls.map((call) => String(call[0]).slice(0, 80))).toEqual([]);
-		} finally {
-			act(() => root?.unmount());
-			container.remove();
-		}
-	});
+			// Every console.error is recorded, not only hydration's: a mismatch React reports
+			// about `open` is the defect, and it arrives through this call in development builds.
+			const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+			let root: Root | undefined;
+			try {
+				await act(async () => {
+					root = hydrateRoot(container, <DocsPage {...page} />);
+				});
+				await waitFor(() =>
+					expect(
+						(container.querySelector('.hx-search-trigger') as HTMLButtonElement).disabled,
+					).toBe(false),
+				);
+				expect(container.querySelector('.hx-tree-disclosure')).toBe(tree);
+				expect(container.querySelector('.hx-toc-disclosure')).toBe(toc);
+				expect([tree.open, toc.open]).toEqual([name === 'tree', name === 'toc']);
+				expect(errors.mock.calls.map((call) => String(call[0]).slice(0, 80))).toEqual([]);
+			} finally {
+				act(() => root?.unmount());
+				container.remove();
+			}
+		},
+	);
 });
 
 describe('the phone disclosures', () => {
@@ -539,6 +545,88 @@ describe('the phone disclosures', () => {
 		expect(tree.open).toBe(true);
 	});
 
+	test('Escape on the search trigger, or in the consumer chrome beside the tree, leaves it open', async () => {
+		// The second Escape of a reader leaving search lands on the trigger, which shares the
+		// tree's landmark and is not the tree. So does anything a consumer renders in `treeTop`.
+		// Focusing the trigger asks for the search index, which has nowhere to come from here.
+		vi.stubGlobal('fetch', () => new Promise(() => undefined));
+		render(
+			<DocsPage
+				{...await data('en', 'guide/troubleshooting')}
+				chrome={{ treeTop: <input id="consumer-filter" /> }}
+			/>,
+		);
+		const tree = disclosure('tree');
+		const trigger = document.getElementById(IDS.searchTrigger) as HTMLButtonElement;
+		await waitFor(() => expect(trigger.disabled).toBe(false));
+		for (const element of [trigger, document.getElementById('consumer-filter') as HTMLElement]) {
+			tree.open = true;
+			element.focus();
+			fireEvent.keyDown(element, { key: 'Escape' });
+			expect({ id: element.id, open: tree.open }).toEqual({ id: element.id, open: true });
+			expect(document.activeElement).toBe(element);
+		}
+	});
+
+	test('Escape that another handler already took changes nothing', async () => {
+		// A consumer's link that closes something of its own on Escape prevents the default,
+		// and the key press was that link's.
+		const Link: DocsLinkComponent = ({ to, children, ...rest }) => (
+			<a
+				href={to}
+				{...rest}
+				onKeyDown={(event) => {
+					if (event.key === 'Escape') event.preventDefault();
+				}}
+			>
+				{children}
+			</a>
+		);
+		render(<DocsPage {...await data('en', 'guide/troubleshooting')} Link={Link} />);
+		const tree = disclosure('tree');
+		tree.open = true;
+		const row = document.querySelector('.hx-tree-link') as HTMLAnchorElement;
+		row.focus();
+		fireEvent.keyDown(row, { key: 'Escape' });
+		expect(tree.open).toBe(true);
+		expect(document.activeElement).toBe(row);
+	});
+
+	test('Escape on the bar Pages link closes the open outline over it', async () => {
+		// The link is in the bar, beside the outline's landmark rather than inside it, and the
+		// panel covers the page above the bar whichever of the two has focus.
+		render(<DocsPage {...await data('en', 'guide/troubleshooting')} />);
+		const toc = disclosure('toc');
+		toc.open = true;
+		const link = document.querySelector('.hx-foot-pages') as HTMLAnchorElement;
+		link.focus();
+		fireEvent.keyDown(link, { key: 'Escape' });
+		expect(toc.open).toBe(false);
+		expect(document.activeElement).toBe(toc.querySelector('summary'));
+	});
+
+	test('focus leaving the bar closes the outline, and focus moving inside it does not', async () => {
+		// The open outline is drawn over the end of the article, and Shift+Tab from the bar's
+		// summary lands on the pager underneath it.
+		render(<DocsPage {...await data('en', 'guide/troubleshooting')} />);
+		const toc = disclosure('toc');
+		const summary = toc.querySelector('summary') as HTMLElement;
+		const row = document.querySelector('.hx-toc-link') as HTMLElement;
+		const pages = document.querySelector('.hx-foot-pages') as HTMLElement;
+		const outside = document.querySelector('.hx-pager a') as HTMLElement;
+		expect(outside).not.toBeNull();
+
+		toc.open = true;
+		fireEvent.focusOut(summary, { relatedTarget: row });
+		fireEvent.focusOut(row, { relatedTarget: pages });
+		expect(toc.open).toBe(true);
+		// Focus going nowhere, which is a click on the panel's padding or its scrollbar.
+		fireEvent.focusOut(row, { relatedTarget: null });
+		expect(toc.open).toBe(true);
+		fireEvent.focusOut(summary, { relatedTarget: outside });
+		expect(toc.open).toBe(false);
+	});
+
 	test('the bar Pages link opens the tree, closes the outline, and still jumps', async () => {
 		render(<DocsPage {...await data('en', 'guide/troubleshooting')} />);
 		const tree = disclosure('tree');
@@ -581,6 +669,26 @@ describe('the phone disclosures', () => {
 		Object.defineProperty(current, 'offsetTop', { configurable: true, value: 40 });
 		tree.open = true;
 		expect(panel.scrollTop).toBe(0);
+	});
+
+	test('opening the outline scrolls it to the heading the reader is in', async () => {
+		// The outline's own toggle handler, on a page where the spy has named a heading. The
+		// case with no current row passes whether the handler is attached or not.
+		const observer = stubObserver();
+		const page = await data('en', 'guide/troubleshooting');
+		render(<DocsPage {...page} />);
+		await observer.ready();
+		const heading = page.page.headings[3];
+		expect(heading).toBeDefined();
+		observer.report(heading?.id as string, true, -40);
+		await waitFor(() => expect(currentTocHref()).toBe(`#${heading?.id}`));
+		const toc = disclosure('toc');
+		const panel = toc.nextElementSibling as HTMLElement;
+		const current = panel.querySelector('[aria-current]') as HTMLElement;
+		Object.defineProperty(panel, 'clientHeight', { configurable: true, value: 300 });
+		Object.defineProperty(current, 'offsetTop', { configurable: true, value: 400 });
+		toc.open = true;
+		expect(panel.scrollTop).toBe(400 - 0.4 * 300);
 	});
 
 	test('a panel with no current row opens where it is, and nothing throws', async () => {

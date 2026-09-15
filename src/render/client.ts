@@ -23,6 +23,7 @@ import {
 	useEffect,
 	useRef,
 	useSyncExternalStore,
+	type FocusEvent,
 	type KeyboardEvent,
 	type MouseEvent,
 	type RefObject,
@@ -306,29 +307,37 @@ export function useAliasScroll(aliases: Readonly<Record<string, string>>, reduce
 export type DisclosureRef = RefObject<HTMLDetailsElement | null>;
 
 /**
- * Closes both disclosures when the page changes under a mounted shell.
+ * Closes both disclosures when the reader's address changes under a mounted shell.
  *
  * A client-side navigation does not reload the document, so a tree the reader opened to pick
- * a page would otherwise still be open over the page they picked. It has to run before
- * `useNavigationAnnounce`, which is a later effect in the same commit: that one moves focus
- * into the article, and focus left on a row in a list that is about to be hidden falls to the
- * body when the list goes.
+ * a page would otherwise still be open over the page they picked. The key is the address, the
+ * reader's locale and the slug together, and not the slug alone. Changing language on one page
+ * is the same route with a different `:lang`, which is what a host's language picker and the
+ * translation notice's English link both do: the shell stays mounted, `useNavigationAnnounce`
+ * moves focus into the article and announces the page, and a slug-only key left the tree open
+ * in flow above it and the outline open over the bar.
  *
- * Nothing happens on the first commit, which is why the slug is compared rather than the
+ * Its order against `useNavigationAnnounce` does not matter. Both run in the same passive flush
+ * after the commit that changed the address, with nothing rendered between them, so either
+ * order leaves the disclosures closed and focus on the article. What keeps focus out of a list
+ * that is being hidden is that other hook moving focus into the article; without it, focus left
+ * on a row would fall to the body when the row stopped being displayed.
+ *
+ * Nothing happens on the first commit, which is why the address is compared rather than the
  * effect simply running. Closing on mount would shut a disclosure the reader opened before
  * hydration finished, which is the one state the native control is there to keep. The refs
  * are not dependencies: a ref object is stable for the life of the component, and the array
  * holding them is a new one on every render, so listing it would re-run the effect for nothing.
  */
-export function useCloseOnNavigate(slug: string, disclosures: readonly DisclosureRef[]): void {
-	const previous = useRef(slug);
+export function useCloseOnNavigate(address: string, disclosures: readonly DisclosureRef[]): void {
+	const previous = useRef(address);
 	useEffect(() => {
-		if (previous.current === slug) return;
-		previous.current = slug;
+		if (previous.current === address) return;
+		previous.current = address;
 		for (const disclosure of disclosures) {
 			if (disclosure.current !== null) disclosure.current.open = false;
 		}
-	}, [slug]);
+	}, [address]);
 }
 
 /**
@@ -390,20 +399,61 @@ export function openTree(
 }
 
 /**
- * Escape inside an open disclosure closes it and puts focus back on its summary.
+ * Closes the outline when focus leaves the bar for somewhere else on the page.
  *
- * Not when the key was pressed inside a `<dialog>`. The search dialog is rendered inside the
- * tree's landmark, so its Escape bubbles through this handler on the way out, and the dialog
- * closing is all that key press means: the tree behind it closing too would take the reader
- * somewhere they did not ask to go.
+ * The open outline is drawn over the article, above the bar, so the pager at the end of the
+ * article can sit entirely under it. Measured at 390px: Shift+Tab from the bar's summary landed
+ * focus on the pager's Next link with none of it visible and nothing that would dismiss the panel
+ * from there, which fails WCAG 2.2's 2.4.11, whose exception for content the reader opened needs
+ * a way to close it without moving focus. Moving between the summary, the rows and the Pages
+ * link stays inside the bar and keeps the outline open.
+ *
+ * Not when focus goes nowhere. A click on the panel's own padding or on its scrollbar blurs to
+ * the body with no `relatedTarget`, and closing then would shut the panel under the pointer that
+ * is scrolling it.
+ */
+export function closeOnLeave(disclosure: DisclosureRef): (event: FocusEvent<HTMLElement>) => void {
+	return (event) => {
+		const next = event.relatedTarget;
+		if (next === null || event.currentTarget.contains(next)) return;
+		if (disclosure.current !== null) disclosure.current.open = false;
+	};
+}
+
+/**
+ * Escape closes an open disclosure and puts focus back on its summary, when the key was pressed
+ * where the disclosure is.
+ *
+ * `within` says where that is. `'disclosure'` is the `<details>` and the list after it, and the
+ * tree takes it because its landmark also holds the search trigger, the search dialog and
+ * whatever a consumer put in `treeTop` and `treeBottom`. None of those is the tree. Measured with
+ * the whole landmark counting: a reader who pressed Escape once to close search and once more on
+ * the trigger closed the tree they had open, with focus pulled onto its summary.
+ *
+ * `'container'` is the whole element the handler is on, and the bar takes it. The outline is
+ * drawn over the article above the bar, so a reader anywhere in the bar with it open, the Pages
+ * link included, is looking at a panel that covers the page, and Escape there has nothing else to
+ * mean. Bound to the outline's landmark alone, Escape on the Pages link left the panel open.
+ *
+ * Nothing happens for a key another handler already took. A consumer's widget in `treeTop` that
+ * closes its own popup on Escape calls `preventDefault`, and the key press was that widget's.
  */
 export function escapeCloses(
 	disclosure: DisclosureRef,
+	within: 'disclosure' | 'container' = 'disclosure',
 ): (event: KeyboardEvent<HTMLElement>) => void {
 	return (event) => {
 		const details = disclosure.current;
-		if (event.key !== 'Escape' || details === null || !details.open) return;
-		if (event.target instanceof Element && event.target.closest('dialog') !== null) return;
+		if (event.key !== 'Escape' || event.defaultPrevented || details === null || !details.open) {
+			return;
+		}
+		const target = event.target;
+		if (!(target instanceof Node)) return;
+		const inside =
+			within === 'container'
+				? event.currentTarget.contains(target)
+				: details.contains(target) || details.nextElementSibling?.contains(target) === true;
+		if (!inside) return;
 		details.open = false;
 		details.querySelector('summary')?.focus();
 	};

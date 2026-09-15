@@ -35,6 +35,7 @@ import {
 } from 'react-router';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import type { Locale } from '../../../src/contracts/locales.js';
 import type { CompiledPage } from '../../../src/contracts/page.js';
 import type { DocsSiteConfig } from '../../../src/contracts/site.js';
 import { DocsPage } from '../../../src/render/page.js';
@@ -181,33 +182,76 @@ describe('a client-side navigation between docs pages', () => {
 		expect(focus.mock.contexts.at(-1)).toBe(document.getElementById('hx-content'));
 	});
 
-	test('closes the phone disclosures a reader opened to get there, before focus moves', async () => {
+	test('closes the phone disclosures a reader opened to get there, and focus is on the article', async () => {
 		// A client-side navigation does not reload the document, so the tree the reader opened
-		// to pick a page would otherwise still be open over the page they picked. The order is
-		// the other half: focus left on a row in a list that is about to be hidden falls to the
-		// body, so both must already be closed when the article takes focus.
+		// to pick a page would otherwise still be open over the page they picked.
 		const router = await mountRouter();
 		const tree = document.querySelector('.hx-tree-disclosure') as HTMLDetailsElement;
 		const toc = document.querySelector('.hx-toc-disclosure') as HTMLDetailsElement;
 		tree.open = true;
 		toc.open = true;
-		const openWhenFocused: boolean[] = [];
-		const focus = vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(function (
-			this: HTMLElement,
-		) {
-			if (this.id === 'hx-content') openWhenFocused.push(tree.open || toc.open);
-		});
+		(document.querySelector('.hx-tree-link') as HTMLElement).focus();
 
 		await act(async () => {
 			await router.navigate('/fixture-app/docs/guide/troubleshooting');
 		});
-		await waitFor(() => expect(focus).toHaveBeenCalledWith({ preventScroll: true }));
+		await waitFor(() => expect(document.activeElement).toBe(document.getElementById('hx-content')));
 
 		// The same two elements, kept by React across the navigation, now closed.
 		expect(document.querySelector('.hx-tree-disclosure')).toBe(tree);
 		expect(document.querySelector('.hx-toc-disclosure')).toBe(toc);
 		expect([tree.open, toc.open]).toEqual([false, false]);
-		expect(openWhenFocused).toEqual([false]);
+	});
+
+	test('closes them when only the language changes, which keeps the same page mounted', async () => {
+		// The consumers' shape: a `:lang` layout route with the page row under it, loading by the
+		// parameter. A host's language picker moves between two of its addresses, so the slug is
+		// the same, the shell stays mounted, and the page it shows is a different one.
+		const load = (locale: Locale): Promise<DocsPageData> =>
+			pageData({
+				manifest: MANIFEST,
+				site: SITE,
+				locale,
+				slug: 'guide/first-tag',
+				load: (l, s) => PAGES.get(`${l}/${s}`) as CompiledPage | undefined,
+			});
+		const pages = { fr: await load('fr'), ja: await load('ja') };
+		const router = createMemoryRouter(
+			[
+				{
+					id: 'lang',
+					path: '/:lang',
+					element: <Outlet />,
+					children: [
+						{
+							id: 'page',
+							path: 'fixture-app/docs/guide/first-tag',
+							loader: ({ params }) => pages[params.lang as keyof typeof pages],
+							Component: DocsRoute,
+						},
+					],
+				},
+			],
+			{ initialEntries: ['/fr/fixture-app/docs/guide/first-tag'] },
+		);
+		render(<RouterProvider router={router} />);
+		await waitFor(() =>
+			expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(pages.fr.page.title),
+		);
+		const tree = document.querySelector('.hx-tree-disclosure') as HTMLDetailsElement;
+		const toc = document.querySelector('.hx-toc-disclosure') as HTMLDetailsElement;
+		tree.open = true;
+		toc.open = true;
+
+		await act(async () => {
+			await router.navigate('/ja/fixture-app/docs/guide/first-tag');
+		});
+		await waitFor(() =>
+			expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(pages.ja.page.title),
+		);
+		await waitFor(() => expect(document.activeElement).toBe(document.getElementById('hx-content')));
+		expect(document.querySelector('.hx-tree-disclosure')).toBe(tree);
+		expect([tree.open, toc.open]).toEqual([false, false]);
 	});
 
 	test('leaves a disclosure the reader opened alone when nothing navigated', async () => {

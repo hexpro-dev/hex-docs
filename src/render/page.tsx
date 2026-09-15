@@ -44,6 +44,7 @@ import { IDS } from '../site/ids.js';
 import type { DocsNavNode, DocsPageData } from '../site/route.js';
 import { languageName, uiPlural, uiString } from '../ui/strings.js';
 import {
+	closeOnLeave,
 	closeOnLink,
 	escapeCloses,
 	openTree,
@@ -125,9 +126,7 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 	const active = useHeadingSpy(page.headings, emit, reduced);
 	const activeText = page.headings.find((heading) => heading.id === active)?.text;
 	useAliasScroll(props.aliases, reduced);
-	// Before the announcement, whose effect moves focus into the article: a row in a list
-	// that is about to be hidden is the one place focus must not be left.
-	useCloseOnNavigate(page.slug, [treeDisclosure, tocDisclosure]);
+	useCloseOnNavigate(`${props.locale}/${page.slug}`, [treeDisclosure, tocDisclosure]);
 	useNavigationAnnounce(
 		page.slug,
 		page.title,
@@ -281,14 +280,13 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 				 * mid-article reaches the tree. It generates no box on desktop, so the table of
 				 * contents is the grid item it always was.
 				 */}
-				<div className="hx-foot">
+				<div
+					className="hx-foot"
+					onKeyDown={escapeCloses(tocDisclosure, 'container')}
+					onBlur={closeOnLeave(tocDisclosure)}
+				>
 					{page.toc && page.headings.length > 0 ? (
-						<nav
-							id={IDS.toc}
-							className="hx-toc"
-							aria-labelledby={IDS.tocHeading}
-							onKeyDown={escapeCloses(tocDisclosure)}
-						>
+						<nav id={IDS.toc} className="hx-toc" aria-labelledby={IDS.tocHeading}>
 							<p id={IDS.tocHeading} className="hx-toc-heading">
 								{uiString(props.locale, 'tocLabel')}
 							</p>
