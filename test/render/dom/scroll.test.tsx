@@ -188,9 +188,11 @@ describe('a client-side navigation between docs pages', () => {
 		const router = await mountRouter();
 		const tree = document.querySelector('.hx-tree-disclosure') as HTMLDetailsElement;
 		const toc = document.querySelector('.hx-toc-disclosure') as HTMLDetailsElement;
+		// Focus first, then open: focus landing outside the bar closes the outline by itself, and
+		// what is under test here is the navigation closing it.
+		(document.querySelector('.hx-tree-link') as HTMLElement).focus();
 		tree.open = true;
 		toc.open = true;
-		(document.querySelector('.hx-tree-link') as HTMLElement).focus();
 
 		await act(async () => {
 			await router.navigate('/fixture-app/docs/guide/troubleshooting');
@@ -248,6 +250,58 @@ describe('a client-side navigation between docs pages', () => {
 		});
 		await waitFor(() =>
 			expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(pages.ja.page.title),
+		);
+		await waitFor(() => expect(document.activeElement).toBe(document.getElementById('hx-content')));
+		expect(document.querySelector('.hx-tree-disclosure')).toBe(tree);
+		expect([tree.open, toc.open]).toEqual([false, false]);
+	});
+
+	test('closes them on a move between two projects that share a slug, which keeps the page mounted', async () => {
+		// One route module serves every project on a site, so two mounts render the same component
+		// function, and every scaffolded home is `index`. A key of the locale and the slug alone
+		// saw no navigation here and left both disclosures open above and over the other project's
+		// home, while focus moved into its article.
+		const first = await data('index');
+		const other = await pageData({
+			manifest: MANIFEST,
+			site: { ...SITE, basePath: '/other-app/docs' },
+			locale: 'en',
+			slug: 'index',
+			load: (l, s) => PAGES.get(`${l}/${s}`) as CompiledPage | undefined,
+		});
+		const second: DocsPageData = {
+			...other,
+			page: { ...other.page, title: 'Other app documentation' },
+		};
+		const router = createMemoryRouter(
+			[
+				{
+					id: 'root',
+					path: '/',
+					element: <Outlet />,
+					children: [
+						{ id: 'first', path: 'fixture-app/docs', loader: () => first, Component: DocsRoute },
+						{ id: 'second', path: 'other-app/docs', loader: () => second, Component: DocsRoute },
+					],
+				},
+			],
+			{ initialEntries: ['/fixture-app/docs'] },
+		);
+		render(<RouterProvider router={router} />);
+		await waitFor(() =>
+			expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(first.page.title),
+		);
+		const tree = document.querySelector('.hx-tree-disclosure') as HTMLDetailsElement;
+		const toc = document.querySelector('.hx-toc-disclosure') as HTMLDetailsElement;
+		expect(toc).not.toBeNull();
+		tree.open = true;
+		toc.open = true;
+
+		await act(async () => {
+			await router.navigate('/other-app/docs');
+		});
+		await waitFor(() =>
+			expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(second.page.title),
 		);
 		await waitFor(() => expect(document.activeElement).toBe(document.getElementById('hx-content')));
 		expect(document.querySelector('.hx-tree-disclosure')).toBe(tree);

@@ -23,7 +23,6 @@ import {
 	useEffect,
 	useRef,
 	useSyncExternalStore,
-	type FocusEvent,
 	type KeyboardEvent,
 	type MouseEvent,
 	type RefObject,
@@ -367,12 +366,16 @@ export type DisclosureRef = RefObject<HTMLDetailsElement | null>;
  * Closes both disclosures when the reader's address changes under a mounted shell.
  *
  * A client-side navigation does not reload the document, so a tree the reader opened to pick
- * a page would otherwise still be open over the page they picked. The key is the address, the
- * reader's locale and the slug together, and not the slug alone. Changing language on one page
- * is the same route with a different `:lang`, which is what a host's language picker and the
- * translation notice's English link both do: the shell stays mounted, `useNavigationAnnounce`
- * moves focus into the article and announces the page, and a slug-only key left the tree open
- * in flow above it and the outline open over the bar.
+ * a page would otherwise still be open over the page they picked. The key is the page's whole
+ * address, and each part of it counts on its own. The locale: changing language on one page is
+ * the same route with a different `:lang`, which is what a host's language picker and the
+ * translation notice's English link both do, and a slug-only key left the tree open in flow
+ * above the new page and the outline open over the bar while `useNavigationAnnounce` moved focus
+ * into the article and announced it. The mount: one route module serves every project on a site,
+ * so two projects share slugs, and every scaffolded home is `index`; moving from one home to the
+ * other keeps the shell mounted exactly as a language change does. The version: a pinned address
+ * of the same page is the same slug again. The address never carries an anchor, so a jump to a
+ * heading on the same page closes nothing.
  *
  * Its order against `useNavigationAnnounce` does not matter. Both run in the same passive flush
  * after the commit that changed the address, with nothing rendered between them, so either
@@ -456,7 +459,7 @@ export function openTree(
 }
 
 /**
- * Closes the outline when focus leaves the bar for somewhere else on the page.
+ * Closes the outline when focus lands anywhere outside the bar while it is open.
  *
  * The open outline is drawn over the article, above the bar, so the pager at the end of the
  * article can sit entirely under it. Measured at 390px: Shift+Tab from the bar's summary landed
@@ -465,16 +468,32 @@ export function openTree(
  * a way to close it without moving focus. Moving between the summary, the rows and the Pages
  * link stays inside the bar and keeps the outline open.
  *
- * Not when focus goes nowhere. A click on the panel's own padding or on its scrollbar blurs to
- * the body with no `relatedTarget`, and closing then would shut the panel under the pointer that
- * is scrolling it.
+ * The check runs on the element that receives focus, not on the bar losing it. A click on the
+ * bar's own inline padding, or on the panel's padding or scrollbar, clears focus to the body with
+ * no related target, and closing then would shut the panel under the pointer that is scrolling
+ * it. But the next Shift+Tab starts from where that click landed and reaches the pager with no
+ * blur from the bar left to see, and so does a Shift+Tab after a tap that opened the outline
+ * without focusing its summary, which is what Safari does with a tapped summary. Measured in
+ * Chrome at 390px and 768px: a click on the bar's padding and then Shift+Tab put focus on the
+ * pager's Next link under the open panel, with a handler that watched the bar blur. Clearing focus
+ * fires no `focusin`, so that click still leaves the panel open.
+ *
+ * On the document rather than on the bar, because the element focus lands on can be anywhere.
  */
-export function closeOnLeave(disclosure: DisclosureRef): (event: FocusEvent<HTMLElement>) => void {
-	return (event) => {
-		const next = event.relatedTarget;
-		if (next === null || event.currentTarget.contains(next)) return;
-		if (disclosure.current !== null) disclosure.current.open = false;
-	};
+export function useCloseOnFocusElsewhere(
+	disclosure: DisclosureRef,
+	bar: RefObject<HTMLElement | null>,
+): void {
+	useEffect(() => {
+		const onFocusIn = (event: globalThis.FocusEvent): void => {
+			const details = disclosure.current;
+			if (details === null || !details.open || !(event.target instanceof Node)) return;
+			if (bar.current?.contains(event.target) === true) return;
+			details.open = false;
+		};
+		document.addEventListener('focusin', onFocusIn);
+		return () => document.removeEventListener('focusin', onFocusIn);
+	}, []);
 }
 
 /**
@@ -493,7 +512,12 @@ export function closeOnLeave(disclosure: DisclosureRef): (event: FocusEvent<HTML
  * mean. Bound to the outline's landmark alone, Escape on the Pages link left the panel open.
  *
  * Nothing happens for a key another handler already took. A consumer's widget in `treeTop` that
- * closes its own popup on Escape calls `preventDefault`, and the key press was that widget's.
+ * closes its own popup on Escape calls `preventDefault`, and the key press was that widget's. A
+ * key this does act on is marked the same way, so a dialog or popover a consumer put around the
+ * page does not close along with the disclosure: measured in Chrome with the shell inside a
+ * consumer's modal dialog, one Escape on the bar closed the outline and the dialog as well. A key
+ * that closed nothing, Escape in the search dialog included, is left alone, because there the
+ * key is the dialog's own close request and a prevented keydown cancels it.
  */
 export function escapeCloses(
 	disclosure: DisclosureRef,
@@ -511,6 +535,7 @@ export function escapeCloses(
 				? event.currentTarget.contains(target)
 				: details.contains(target) || details.nextElementSibling?.contains(target) === true;
 		if (!inside) return;
+		event.preventDefault();
 		details.open = false;
 		details.querySelector('summary')?.focus();
 	};

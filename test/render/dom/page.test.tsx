@@ -651,6 +651,33 @@ describe('the phone disclosures', () => {
 		expect(document.activeElement).toBe(row);
 	});
 
+	test('an Escape that closed a disclosure reads as taken to whatever handles it next', async () => {
+		// Measured in Chrome with the shell inside a consumer's modal dialog: one Escape on the
+		// bar closed the outline and the dialog around the page as well.
+		render(<DocsPage {...await data('en', 'guide/troubleshooting')} />);
+		const taken: boolean[] = [];
+		const onKey = (event: KeyboardEvent): void => {
+			taken.push(event.defaultPrevented);
+		};
+		document.addEventListener('keydown', onKey);
+		try {
+			for (const name of ['tree', 'toc'] as const) {
+				disclosure(name).open = true;
+				fireEvent.keyDown(document.querySelector(`.hx-${name}-link`) as HTMLElement, {
+					key: 'Escape',
+				});
+			}
+			// A key that closed nothing is still the page's to use, and in the search dialog it is
+			// the dialog's own close request, which a prevented keydown would cancel.
+			fireEvent.keyDown(document.querySelector('.hx-tree-link') as HTMLElement, { key: 'Escape' });
+			disclosure('tree').open = true;
+			fireEvent.keyDown(document.getElementById(IDS.searchInput) as HTMLElement, { key: 'Escape' });
+		} finally {
+			document.removeEventListener('keydown', onKey);
+		}
+		expect(taken).toEqual([true, true, false, false]);
+	});
+
 	test('Escape on the bar Pages link closes the open outline over it', async () => {
 		// The link is in the bar, beside the outline's landmark rather than inside it, and the
 		// panel covers the page above the bar whichever of the two has focus.
@@ -664,7 +691,7 @@ describe('the phone disclosures', () => {
 		expect(document.activeElement).toBe(toc.querySelector('summary'));
 	});
 
-	test('focus leaving the bar closes the outline, and focus moving inside it does not', async () => {
+	test('focus landing outside the bar closes the outline, and focus moving inside it does not', async () => {
 		// The open outline is drawn over the end of the article, and Shift+Tab from the bar's
 		// summary lands on the pager underneath it.
 		render(<DocsPage {...await data('en', 'guide/troubleshooting')} />);
@@ -676,14 +703,47 @@ describe('the phone disclosures', () => {
 		expect(outside).not.toBeNull();
 
 		toc.open = true;
-		fireEvent.focusOut(summary, { relatedTarget: row });
-		fireEvent.focusOut(row, { relatedTarget: pages });
+		summary.focus();
+		row.focus();
+		pages.focus();
 		expect(toc.open).toBe(true);
-		// Focus going nowhere, which is a click on the panel's padding or its scrollbar.
-		fireEvent.focusOut(row, { relatedTarget: null });
-		expect(toc.open).toBe(true);
-		fireEvent.focusOut(summary, { relatedTarget: outside });
+		outside.focus();
 		expect(toc.open).toBe(false);
+	});
+
+	test('a click that clears focus leaves the outline open, and the next focus outside the bar closes it', async () => {
+		// A click on the bar's inline padding, or on the panel's padding or scrollbar, clears focus
+		// to the body with no related target. Measured in Chrome: the next Shift+Tab starts from
+		// where that click landed and reaches the pager under the panel with no blur from the bar
+		// left to see, so a handler that watched the bar lose focus left the outline open over it.
+		render(<DocsPage {...await data('en', 'guide/troubleshooting')} />);
+		const toc = disclosure('toc');
+		const summary = toc.querySelector('summary') as HTMLElement;
+		const outside = document.querySelector('.hx-pager a') as HTMLElement;
+
+		toc.open = true;
+		summary.focus();
+		summary.blur();
+		expect(document.activeElement).toBe(document.body);
+		expect(toc.open).toBe(true);
+		outside.focus();
+		expect(toc.open).toBe(false);
+	});
+
+	test('a page with no outline, and a tree left open by a navigation to one, throw nothing', async () => {
+		// The outline's ref is empty on a page with no outline, and both the focus check and the
+		// close on navigation read it. A cast in place of either null check throws on this page.
+		const { rerender } = render(<DocsPage {...await data('ja', 'reference/index')} />);
+		disclosure('tree').open = true;
+		rerender(<DocsPage {...await data('ja', 'reference/chip-support')} />);
+		expect(document.querySelector('.hx-toc-disclosure')).toBeNull();
+		await waitFor(() => expect(disclosure('tree').open).toBe(false));
+		disclosure('tree').open = true;
+		expect(() => {
+			(document.querySelector('.hx-foot-pages') as HTMLElement).focus();
+			(document.querySelector('.hx-tree-link') as HTMLElement).focus();
+		}).not.toThrow();
+		expect(disclosure('tree').open).toBe(true);
 	});
 
 	test('the bar Pages link opens the tree, closes the outline, and still jumps', async () => {

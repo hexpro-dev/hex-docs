@@ -44,12 +44,12 @@ import { IDS } from '../site/ids.js';
 import type { DocsNavNode, DocsPageData } from '../site/route.js';
 import { languageName, uiPlural, uiString } from '../ui/strings.js';
 import {
-	closeOnLeave,
 	closeOnLink,
 	escapeCloses,
 	openTree,
 	revealCurrent,
 	useAliasScroll,
+	useCloseOnFocusElsewhere,
 	useCloseOnNavigate,
 	useDocsEvents,
 	useHeadingSpy,
@@ -106,6 +106,7 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 	const live = useRef<HTMLParagraphElement | null>(null);
 	const treeDisclosure = useRef<HTMLDetailsElement | null>(null);
 	const tocDisclosure = useRef<HTMLDetailsElement | null>(null);
+	const foot = useRef<HTMLDivElement | null>(null);
 	const emit = useDocsEvents(root);
 	const reduced = useReducedMotion();
 
@@ -126,7 +127,13 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 	const active = useHeadingSpy(page.headings, emit, reduced);
 	const activeText = page.headings.find((heading) => heading.id === active)?.text;
 	useAliasScroll(props.aliases, reduced);
-	useCloseOnNavigate(`${props.locale}/${page.slug}`, [treeDisclosure, tocDisclosure]);
+	// The whole address, so a move between two mounts or two versions of one slug counts as the
+	// navigation it is. `props.address` never carries an anchor, so a jump within the page does not.
+	useCloseOnNavigate(docsHref({ ...props.address, slug: page.slug }), [
+		treeDisclosure,
+		tocDisclosure,
+	]);
+	useCloseOnFocusElsewhere(tocDisclosure, foot);
 	useNavigationAnnounce(
 		page.slug,
 		page.title,
@@ -280,11 +287,7 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 				 * mid-article reaches the tree. It generates no box on desktop, so the table of
 				 * contents is the grid item it always was.
 				 */}
-				<div
-					className="hx-foot"
-					onKeyDown={escapeCloses(tocDisclosure, 'container')}
-					onBlur={closeOnLeave(tocDisclosure)}
-				>
+				<div ref={foot} className="hx-foot" onKeyDown={escapeCloses(tocDisclosure, 'container')}>
 					{page.toc && page.headings.length > 0 ? (
 						<nav id={IDS.toc} className="hx-toc" aria-labelledby={IDS.tocHeading}>
 							<p id={IDS.tocHeading} className="hx-toc-heading">
