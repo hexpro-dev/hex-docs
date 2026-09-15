@@ -150,9 +150,16 @@ export function useNavigationAnnounce(
  * topmost visible one. On a page of short sections those are different headings, and the
  * difference is invisible in a screenshot.
  *
- * The last, in document order. `useHeadingSpy` keeps every heading that has passed, so
- * `passed` is a prefix of the page, and this used to return the first match: the page's
+ * The last, in document order. This used to return the first match, which was the page's
  * first heading, marked current for the whole read on every page with more than one.
+ *
+ * Taking the last is only right because `passed` holds every heading above the line and none
+ * below it, and that is a property of the observer's root rather than of this function. The
+ * root reaches far above the viewport, so a heading changes state whenever it crosses the line,
+ * however far one scroll carried it. With the root ending at the top of the viewport it did
+ * not: an instant jump carries headings from above the viewport to below the line, or back,
+ * without either position intersecting, no entry arrives for them, and the set keeps a heading
+ * the reader has left. `useHeadingSpy` says what that looked like.
  */
 export function activeHeading(
 	order: readonly string[],
@@ -190,6 +197,23 @@ export function aliasTarget(
  * top has passed the sticky offset, which is what a reader means by "where I am" and is
  * not what "the topmost visible heading" gives on a page of short sections.
  *
+ * The line is 30% down the viewport, and the root's top edge is 100000px above the viewport's,
+ * so intersecting means "at or above the line" and an entry arrives exactly when a heading
+ * crosses it. An observer only reports a change of state, and with the root's top at the
+ * viewport's own top a heading carried from above the screen to below the line in one scroll
+ * never changed state. Measured in Chrome at 390 by 844 on a 13000px page: a tap on the bar's
+ * Pages link from the end of the page, an outline pick upwards and a jump to the end each
+ * delivered no entry for the headings they skipped, and the bar and `aria-current` went on
+ * naming a heading the reader had left, while continuous scrolling was right at every step.
+ *
+ * A heading more than 100000px above the viewport stops intersecting. Its entry has a negative
+ * top, which the callback keeps as passed, so a long section scrolled through still names its
+ * heading. What the margin does not cover is a single jump longer than it, from below the line
+ * to more than 100000px above: that heading never intersects on either side and is never
+ * added. Only the last passed heading counts, so the answer is wrong only when that heading is
+ * the one the reader is in, which means landing more than a hundred phone screens into a
+ * single section.
+ *
  * It keeps running under reduced motion. Scroll spy is information, not decoration, and a
  * table of contents that stopped following the reader would be a regression for exactly
  * the people the setting is for. Only the `hexdocs:heading` events stop, because those
@@ -208,6 +232,8 @@ export function useHeadingSpy(
 			const observer = new IntersectionObserver(
 				(entries) => {
 					for (const entry of entries) {
+						// Not intersecting with a positive top is below the line. With a negative top
+						// it is past the root's far edge, which is still a heading the reader passed.
 						seen.set(entry.target.id, entry.boundingClientRect.top);
 						if (!entry.isIntersecting && entry.boundingClientRect.top > 0) {
 							seen.delete(entry.target.id);
@@ -225,7 +251,7 @@ export function useHeadingSpy(
 						emit('hexdocs:heading', { id: current, index, total: headings.length });
 					}
 				},
-				{ rootMargin: '0px 0px -70% 0px' },
+				{ rootMargin: '100000px 0px -70% 0px' },
 			);
 			for (const heading of headings) {
 				const element = document.getElementById(heading.id);

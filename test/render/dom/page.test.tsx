@@ -179,9 +179,11 @@ describe('the custom events', () => {
 /**
  * A stand-in `IntersectionObserver` and a way to hand it entries.
  *
- * `top` is the heading's distance from the top of the viewport. A negative one has scrolled
- * past; a positive one that is not intersecting is below the band, which is the only state
- * the spy forgets a heading in.
+ * `top` is the heading's distance from the top of the viewport. A heading at or above the
+ * line intersects the spy's root, which reaches far above the screen; one that does not
+ * intersect with a positive top is below the line, which is the only state the spy forgets a
+ * heading in. This hands over exactly the entries a test writes, so it shows what the spy does
+ * with an entry and never which entries a browser would send: `layoutObserver` is for that.
  */
 function stubObserver(): {
 	ready: () => Promise<void>;
@@ -217,6 +219,99 @@ function stubObserver(): {
 	};
 }
 
+/** How tall a heading is in `layoutObserver`'s page. Any positive height gives the same answers. */
+const HEADING_HEIGHT = 32;
+
+/**
+ * An `IntersectionObserver` that decides which entries to send, the way a browser's does.
+ *
+ * It reads the root margin the spy asked for, places each heading at a top in a page whose
+ * viewport is `viewport` tall, and on every scroll queues an entry only for a heading whose
+ * intersection with the root changed, plus one for each heading when it is first observed. That
+ * is the rule a browser follows and the whole of the jump defect: a heading carried across the
+ * line without ever being inside the root changes nothing and reports nothing. Only the top and
+ * bottom margins are read, in `px` or in `%` of the viewport height, because those are the only
+ * two that move the line or the root's far edge; anything else is refused by name.
+ */
+function layoutObserver(viewport: number): {
+	place: (tops: ReadonlyMap<string, number>) => void;
+	ready: (count: number) => Promise<void>;
+	scroll: (y: number) => void;
+	passed: (order: readonly string[]) => string | undefined;
+} {
+	const page = new Map<string, number>();
+	let scrollY = 0;
+	const records: {
+		callback: IntersectionObserverCallback;
+		top: number;
+		bottom: number;
+		state: Map<Element, boolean | undefined>;
+	}[] = [];
+	const margin = (token: string | undefined): number => {
+		const match = /^(-?\d+(?:\.\d+)?)(px|%)$/.exec(token ?? '');
+		if (match === null) throw new Error(`A root margin this observer cannot read: ${token}`);
+		return match[2] === '%' ? (Number(match[1]) / 100) * viewport : Number(match[1]);
+	};
+	vi.stubGlobal(
+		'IntersectionObserver',
+		class {
+			private readonly record: (typeof records)[number];
+			constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+				// The shorthand's order is top, right, bottom, left, and bottom falls back to top.
+				const tokens = (options?.rootMargin ?? '0px').trim().split(/\s+/);
+				this.record = {
+					callback,
+					top: margin(tokens[0]),
+					bottom: margin(tokens[2] ?? tokens[0]),
+					state: new Map(),
+				};
+				records.push(this.record);
+			}
+			observe(target: Element): void {
+				this.record.state.set(target, undefined);
+			}
+			disconnect(): void {
+				this.record.state.clear();
+			}
+		},
+	);
+	const deliver = (): void => {
+		for (const record of records) {
+			const entries: IntersectionObserverEntry[] = [];
+			for (const [target, was] of record.state) {
+				const top = (page.get(target.id) ?? Number.POSITIVE_INFINITY) - scrollY;
+				const now = top < viewport + record.bottom && top + HEADING_HEIGHT > -record.top;
+				if (now === was) continue;
+				record.state.set(target, now);
+				entries.push({
+					target,
+					isIntersecting: now,
+					boundingClientRect: { top } as DOMRectReadOnly,
+				} as IntersectionObserverEntry);
+			}
+			if (entries.length > 0) {
+				act(() => record.callback(entries, {} as IntersectionObserver));
+			}
+		}
+	};
+	return {
+		place: (tops) => {
+			for (const [id, top] of tops) page.set(id, top);
+		},
+		ready: async (count) => {
+			await waitFor(() => expect(records.at(-1)?.state.size).toBe(count));
+			deliver();
+		},
+		scroll: (y) => {
+			scrollY = y;
+			deliver();
+		},
+		// The spy's own definition, read off the page rather than off the entries: the last
+		// heading whose top is above the line 30% down the viewport.
+		passed: (order) => order.filter((id) => (page.get(id) ?? 0) - scrollY < viewport * 0.3).at(-1),
+	};
+}
+
 const currentTocHref = (): string | null | undefined =>
 	document.querySelector('.hx-toc-link[aria-current]')?.getAttribute('href');
 
@@ -240,7 +335,7 @@ describe('the heading the table of contents marks', () => {
 
 		expect(currentTocHref()).toBeUndefined();
 		expect(barText()).toBe('');
-		observer.report(first.id, false, -40);
+		observer.report(first.id, true, -40);
 		await waitFor(() => expect(currentTocHref()).toBe(`#${first.id}`));
 		expect(barText()).toBe(first.text);
 		observer.report(second.id, true, 60);
@@ -251,6 +346,75 @@ describe('the heading the table of contents marks', () => {
 		await waitFor(() => expect(currentTocHref()).toBe(`#${first.id}`));
 		expect(barText()).toBe(first.text);
 		expect(document.querySelectorAll('.hx-toc-link[aria-current]').length).toBe(1);
+	});
+
+	/** Asserts the bar and the outline both name the heading the page's geometry says. */
+	const expectNamed = (
+		where: string,
+		headings: readonly { id: string; text: string }[],
+		id: string | undefined,
+	): void => {
+		const heading = headings.find((candidate) => candidate.id === id);
+		expect({ where, bar: barText(), current: currentTocHref() }).toEqual({
+			where,
+			bar: heading?.text ?? '',
+			current: heading === undefined ? undefined : `#${heading.id}`,
+		});
+	};
+
+	test('is still right after a jump that carries headings past the line in one step', async () => {
+		// The bar's Pages link from the end of a page, an outline pick upwards and a jump to the
+		// end each move the page thousands of pixels in one frame. An observer whose root ended at
+		// the top of the screen sent no entry for the headings in between, because each was
+		// outside the root before and after, and the bar went on naming a heading the reader had
+		// left. Reading down in small steps is right either way, which is why the jumps are here.
+		const viewport = 844;
+		const layout = layoutObserver(viewport);
+		const page = await data('en', 'guide/troubleshooting');
+		const headings = page.page.headings;
+		const order = headings.map((heading) => heading.id);
+		expect(headings.length).toBeGreaterThanOrEqual(4);
+		// Two thousand pixels a section, which is a long manual page on a phone.
+		layout.place(new Map(order.map((id, index) => [id, 2000 * (index + 1)])));
+		render(<DocsPage {...page} />);
+		await layout.ready(headings.length);
+		const end = 2000 * headings.length + 1000;
+
+		expectNamed('at the top', headings, layout.passed(order));
+		for (let y = 100; y <= end; y += 100) {
+			layout.scroll(y);
+			expectNamed(`reading down at ${y}px`, headings, layout.passed(order));
+		}
+		expect(layout.passed(order)).toBe(order.at(-1));
+
+		layout.scroll(0);
+		expectNamed('jumped from the end to the top', headings, undefined);
+		layout.scroll(end);
+		expectNamed('jumped from the top to the end', headings, order.at(-1));
+		// The second heading lands just under the host's header.
+		layout.scroll(2000 * 2 - 80);
+		expectNamed('jumped up to the second heading', headings, order[1]);
+		expect(document.querySelectorAll('.hx-toc-link[aria-current]').length).toBe(1);
+	});
+
+	test('still names the heading of a section longer than the root reaches above the screen', async () => {
+		// Past the root's far edge a heading stops intersecting, and its entry has a negative
+		// top. A callback that kept only intersecting headings would empty the bar there, a
+		// hundred screens into one long section, with the reader still inside it.
+		const viewport = 844;
+		const layout = layoutObserver(viewport);
+		const page = await data('en', 'guide/troubleshooting');
+		const headings = page.page.headings;
+		const order = headings.map((heading) => heading.id);
+		layout.place(
+			new Map(order.map((id, index) => [id, index === 0 ? 2000 : 400_000 + 2000 * index])),
+		);
+		render(<DocsPage {...page} />);
+		await layout.ready(headings.length);
+		for (let y = 20_000; y <= 380_000; y += 20_000) {
+			layout.scroll(y);
+			expectNamed(`${y}px into the first section`, headings, order[0]);
+		}
 	});
 });
 

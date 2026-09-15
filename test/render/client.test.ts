@@ -10,9 +10,11 @@ describe('which heading the reader is in', () => {
 	test('is the last in document order among the ones whose tops have passed', () => {
 		// Not the topmost visible heading. On a page of short sections several are visible
 		// at once, and the one the reader means is the one they have scrolled past most
-		// recently. The observer keeps every heading whose top has gone above the bottom of
-		// its band, so the set it hands over is a prefix of the document: the first of it is
-		// the page's first heading for the whole read, and the last is where the reader is.
+		// recently. The first of the passed set is the page's first heading for the whole read,
+		// and the last is where the reader is. That the set holds every heading above the line
+		// and none below is the observer's doing, not this function's, and a jump is where it
+		// can fail: `test/render/dom/page.test.tsx` drives the spy with an observer that, like a
+		// browser's, reports a heading only when it crosses the edge of the root.
 		const order = ['a', 'b', 'c'];
 		expect(activeHeading(order, new Set(['a', 'b']))).toBe('b');
 		expect(activeHeading(order, new Set(['b', 'c']))).toBe('c');
