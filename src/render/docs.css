@@ -952,8 +952,17 @@
 	display: none;
 }
 
+/*
+ * Not displayed on a desktop at all. A closed details element that generates a box, even an
+ * empty zero-height one, is an unnamed group in the accessibility tree, so a desktop screen
+ * reader walking the tree or the outline landmark met a group it could do nothing with. The
+ * phone block displays both again, and without that rule the Pages chip and the bar's outline
+ * control are gone at phone width. Not `display: contents`, which Chrome still exposes as a
+ * group.
+ */
 .hx-root .hx-tree-disclosure,
 .hx-root .hx-toc-disclosure {
+	display: none;
 	margin: 0;
 	padding: 0;
 	border: 0;
@@ -970,12 +979,14 @@
 
 @media (max-width: 60rem) {
 	/*
-	 * A block rather than a one-column grid. A sticky box is held inside its containing block,
-	 * and a grid item's is its own grid area, which is exactly as tall as the item: the bar
-	 * would have nowhere to stick.
+	 * A block container rather than a one-column grid. A sticky box is held inside its
+	 * containing block, and a grid item's is its own grid area, which is exactly as tall as the
+	 * item: the bar would have nowhere to stick. A flow root rather than a plain block, because
+	 * a plain block lets the tree's top margin collapse through it and out past the docs root,
+	 * which then starts 12px below the host's header with the host's ground showing in the gap.
 	 */
 	.hx-root .hx-layout {
-		display: block;
+		display: flow-root;
 	}
 
 	/*
@@ -1008,6 +1019,12 @@
 		inline-size: auto;
 		min-block-size: 2.75rem;
 		margin-block-end: 0;
+	}
+
+	/* The desktop hides both disclosures outright; here they are the controls. */
+	.hx-root .hx-tree-disclosure,
+	.hx-root .hx-toc-disclosure {
+		display: block;
 	}
 
 	.hx-root .hx-tree > .hx-tree-disclosure {
@@ -1109,6 +1126,20 @@
 	 * outline panel is drawn outside this box, above it, and a clipped bar would hide it.
 	 * Sticky inside the layout, so at the end of the page it settles into flow above the
 	 * host's footer rather than covering it.
+	 *
+	 * The inline padding is the column's own inset: the shell's inset on a phone, and on a
+	 * tablet the room either side of the centred measure as well, so the label starts at the
+	 * column's start and the link ends at its end whatever width the translated link has. A
+	 * percentage in padding resolves against the layout's content box, which is the box the
+	 * column is centred in. Padding by the shell's inset alone and centring a pair sized around
+	 * the link's minimum lined up only when the word fitted that minimum; in Arabic it did not,
+	 * and at 768px the label and the link each sat 10px outside the column.
+	 *
+	 * The block-end padding is never less than 4px, which is how far the shared focus ring
+	 * reaches outside a control: 2px wide at a 2px offset. The bar is stuck to the bottom of the
+	 * viewport, so with no padding the ring's bottom edge on the summary and the Pages link is
+	 * drawn below the screen. An inset ring was measured and refused: the summary has no
+	 * inline-start padding, and a ring drawn inside it covers the label's first letter.
 	 */
 	.hx-root .hx-foot {
 		display: flex;
@@ -1118,22 +1149,22 @@
 		inset-block-end: 0;
 		z-index: 2;
 		margin-inline: calc(-1 * var(--hx-shell-inset, clamp(1rem, 2.5vw, 2rem)));
-		padding-inline: var(--hx-shell-inset, clamp(1rem, 2.5vw, 2rem));
-		padding-block-end: env(safe-area-inset-bottom, 0px);
+		padding-inline: max(var(--hx-shell-inset, clamp(1rem, 2.5vw, 2rem)), calc((100% - var(--hx-measure, 42rem)) / 2 + var(--hx-shell-inset, clamp(1rem, 2.5vw, 2rem))));
+		padding-block-end: max(4px, env(safe-area-inset-bottom, 0px));
 		background: var(--hx-surface, #171512);
 		border-block-start: 1px solid var(--hx-edge, #2a2621);
 	}
 
 	/*
-	 * Static, so the sticky bar is the outline panel's containing block. Its basis and the
-	 * Pages link's minimum add up to the measure, which is what lines the pair up with the
-	 * column on a tablet.
+	 * Static, so the sticky bar is the outline panel's containing block. It takes whatever the
+	 * Pages link leaves of the bar's content box, which the bar's padding makes the column, so
+	 * nothing here has to know how wide the translated link is.
 	 */
 	.hx-root .hx-toc {
 		position: static;
 		max-block-size: none;
 		overflow: visible;
-		flex: 0 1 calc(var(--hx-measure, 42rem) - 5rem);
+		flex: 1 1 auto;
 		min-inline-size: 0;
 	}
 
@@ -1160,7 +1191,7 @@
 		display: block;
 		color: var(--hx-dim, #a89f93);
 		font-size: 0.75rem;
-		line-height: 1.3;
+		line-height: 1.25;
 	}
 
 	/*
@@ -1174,7 +1205,12 @@
 		line-height: 1.4;
 	}
 
-	/* One line whatever the heading, so the bar keeps its height; the accessible name keeps the text. */
+	/*
+	 * One line whatever the heading; the accessible name keeps the whole text. The caption's
+	 * 15px line, this 21px one and the summary's 12px of padding fill its 3rem row exactly, so
+	 * naming a heading changes the bar's height by nothing. A caption at a line height of 1.3
+	 * made the row 48.6px, and the bar's top rule moved the first time the spy answered.
+	 */
 	.hx-root .hx-toc-here {
 		display: block;
 		overflow: hidden;
@@ -1192,10 +1228,14 @@
 	 * Above the bar and out of flow, so the article never moves when it opens or closes. The
 	 * percentage in the inline padding resolves against the bar's full-bleed box rather than
 	 * the column, which is why it is not the column's own centring formula.
+	 *
+	 * The extra pixel is the bar's own top rule. An absolute box is placed against its
+	 * containing block's padding box, which starts inside that rule, so at 100% the panel's
+	 * bottom row of pixels covered it and nothing separated the panel from the bar.
 	 */
 	.hx-root .hx-toc-disclosure + .hx-toc-list {
 		position: absolute;
-		inset-block-end: 100%;
+		inset-block-end: calc(100% + 1px);
 		inset-inline: 0;
 		margin: 0;
 		max-block-size: 60svh;
@@ -1234,12 +1274,29 @@
 	/*
 	 * Anchored to the top, so the input does not move as results arrive and stays above the
 	 * on-screen keyboard. The rule outside this block keeps `margin: auto`, which centres the
-	 * dialog everywhere else.
+	 * dialog everywhere else. The maximum is lifted because the browser's own rule for a modal
+	 * dialog caps it at `calc(100% - 6px - 2em)`, which is narrower than this width below about
+	 * 720px: the dialog was 354px wide with 18px either side, not the shell's 16px.
 	 */
 	.hx-search {
 		inline-size: calc(100% - 2 * var(--hx-shell-inset, clamp(1rem, 2.5vw, 2rem)));
+		max-inline-size: none;
 		max-block-size: 80svh;
 		margin-block: var(--hx-shell-inset, clamp(1rem, 2.5vw, 2rem)) auto;
+	}
+}
+
+/*
+ * A forced palette repaints the chevrons' token background as Canvas, the colour of the ground
+ * under them, and both vanish, which takes away the only open or closed cue either disclosure
+ * has and leaves the bar reading as plain text. CanvasText is the reader's own text colour, so
+ * it follows whichever palette they chose. After the phone block, because the rule it overrides
+ * there has the same specificity; outside it, because the summaries show nowhere else.
+ */
+@media (forced-colors: active) {
+	.hx-root .hx-tree-summary::after,
+	.hx-root .hx-toc-summary::after {
+		background: CanvasText;
 	}
 }
 

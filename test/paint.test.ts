@@ -62,6 +62,10 @@ async function paintWith(edit: (css: string) => string): Promise<CheckResult[]> 
 	}
 }
 
+/** The shell inset and the measure as the generator writes them, which every phone rule repeats. */
+const INSET = 'var(--hx-shell-inset, clamp(1rem, 2.5vw, 2rem))';
+const MEASURE = 'var(--hx-measure, 42rem)';
+
 /** Replaces text that must occur exactly once, so a stale search string fails here by name. */
 function once(css: string, from: string, to: string): string {
 	expect({ from, occurrences: css.split(from).length - 1 }).toEqual({ from, occurrences: 1 });
@@ -363,8 +367,8 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 		expect(rows[0]?.state).toBe('PASS');
 		// A literal, so a deleted probe is a failure here rather than a smaller number on the
 		// ladder, which does not fail.
-		expect(rows[0]?.examined).toBe(23);
-		expect(PROBES.length).toBe(23);
+		expect(rows[0]?.examined).toBe(27);
+		expect(PROBES.length).toBe(27);
 		expect(rows[0]?.unit).toBe('probes');
 	}, 60_000);
 
@@ -479,7 +483,13 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 		},
 		{
 			name: 'an outline panel left at its static position',
-			edit: (css) => once(css, '\t\tinset-block-end: 100%;\n', ''),
+			edit: (css) => once(css, '\t\tinset-block-end: calc(100% + 1px);\n', ''),
+			expect: ['The phone-foot probe'],
+		},
+		{
+			name: "an outline panel placed on the bar's padding box, over the bar's top rule",
+			edit: (css) =>
+				once(css, '\t\tinset-block-end: calc(100% + 1px);\n', '\t\tinset-block-end: 100%;\n'),
 			expect: ['The phone-foot probe'],
 		},
 		{
@@ -510,7 +520,9 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 					'\t.hx-root .hx-tree-summary {\n\t\tdisplay: flex;\n',
 					'\t.hx-root .hx-tree-summary {\n',
 				),
-			expect: ['The phone-targets probe'],
+			// A chip that is not displayed is also missing from the tablet's row, and has no
+			// chevron for the forced palette probe to find: one defect seen from three probes.
+			expect: ['The phone-targets probe', 'The phone-tablet probe', 'The phone-forced probe'],
 		},
 		{
 			name: 'a bar link that stays hidden at phone width',
@@ -520,17 +532,281 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 					'\t.hx-root .hx-foot-pages {\n\t\tdisplay: flex;\n',
 					'\t.hx-root .hx-foot-pages {\n',
 				),
-			expect: ['The phone-targets probe'],
+			// The tablet probe sees the same hidden link as a bar that no longer reaches the column's end.
+			expect: ['The phone-targets probe', 'The phone-tablet probe'],
 		},
 		{
 			name: 'a bar that bleeds to the edge and never pads back in',
 			edit: (css) =>
 				once(
 					css,
-					'\t\tpadding-inline: var(--hx-shell-inset, clamp(1rem, 2.5vw, 2rem));\n\t\tpadding-block-end:',
+					`\t\tpadding-inline: max(${INSET}, calc((100% - ${MEASURE}) / 2 + ${INSET}));\n\t\tpadding-block-end:`,
 					'\t\tpadding-block-end:',
 				),
+			// The tablet probe sees the same missing padding as a label and a link outside the column.
+			expect: ['The phone-targets probe', 'The phone-tablet probe'],
+		},
+		{
+			name: 'a layout that is a plain block, so the tree margin collapses out past the docs root',
+			edit: (css) =>
+				once(
+					css,
+					'\t.hx-root .hx-layout {\n\t\tdisplay: flow-root;\n',
+					'\t.hx-root .hx-layout {\n\t\tdisplay: block;\n',
+				),
+			expect: ['The phone-reading probe'],
+		},
+		{
+			name: 'disclosures that stay hidden at phone width',
+			edit: (css) =>
+				once(
+					css,
+					'\t.hx-root .hx-tree-disclosure,\n\t.hx-root .hx-toc-disclosure {\n\t\tdisplay: block;\n\t}\n\n',
+					'',
+				),
+			// Both chips gone, seen from the row at 768px and from the forced palette as well.
+			expect: ['The phone-targets probe', 'The phone-tablet probe', 'The phone-forced probe'],
+		},
+		{
+			name: 'a bar padded to the shell inset, which a wide Pages label pushes past the column',
+			edit: (css) =>
+				once(
+					css,
+					`\t\tpadding-inline: max(${INSET}, calc((100% - ${MEASURE}) / 2 + ${INSET}));\n`,
+					`\t\tpadding-inline: ${INSET};\n`,
+				),
+			expect: ['The phone-tablet probe'],
+		},
+		{
+			name: 'a caption line that makes the bar grow when a heading is named',
+			edit: (css) =>
+				once(
+					css,
+					'\t\tfont-size: 0.75rem;\n\t\tline-height: 1.25;\n',
+					'\t\tfont-size: 0.75rem;\n\t\tline-height: 1.3;\n',
+				),
+			expect: ['The phone-foot probe'],
+		},
+		{
+			name: 'a bar with no room under its controls for the focus ring',
+			edit: (css) =>
+				once(
+					css,
+					'\t\tpadding-block-end: max(4px, env(safe-area-inset-bottom, 0px));\n',
+					'\t\tpadding-block-end: env(safe-area-inset-bottom, 0px);\n',
+				),
+			expect: ['The phone-foot probe'],
+		},
+		{
+			name: 'both panels with no height cap',
+			edit: (css) =>
+				once(
+					once(
+						css,
+						'\t\tposition: relative;\n\t\tmax-block-size: 60svh;\n',
+						'\t\tposition: relative;\n',
+					),
+					'\t\tmargin: 0;\n\t\tmax-block-size: 60svh;\n',
+					'\t\tmargin: 0;\n',
+				),
+			expect: ['The phone-reading probe', 'The phone-foot probe'],
+		},
+		{
+			name: 'a tree panel with no height cap',
+			edit: (css) =>
+				once(
+					css,
+					'\t\tposition: relative;\n\t\tmax-block-size: 60svh;\n',
+					'\t\tposition: relative;\n',
+				),
+			expect: ['The phone-reading probe'],
+		},
+		{
+			name: 'a tree panel capped with nothing to scroll it',
+			edit: (css) =>
+				once(
+					css,
+					'\t\toverflow-y: auto;\n\t\toverscroll-behavior: contain;\n\t\tpadding: 0.5rem;\n',
+					'\t\toverscroll-behavior: contain;\n\t\tpadding: 0.5rem;\n',
+				),
+			expect: ['The phone-reading probe'],
+		},
+		{
+			name: 'an outline panel with no height cap',
+			edit: (css) => once(css, '\t\tmargin: 0;\n\t\tmax-block-size: 60svh;\n', '\t\tmargin: 0;\n'),
+			expect: ['The phone-foot probe'],
+		},
+		{
+			name: 'an outline panel capped with nothing to scroll it',
+			edit: (css) =>
+				once(
+					css,
+					'\t\toverflow-y: auto;\n\t\toverscroll-behavior: contain;\n\t\tpadding-block: 0.5rem;\n',
+					'\t\toverscroll-behavior: contain;\n\t\tpadding-block: 0.5rem;\n',
+				),
+			expect: ['The phone-foot probe'],
+		},
+		{
+			name: "a tree panel that is not its rows' offset parent",
+			edit: (css) =>
+				once(
+					css,
+					'\t\tposition: relative;\n\t\tmax-block-size: 60svh;\n',
+					'\t\tmax-block-size: 60svh;\n',
+				),
+			expect: ['The phone-reading probe'],
+		},
+		{
+			name: 'a Pages link with no height of its own, on a page with no outline',
+			edit: (css) => once(css, '\t\tmin-block-size: 3rem;\n\t\tmargin: 0;\n', '\t\tmargin: 0;\n'),
 			expect: ['The phone-targets probe'],
+		},
+		{
+			name: 'a Pages link centred in the bar on a page with no outline',
+			edit: (css) =>
+				once(css, `\t.hx-root .hx-foot-pages:only-child {\n\t\tflex: 0 1 ${MEASURE};\n\t}\n\n`, ''),
+			expect: ['The phone-targets probe'],
+		},
+		{
+			name: 'a heading line that cannot shrink, under the Pages link',
+			edit: (css) =>
+				once(
+					css,
+					'\t\tflex: 1 1 auto;\n\t\tmin-inline-size: 0;\n\t}\n\n\t.hx-root .hx-toc-summary-label',
+					'\t\tflex: 1 1 auto;\n\t}\n\n\t.hx-root .hx-toc-summary-label',
+				),
+			expect: ['The phone-foot probe'],
+		},
+		{
+			name: 'a heading line that is never clipped',
+			edit: (css) =>
+				once(
+					css,
+					'\t\tdisplay: block;\n\t\toverflow: hidden;\n\t\ttext-overflow: ellipsis;\n',
+					'\t\tdisplay: block;\n\t\ttext-overflow: ellipsis;\n',
+				),
+			expect: ['The phone-foot probe'],
+		},
+		{
+			name: 'a bar with no ground of its own',
+			edit: (css) =>
+				once(
+					css,
+					'\t\tpadding-block-end: max(4px, env(safe-area-inset-bottom, 0px));\n\t\tbackground: var(--hx-surface, #171512);\n',
+					'\t\tpadding-block-end: max(4px, env(safe-area-inset-bottom, 0px));\n',
+				),
+			expect: ['The phone-foot probe'],
+		},
+		{
+			name: 'an outline panel with no ground of its own',
+			edit: (css) =>
+				once(
+					css,
+					`\t\tpadding-inline: max(${INSET}, calc((100% - ${MEASURE}) / 2));\n\t\tbackground: var(--hx-surface, #171512);\n`,
+					`\t\tpadding-inline: max(${INSET}, calc((100% - ${MEASURE}) / 2));\n`,
+				),
+			expect: ['The phone-foot probe'],
+		},
+		{
+			name: 'a bar Pages link that leaves its colour to the browser',
+			edit: (css) =>
+				once(css, '\t\tborder: 0;\n\t\tcolor: var(--hx-ink, #f2ede6);\n', '\t\tborder: 0;\n'),
+			expect: ['The phone-bare probe'],
+		},
+		{
+			name: 'a bar Pages link that leaves its underline to the browser',
+			edit: (css) =>
+				once(css, '\t\tfont-weight: 600;\n\t\ttext-decoration: none;\n', '\t\tfont-weight: 600;\n'),
+			expect: ['The phone-bare probe'],
+		},
+		{
+			name: 'a top row that is not a flex row',
+			edit: (css) =>
+				once(css, '\t\tdisplay: flex;\n\t\tflex-wrap: wrap;\n', '\t\tflex-wrap: wrap;\n'),
+			expect: ['The phone-targets probe'],
+		},
+		{
+			name: 'a Pages chip that takes a line of its own',
+			edit: (css) =>
+				once(css, '\t.hx-root .hx-tree > .hx-tree-disclosure {\n\t\tflex: 0 0 auto;\n\t}\n\n', ''),
+			expect: ['The phone-targets probe'],
+		},
+		{
+			name: 'a tree list that does not take a line of its own',
+			edit: (css) =>
+				once(
+					css,
+					'\t.hx-root .hx-tree > * {\n\t\tflex: 0 0 100%;\n\t\tmin-inline-size: 0;\n\t}\n\n',
+					'',
+				),
+			expect: ['The phone-targets probe'],
+		},
+		{
+			name: 'a top row as wide as the layout rather than the column',
+			edit: (css) =>
+				once(css, `\t\tgap: 0.5rem;\n\t\tmax-inline-size: ${MEASURE};\n`, '\t\tgap: 0.5rem;\n'),
+			expect: ['The phone-tablet probe'],
+		},
+		{
+			name: 'a bar that does not bleed to the edges',
+			edit: (css) =>
+				once(
+					css,
+					`\t\tz-index: 2;\n\t\tmargin-inline: calc(-1 * ${INSET});\n`,
+					'\t\tz-index: 2;\n',
+				),
+			expect: ['The phone-tablet probe'],
+		},
+		{
+			name: 'an article that is not centred at phone width',
+			edit: (css) =>
+				once(
+					css,
+					'\t.hx-root .hx-article {\n\t\tmargin-inline: auto;\n',
+					'\t.hx-root .hx-article {\n',
+				),
+			expect: ['The phone-tablet probe'],
+		},
+		{
+			name: "a search dialog held to the browser's modal width",
+			edit: (css) => once(css, '\t\tmax-inline-size: none;\n', ''),
+			expect: ['The phone-search probe'],
+		},
+		{
+			name: 'a search dialog with no phone rule, centred and capped',
+			edit: (css) => {
+				const start = css.indexOf(`\t.hx-search {\n\t\tinline-size: calc(100% - 2 * ${INSET});\n`);
+				expect(start).toBeGreaterThan(0);
+				return css.slice(0, start) + css.slice(css.indexOf('\t}\n', start) + 3);
+			},
+			expect: ['The phone-search probe'],
+		},
+		{
+			name: 'the phone rules moved above the search rules they override',
+			edit: (css) => {
+				// The whole phone section, desktop defaults and media query together, so the only
+				// thing that changes is which of the phone and search rules comes later.
+				const start = css.indexOf('/*\n * The phone layout, below 60rem');
+				const end = css.indexOf('\n}\n', css.indexOf('\n@media (max-width: 60rem) {\n')) + 3;
+				expect(start).toBeGreaterThan(0);
+				const section = css.slice(start, end);
+				return once(
+					css.slice(0, start) + css.slice(end),
+					'\n.hx-root .hx-search-trigger {\n',
+					`\n${section}\n.hx-root .hx-search-trigger {\n`,
+				);
+			},
+			expect: ['The phone-search probe'],
+		},
+		{
+			name: 'chevrons left to a forced palette',
+			edit: (css) => {
+				const head = '\n@media (forced-colors: active) {\n';
+				const start = css.indexOf(head);
+				expect(start).toBeGreaterThan(0);
+				return css.slice(0, start + 1) + css.slice(css.indexOf('\n}\n', start) + 3);
+			},
+			expect: ['The phone-forced probe'],
 		},
 	];
 

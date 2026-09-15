@@ -119,10 +119,14 @@ const page = (css, body, host) =>
  * @property {boolean} [sample]  The expression returns JSON carrying a `samples` map of names
  *   to viewport points, and the colour painted at each point is read back out of a screenshot
  *   and attached to the measurement as `pixels`.
+ * @property {{ name: string, value: string }[]} [media]  Media features the page is emulated
+ *   under, such as a forced colour palette. None by default.
  */
 
 const DESKTOP = 1280;
 const PHONE = 390;
+/** A tablet held upright, which is still under the phone breakpoint and wider than the column. */
+const TABLET = 768;
 
 /**
  * The smallest distance, in CSS pixels, the shell may leave between its content and the
@@ -153,6 +157,13 @@ const FOOT_MAX = 64;
 
 /** A seventy-character heading, the length of a long French or Portuguese one, for the bar's second line. */
 const LONG_HEADING = 'Hold the top edge of your phone flat against the tag for a full second';
+
+/**
+ * The narrowest the bar's Pages link is drawn, in CSS pixels. A label wider than this is the
+ * case where a bar laid out around the minimum stops lining up with the column, so the tablet
+ * probe refuses to pass on one that is not. A number here for the reason `MIN_INSET` gives.
+ */
+const PAGES_MINIMUM = 80;
 
 /**
  * The base layer a consuming site puts under the docs, reduced to the rules that restyle
@@ -226,9 +237,11 @@ export const FRAGMENTS = {
  * right-to-left shell. `current` adds a second tree link and a second table of contents
  * link and marks the first of each current, so a probe can compare a current link with a
  * plain one at the same place. `links` is how many rows the tree has, for a probe that needs
- * a tree long enough to push the article off the first screen if it were shown.
+ * a tree long enough to push the article off the first screen if it were shown, and `mark`
+ * which of them is the current page. `tocLinks` is how many rows the outline has, and `pages`
+ * the word the Pages chip and the bar's link carry.
  *
- * @param {{ prose: string, head?: string, tree?: string, dir?: 'ltr' | 'rtl', article?: string, current?: boolean, links?: number }} parts
+ * @param {{ prose: string, head?: string, tree?: string, dir?: 'ltr' | 'rtl', article?: string, current?: boolean, links?: number, mark?: number, tocLinks?: number, pages?: string }} parts
  */
 const shell = ({
 	prose,
@@ -238,22 +251,42 @@ const shell = ({
 	article = '',
 	current = false,
 	links = current ? 2 : 1,
+	mark = current ? 0 : undefined,
+	tocLinks = current ? 2 : 1,
+	pages = 'Pages',
 }) =>
-	`<div class="hx-root" dir="${dir}">${FRAGMENTS.skip}<div class="hx-layout"><nav id="hx-tree" class="hx-tree" aria-label="Documentation"><button type="button" class="hx-search-trigger" disabled="">Search</button>${tree}<details class="hx-tree-disclosure"><summary class="hx-tree-summary">Pages</summary></details><ol class="hx-tree-list">${treeRows(links, current)}</ol></nav><article id="hx-content" class="hx-article" tabindex="-1"${article}>${head}<h1 id="hx-title" class="hx-title">Scan your first tag</h1><div class="hx-prose">${prose}</div></article><div class="hx-foot"><nav id="hx-toc" class="hx-toc" aria-label="On this page"><p class="hx-toc-heading">On this page</p><details class="hx-toc-disclosure"><summary class="hx-toc-summary"><span class="hx-toc-where"><span class="hx-toc-summary-label">On this page</span><span class="hx-toc-here"></span></span></summary></details><ol class="hx-toc-list"><li class="hx-toc-item" data-depth="2"><a href="#before" class="hx-toc-link"${current ? ' aria-current="true"' : ''}>Before you start</a></li>${current ? '<li class="hx-toc-item" data-depth="2"><a href="#hold" class="hx-toc-link">Hold the tag still</a></li>' : ''}</ol></nav><a class="hx-foot-pages" href="#hx-tree">Pages</a></div></div></div>`;
+	`<div class="hx-root" dir="${dir}">${FRAGMENTS.skip}<div class="hx-layout"><nav id="hx-tree" class="hx-tree" aria-label="Documentation"><button type="button" class="hx-search-trigger" disabled="">Search</button>${tree}<details class="hx-tree-disclosure"><summary class="hx-tree-summary">${pages}</summary></details><ol class="hx-tree-list">${treeRows(links, mark)}</ol></nav><article id="hx-content" class="hx-article" tabindex="-1"${article}>${head}<h1 id="hx-title" class="hx-title">Scan your first tag</h1><div class="hx-prose">${prose}</div></article><div class="hx-foot"><nav id="hx-toc" class="hx-toc" aria-label="On this page"><p class="hx-toc-heading">On this page</p><details class="hx-toc-disclosure"><summary class="hx-toc-summary"><span class="hx-toc-where"><span class="hx-toc-summary-label">On this page</span><span class="hx-toc-here"></span></span></summary></details><ol class="hx-toc-list">${tocRows(tocLinks, current)}</ol></nav><a class="hx-foot-pages" href="#hx-tree">${pages}</a></div></div></div>`;
 
 /**
- * The tree's rows: the first marked current when `current` is set, and the rest plain.
+ * The tree's rows, with the one at `mark` marked as the current page.
  *
  * @param {number} count
- * @param {boolean} current
+ * @param {number | undefined} mark
  */
-function treeRows(count, current) {
+function treeRows(count, mark) {
 	const names = ['First scan', 'Write a tag'];
 	return Array.from(
 		{ length: count },
 		(_, index) =>
-			`<li class="hx-tree-item"><a class="hx-tree-link" href="#${index === 0 ? 'first' : index === 1 ? 'write' : `page-${index + 1}`}"${current && index === 0 ? ' aria-current="page"' : ''}>${names[index] ?? `Page ${index + 1}`}</a></li>`,
+			`<li class="hx-tree-item"><a class="hx-tree-link" href="#${index === 0 ? 'first' : index === 1 ? 'write' : `page-${index + 1}`}"${index === mark ? ' aria-current="page"' : ''}>${names[index] ?? `Page ${index + 1}`}</a></li>`,
 	).join('');
+}
+
+/**
+ * The outline's rows: the first marked current when `current` is set, and the rest plain.
+ *
+ * @param {number} count
+ * @param {boolean} current
+ */
+function tocRows(count, current) {
+	const names = [
+		['before', 'Before you start'],
+		['hold', 'Hold the tag still'],
+	];
+	return Array.from({ length: count }, (_, index) => {
+		const [id, text] = names[index] ?? [`heading-${index + 1}`, `Heading ${index + 1}`];
+		return `<li class="hx-toc-item" data-depth="2"><a href="#${id}" class="hx-toc-link"${current && index === 0 ? ' aria-current="true"' : ''}>${text}</a></li>`;
+	}).join('');
 }
 
 const PARAGRAPH =
@@ -336,9 +369,13 @@ const BASE_STYLES = `(() => {
 	});
 })()`;
 
+/** The search dialog, closed, as it sits in the tree's landmark beside the trigger. */
+const DIALOG =
+	'<dialog class="hx-search" aria-label="Search the documentation"><div class="hx-search-bar"><input class="hx-search-input" type="search"/><button type="button" class="hx-search-close">Close search</button></div></dialog>';
+
 const BASE_PAGE = hosted(
 	shell({
-		tree: '<dialog class="hx-search" aria-label="Search the documentation"><div class="hx-search-bar"><input class="hx-search-input" type="search"/><button type="button" class="hx-search-close">Close search</button></div></dialog>',
+		tree: DIALOG,
 		head: '<nav id="hx-breadcrumb" class="hx-breadcrumb" aria-label="Breadcrumb"><ol><li><a href="/fixture-app/docs">Overview</a></li></ol></nav><aside class="hx-banner" data-banner="stale"><p>This translation is older than the English page.</p><a href="/fixture-app/docs/guide/first-tag">Read this page in English</a></aside>',
 		prose:
 			'<h2 id="before" class="hx-heading">Before you start</h2><p>The <a href="/fixture-app/docs/reference/chip-support">chip support matrix</a> lists every chip.</p><ul class="hx-list hx-tight"><li><p>text records</p><ul class="hx-list hx-tight"><li><p>with the language code the tag declares</p></li></ul></li></ul><ol class="hx-list hx-tight"><li><p>Create the package.</p></li></ol><blockquote><p>Hold the tag still.</p></blockquote>' +
@@ -720,42 +757,90 @@ export const PROBES = [
 		id: 'phone-reading',
 		host: HOST_BASE,
 		width: PHONE,
-		body: hosted(shell({ prose: PARAGRAPH, links: 10 })),
-		expression: `JSON.stringify({
-			list: document.querySelector('.hx-tree-list').getBoundingClientRect().height,
-			paragraph: Math.round(document.querySelector('.hx-article p').getBoundingClientRect().top),
-		})`,
-		why: 'On a phone the page tree sits above the article behind a closed Pages disclosure, so a reader arriving on a page reads it on the first screen. A tree shown before anybody asked for it pushes the article down by the whole length of the tree.',
+		body: hosted(shell({ prose: PARAGRAPH, links: 20, mark: 14 })),
+		expression: `(() => {
+			const list = document.querySelector('.hx-tree-list');
+			const closed = {
+				list: list.getBoundingClientRect().height,
+				paragraph: Math.round(document.querySelector('.hx-article p').getBoundingClientRect().top),
+				rootGap: document.querySelector('.hx-root').getBoundingClientRect().top - document.querySelector('header').getBoundingClientRect().bottom,
+			};
+			document.querySelector('.hx-tree-disclosure').open = true;
+			const panel = list.getBoundingClientRect();
+			list.scrollTop = list.scrollHeight;
+			const rows = list.querySelectorAll('.hx-tree-link');
+			const current = list.querySelector('[aria-current]');
+			return JSON.stringify({
+				...closed,
+				viewport: innerHeight,
+				panelHeight: Math.round(panel.height),
+				panelBottom: list.getBoundingClientRect().bottom,
+				lastBottom: rows[rows.length - 1].getBoundingClientRect().bottom,
+				offsetParent: current.offsetParent === list ? 'the panel' : String(current.offsetParent?.className),
+			});
+		})()`,
+		why: 'On a phone the page tree sits above the article behind a closed Pages disclosure, so a reader arriving on a page reads it on the first screen, and the docs ground starts right under the host header. Opened, a long tree is a panel no taller than 60% of the screen that scrolls to its last row, and the panel is what its rows are measured from, which is how opening it scrolls to the current page.',
 	},
 	{
 		id: 'phone-foot',
 		host: HOST_BASE,
 		width: PHONE,
-		body: hosted(shell({ prose: PARAGRAPH.repeat(40) })),
+		body: hosted(shell({ prose: PARAGRAPH.repeat(40), tocLinks: 25 })),
 		expression: `(() => {
 			const foot = document.querySelector('.hx-foot');
 			const label = document.querySelector('.hx-toc-summary-label');
+			const here = document.querySelector('.hx-toc-here');
+			const link = document.querySelector('.hx-foot-pages');
 			const scrollable = document.documentElement.scrollHeight > innerHeight;
 			const bottom = foot.getBoundingClientRect().bottom;
 			const rest = getComputedStyle(label).fontSize;
-			document.querySelector('.hx-toc-here').textContent = ${JSON.stringify(LONG_HEADING)};
+			const restHeight = foot.getBoundingClientRect().height;
+			const wide = document.documentElement.scrollWidth;
+			here.textContent = ${JSON.stringify(LONG_HEADING)};
 			const named = getComputedStyle(label).fontSize;
-			const height = foot.getBoundingClientRect().height;
+			const namedHeight = foot.getBoundingClientRect().height;
+			const heading = here.getBoundingClientRect();
+			const target = link.getBoundingClientRect();
+			const rtl = getComputedStyle(foot).direction === 'rtl';
+			const rings = [document.querySelector('.hx-toc-summary'), link]
+				.filter((element) => element.getBoundingClientRect().height > 0)
+				.map((element) => {
+					element.focus();
+					// A live declaration, so every value is read before the blur takes the ring away.
+					const style = getComputedStyle(element);
+					const ring = {
+						name: element.className,
+						drawn: style.outlineStyle !== 'none',
+						reach: element.getBoundingClientRect().bottom + parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth),
+					};
+					element.blur();
+					return ring;
+				});
 			document.querySelector('.hx-toc-disclosure').open = true;
-			const panel = document.querySelector('.hx-toc-list').getBoundingClientRect();
+			const list = document.querySelector('.hx-toc-list');
+			const panel = list.getBoundingClientRect();
+			list.scrollTop = list.scrollHeight;
+			const rows = list.querySelectorAll('.hx-toc-link');
 			return JSON.stringify({
 				scrollable,
 				bottom: Math.round(bottom),
 				viewport: innerHeight,
 				rest,
 				named,
-				height: Math.round(height),
+				restHeight,
+				namedHeight,
+				clash: target.width === 0 ? 0 : Math.round(rtl ? target.right - heading.left : heading.right - target.left),
+				spill: document.documentElement.scrollWidth - wide,
+				rings,
+				footGround: getComputedStyle(foot).backgroundColor,
+				panelGround: getComputedStyle(list).backgroundColor,
 				panelBottom: panel.bottom,
 				footTop: foot.getBoundingClientRect().top,
 				panelHeight: Math.round(panel.height),
+				lastBottom: rows[rows.length - 1].getBoundingClientRect().bottom,
 			});
 		})()`,
-		why: 'On a phone the table of contents is a bar stuck to the bottom of the viewport, under the thumb, on a page long enough to scroll. At rest its label is the control, at the size of the link beside it; once a heading is named the label becomes a caption above one line of heading, and the outline opens above the bar without moving the article.',
+		why: 'On a phone the table of contents is a bar with its own ground, stuck to the bottom of the viewport, under the thumb, on a page long enough to scroll. At rest its label is the control, at the size of the link beside it; once a heading is named the label becomes a caption above one line of heading that ellipsises beside the link, the bar keeps its height, and a focus ring on either control stays on screen. The outline opens above the bar, on a ground of its own, without covering the bar or moving the article, and a long one scrolls inside a panel no taller than 60% of the screen.',
 	},
 	{
 		id: 'phone-targets',
@@ -764,17 +849,110 @@ export const PROBES = [
 		body: hosted(shell({ prose: PARAGRAPH })),
 		expression: `(() => {
 			for (const details of document.querySelectorAll('details')) details.open = true;
-			const height = (selector) => Math.round(document.querySelector(selector).getBoundingClientRect().height);
-			const pages = document.querySelector('.hx-foot-pages').getBoundingClientRect();
-			return JSON.stringify({
+			const box = (selector) => document.querySelector(selector).getBoundingClientRect();
+			const height = (selector) => Math.round(box(selector).height);
+			const pages = box('.hx-foot-pages');
+			const reading = {
 				heights: Object.fromEntries(
 					['.hx-search-trigger', '.hx-tree-summary', '.hx-toc-summary', '.hx-foot-pages', '.hx-tree-link', '.hx-toc-link'].map((selector) => [selector, height(selector)]),
 				),
 				end: Math.round(document.documentElement.clientWidth - pages.right),
 				summary: getComputedStyle(document.querySelector('.hx-tree-summary')).display,
+				row: box('.hx-tree-summary').top - box('.hx-search-trigger').top,
+				under: box('.hx-tree-list').top - box('.hx-tree-summary').bottom,
+			};
+			document.getElementById('hx-toc').remove();
+			const alone = box('.hx-foot-pages');
+			return JSON.stringify({ ...reading, alone: { height: Math.round(alone.height), shift: alone.right - pages.right } });
+		})()`,
+		why: 'Every control and row on a phone is at least 44px tall, the Pages chip sits beside Search with the open tree under both, and the bar pads its Pages link in from the edge of the screen though its ground runs edge to edge. On a page with no outline the link is still 44px tall and ends where it ends on every other page. The Pages chip has to state its own display at phone width, because otherwise the rule that hides it on a desktop hides it here too.',
+	},
+	{
+		id: 'phone-bare',
+		width: PHONE,
+		body: hosted(shell({ prose: PARAGRAPH })),
+		expression: `JSON.stringify({
+			colour: getComputedStyle(document.querySelector('.hx-foot-pages')).color,
+			decoration: getComputedStyle(document.querySelector('.hx-foot-pages')).textDecorationLine,
+		})`,
+		why: "With no host stylesheet at all, the bar's Pages link is ink with no underline. Only the phone block states either, so the desktop comparison of a bare page with a hosted one never sees the link, and a host whose base layer sets links to inherit hides the browser's own blue.",
+	},
+	{
+		id: 'phone-search',
+		host: HOST_BASE,
+		width: PHONE,
+		body: hosted(shell({ prose: PARAGRAPH, tree: DIALOG })),
+		expression: `(() => {
+			const dialog = document.querySelector('dialog.hx-search');
+			dialog.showModal();
+			const box = dialog.getBoundingClientRect();
+			return JSON.stringify({ start: box.left, end: document.documentElement.clientWidth - box.right, top: box.top });
+		})()`,
+		why: "On a phone the search dialog is anchored to the top of the screen, so its input stays above the keyboard and does not move as results arrive, and it is as wide as the column, 16px from each edge at 390px where the shell's inset sits at its floor. The browser's own rule for a modal dialog caps its width below that, and the rule that centres it on a desktop wins if the phone block comes before it.",
+	},
+	{
+		id: 'phone-tablet',
+		host: HOST_BASE,
+		width: TABLET,
+		body: hosted(
+			shell({ prose: PARAGRAPH, dir: 'rtl', pages: '\u0627\u0644\u0635\u0641\u062d\u0627\u062a' }),
+		),
+		expression: `(() => {
+			const box = (selector) => document.querySelector(selector).getBoundingClientRect();
+			const trigger = box('.hx-search-trigger');
+			const chip = box('.hx-tree-summary');
+			const link = box('.hx-foot-pages');
+			const column = box('.hx-article');
+			const foot = box('.hx-foot');
+			return JSON.stringify({
+				column: [column.left, column.right],
+				row: [Math.min(trigger.left, chip.left), Math.max(trigger.right, chip.right)],
+				bar: [link.left, box('.hx-toc-summary').right],
+				foot: [foot.left, foot.right],
+				width: document.documentElement.clientWidth,
+				link: link.width,
 			});
 		})()`,
-		why: 'Every control and row on a phone is at least 44px tall, and the bar pads its Pages link in from the edge of the screen though its ground runs edge to edge. The Pages chip has to state its own display at phone width, because otherwise the rule that hides it on a desktop hides it here too.',
+		why: "At 768px the phone layout centres the column at its measure. The search and Pages row lines up with it, and the bar's ground runs edge to edge while its label starts where the column starts and its Pages link ends where the column ends. In Arabic the word for Pages is wider than the link's minimum, which is where a bar laid out around that minimum sat 10px outside the column at both ends.",
+	},
+	{
+		id: 'phone-forced',
+		host: HOST_BASE,
+		width: PHONE,
+		sample: true,
+		media: [{ name: 'forced-colors', value: 'active' }],
+		body: hosted(shell({ prose: PARAGRAPH })),
+		expression: `(() => {
+			const points = (name, summary) => {
+				// The chevron is the summary's last flex item, drawn one gap after everything
+				// before it, and centred on the cross axis. A range over the summary's contents
+				// covers what comes before it and not the pseudo-element.
+				const range = document.createRange();
+				range.selectNodeContents(summary);
+				const before = range.getBoundingClientRect();
+				const box = summary.getBoundingClientRect();
+				const chevron = getComputedStyle(summary, '::after');
+				const width = parseFloat(chevron.width);
+				const height = parseFloat(chevron.height);
+				const left = before.right + parseFloat(getComputedStyle(summary).columnGap);
+				const top = box.top + (box.height - height) / 2;
+				return {
+					[name + ' ground']: [Math.floor(left - 4), Math.floor(top + height / 2)],
+					[name + ' chevron 1']: [Math.floor(left + width / 2), Math.floor(top + height * 0.1875)],
+					[name + ' chevron 2']: [Math.floor(left + width / 2), Math.floor(top + height * 0.3125)],
+					[name + ' chevron 3']: [Math.floor(left + width / 2), Math.floor(top + height * 0.6875)],
+					[name + ' chevron 4']: [Math.floor(left + width / 2), Math.floor(top + height * 0.8125)],
+				};
+			};
+			return JSON.stringify({
+				forced: matchMedia('(forced-colors: active)').matches,
+				samples: {
+					...points('tree', document.querySelector('.hx-tree-summary')),
+					...points('toc', document.querySelector('.hx-toc-summary')),
+				},
+			});
+		})()`,
+		why: "The chevron on the Pages chip and on the bar is the only sign either disclosure is open or closed. Under a forced colour palette its token background is repainted as the ground's own colour unless the stylesheet paints it in the palette's text colour. The chevron is sampled down its middle, where its point crosses whichever way it is turned, beside a point of ground just before it.",
 	},
 	{
 		id: 'base-bare',
@@ -966,7 +1144,13 @@ async function measure(binary, probes, root) {
 		await send('Emulation.setFocusEmulationEnabled', { enabled: true }, session);
 
 		let width = 0;
+		let media = '[]';
 		for (const probe of probes) {
+			const features = JSON.stringify(probe.media ?? []);
+			if (features !== media) {
+				await send('Emulation.setEmulatedMedia', { features: probe.media ?? [] }, session);
+				media = features;
+			}
 			const wanted = probe.width ?? DESKTOP;
 			if (wanted !== width) {
 				// `mobile: false` on purpose. With it true, a page with no viewport meta tag lays
@@ -1149,13 +1333,23 @@ export function declarationProblems(raw) {
 }
 
 /**
+ * Whether two sampled pixels are the same paint: no channel differs by more than 24.
+ *
+ * Measured on macOS, a screenshot of a flat colour comes back exact, and nobody has measured a
+ * Linux runner, so the margin is for a capture that turns out to be colour managed. The colours
+ * being told apart are at least 200 apart on some channel, so it cannot blur one into the other.
+ *
+ * @param {number[] | undefined} a
+ * @param {number[] | undefined} b
+ */
+const samePaint = (a, b) =>
+	a !== undefined &&
+	b !== undefined &&
+	a.every((channel, index) => Math.abs(channel - (b[index] ?? -999)) <= 24);
+
+/**
  * What the `sides-*` probes measured, as problems: one for the partial mark and one for the
  * current-item bar, per probe, so a defect names the direction it shows up in.
- *
- * Two samples are the same paint when no channel differs by more than 24. Measured on macOS,
- * a screenshot of a flat colour comes back exact, and nobody has measured a Linux runner, so
- * the margin is for a capture that turns out to be colour managed. The colours being told
- * apart are at least 200 apart on some channel, so it cannot blur one into the other.
  *
  * @param {Record<string, string>} measured
  * @returns {string[]}
@@ -1163,11 +1357,7 @@ export function declarationProblems(raw) {
 export function sideProblems(measured) {
 	/** @type {string[]} */
 	const problems = [];
-	/** @param {number[] | undefined} a @param {number[] | undefined} b */
-	const same = (a, b) =>
-		a !== undefined &&
-		b !== undefined &&
-		a.every((channel, index) => Math.abs(channel - (b[index] ?? -999)) <= 24);
+	const same = samePaint;
 	/** @param {boolean} left @param {boolean} right @param {string} one @param {string} two */
 	const which = (left, right, one, two) =>
 		left && right
@@ -1301,6 +1491,15 @@ function layoutProblems(measured) {
 
 	// The phone probes. One message each, listing everything that probe found, so a break that
 	// trips two of one probe's checks is still one probe failing and not two.
+	/** @param {string} id @param {string[]} found */
+	const report = (id, found) => {
+		if (found.length > 0)
+			problems.push(`The ${id} probe found ${found.join(', and ')}. ${why(id)}`);
+	};
+	/** @param {number} value */
+	const px = (value) => `${Math.round(value * 100) / 100}px`;
+	const transparent = 'rgba(0, 0, 0, 0)';
+
 	const reading = read('phone-reading');
 	if (reading !== undefined) {
 		/** @type {string[]} */
@@ -1313,11 +1512,25 @@ function layoutProblems(measured) {
 				`the first paragraph starting ${reading.paragraph}px down, where ${FIRST_SCREEN}px is the most the first screen can spare`,
 			);
 		}
-		if (found.length > 0) {
-			problems.push(
-				`The phone-reading probe found ${found.join(', and ')}. ${why('phone-reading')}`,
+		if (Math.abs(reading.rootGap) > 0.5) {
+			found.push(
+				`the docs root starting ${px(reading.rootGap)} below the host's header, with the host's own ground in the gap`,
 			);
 		}
+		if (reading.panelHeight > 0.6 * reading.viewport) {
+			found.push(`the open page tree ${reading.panelHeight}px tall, over 60% of the viewport`);
+		}
+		if (reading.lastBottom > reading.panelBottom + 1) {
+			found.push(
+				`the open tree's last row ${px(reading.lastBottom - reading.panelBottom)} below the bottom of its panel, where nothing scrolls to it`,
+			);
+		}
+		if (reading.offsetParent !== 'the panel') {
+			found.push(
+				`the current row in the open tree measured from ${reading.offsetParent} rather than from its panel, so opening the tree scrolls to the wrong place`,
+			);
+		}
+		report('phone-reading', found);
 	}
 
 	const foot = read('phone-foot');
@@ -1336,20 +1549,54 @@ function layoutProblems(measured) {
 				`the bar's label at ${foot.rest} with no heading and ${foot.named} with one, where it is 15px as the control and 12px as a caption`,
 			);
 		}
-		if (foot.height > FOOT_MAX) {
-			found.push(`the bar ${foot.height}px tall with a long heading named, over ${FOOT_MAX}px`);
-		}
-		if (Math.round(foot.panelBottom - foot.footTop) > 1) {
+		if (foot.namedHeight > FOOT_MAX) {
 			found.push(
-				`the open outline's bottom edge ${Math.round(foot.panelBottom - foot.footTop)}px below the bar's top, where it sits on the bar`,
+				`the bar ${px(foot.namedHeight)} tall with a long heading named, over ${FOOT_MAX}px`,
+			);
+		}
+		if (Math.abs(foot.namedHeight - foot.restHeight) > 0.01) {
+			found.push(
+				`the bar growing from ${px(foot.restHeight)} to ${px(foot.namedHeight)} when a heading is named`,
+			);
+		}
+		if (foot.clash > 0) {
+			found.push(`a long heading running ${foot.clash}px under the Pages link`);
+		}
+		if (foot.spill > 0) {
+			found.push(`the page ${foot.spill}px wider than the screen with a long heading named`);
+		}
+		/** @type {{ name: string, drawn: boolean, reach: number }[]} */
+		const rings = foot.rings;
+		if (rings.length === 0 || rings.some((ring) => !ring.drawn)) {
+			found.push(
+				'a focused control on the bar with no focus ring drawn, so where the ring reaches was never examined',
+			);
+		}
+		for (const ring of rings.filter((entry) => entry.drawn && entry.reach > foot.viewport + 0.5)) {
+			found.push(
+				`the focus ring on .${ring.name} reaching ${px(ring.reach - foot.viewport)} below the bottom of the screen`,
+			);
+		}
+		if (foot.footGround === transparent) {
+			found.push('the bar with no ground of its own, over the article it sits on');
+		}
+		if (foot.panelGround === transparent) {
+			found.push('the open outline with no ground of its own, over the article it covers');
+		}
+		if (foot.panelBottom - foot.footTop > 0.5) {
+			found.push(
+				`the open outline's bottom edge ${px(foot.panelBottom - foot.footTop)} below the bar's top, over the rule between them`,
 			);
 		}
 		if (foot.panelHeight > 0.6 * foot.viewport) {
 			found.push(`the open outline ${foot.panelHeight}px tall, over 60% of the viewport`);
 		}
-		if (found.length > 0) {
-			problems.push(`The phone-foot probe found ${found.join(', and ')}. ${why('phone-foot')}`);
+		if (foot.lastBottom > foot.panelBottom + 1) {
+			found.push(
+				`the outline's last row ${px(foot.lastBottom - foot.panelBottom)} below the bottom of its panel, where nothing scrolls to it`,
+			);
 		}
+		report('phone-foot', found);
 	}
 
 	const targets = read('phone-targets');
@@ -1366,11 +1613,108 @@ function layoutProblems(measured) {
 		if (targets.summary !== 'flex') {
 			found.push(`the Pages chip computing display ${targets.summary} rather than flex`);
 		}
-		if (found.length > 0) {
-			problems.push(
-				`The phone-targets probe found ${found.join(', and ')}. ${why('phone-targets')}`,
+		if (Math.abs(targets.row) > 1) {
+			found.push(`the Pages chip ${px(targets.row)} below the top of Search rather than beside it`);
+		}
+		if (targets.under < -0.5) {
+			found.push('the open page tree beside the Pages chip rather than under it');
+		}
+		if (targets.alone.height < TOUCH) {
+			found.push(
+				`the Pages link ${targets.alone.height}px tall on a page with no outline, under the ${TOUCH}px floor`,
 			);
 		}
+		if (Math.abs(targets.alone.shift) > 1) {
+			found.push(
+				`the Pages link ending ${px(Math.abs(targets.alone.shift))} away from where it ends on a page with an outline`,
+			);
+		}
+		report('phone-targets', found);
+	}
+
+	const bareLink = read('phone-bare');
+	if (bareLink !== undefined) {
+		/** @type {string[]} */
+		const found = [];
+		if (bareLink.colour === UA_LINK) {
+			found.push(`the bar's Pages link in the browser's default link blue, ${UA_LINK}`);
+		}
+		if (bareLink.decoration !== 'none') {
+			found.push(`the bar's Pages link drawn with a ${bareLink.decoration} decoration`);
+		}
+		report('phone-bare', found);
+	}
+
+	const search = read('phone-search');
+	if (search !== undefined) {
+		/** @type {string[]} */
+		const found = [];
+		if (Math.round(search.start) !== MIN_INSET || Math.round(search.end) !== MIN_INSET) {
+			found.push(
+				`the open search dialog ${px(search.start)} from the start edge and ${px(search.end)} from the end edge, where both are ${MIN_INSET}px`,
+			);
+		}
+		if (search.top > MIN_INSET + 1) {
+			found.push(`the open search dialog starting ${px(search.top)} down rather than at the top`);
+		}
+		report('phone-search', found);
+	}
+
+	const tablet = read('phone-tablet');
+	if (tablet !== undefined) {
+		/** @type {string[]} */
+		const found = [];
+		const [start, end] = tablet.column;
+		/** @param {number[]} edges */
+		const off = (edges) =>
+			Math.abs((edges[0] ?? Number.NaN) - start) > 1 ||
+			Math.abs((edges[1] ?? Number.NaN) - end) > 1;
+		/** @param {number[]} edges */
+		const span = (edges) => `${px(edges[0] ?? Number.NaN)} to ${px(edges[1] ?? Number.NaN)}`;
+		if (tablet.link <= PAGES_MINIMUM + 0.5) {
+			found.push(
+				`a Pages link no wider than its ${PAGES_MINIMUM}px minimum, so how a wider one lines up was never examined`,
+			);
+		}
+		if (off(tablet.row)) {
+			found.push(
+				`the search and Pages row from ${span(tablet.row)} where the column runs from ${span(tablet.column)}`,
+			);
+		}
+		if (off(tablet.bar)) {
+			found.push(
+				`the bar's Pages link and label from ${span(tablet.bar)} where the column runs from ${span(tablet.column)}`,
+			);
+		}
+		if (tablet.foot[0] > 0.5 || tablet.width - tablet.foot[1] > 0.5) {
+			found.push(
+				`the bar's ground from ${span(tablet.foot)} rather than edge to edge of a ${tablet.width}px screen`,
+			);
+		}
+		report('phone-tablet', found);
+	}
+
+	const forced = read('phone-forced');
+	if (forced !== undefined) {
+		/** @type {string[]} */
+		const found = [];
+		if (forced.forced !== true) {
+			found.push(
+				'a page that was not under a forced palette, so what one paints was never examined',
+			);
+		} else {
+			for (const [name, label] of [
+				['tree', "the Pages chip's chevron"],
+				['toc', "the bar's chevron"],
+			]) {
+				const ground = forced.pixels[`${name} ground`];
+				const shown = [1, 2, 3, 4].some(
+					(index) => !samePaint(forced.pixels[`${name} chevron ${index}`], ground),
+				);
+				if (!shown) found.push(`${label} painted in the colour of the ground under it`);
+			}
+		}
+		report('phone-forced', found);
 	}
 
 	const bare = read('base-bare');
