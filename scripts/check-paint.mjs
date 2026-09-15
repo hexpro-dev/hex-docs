@@ -159,13 +159,6 @@ const FOOT_MAX = 64;
 const LONG_HEADING = 'Hold the top edge of your phone flat against the tag for a full second';
 
 /**
- * The narrowest the bar's Pages link is drawn, in CSS pixels. A label wider than this is the
- * case where a bar laid out around the minimum stops lining up with the column, so the tablet
- * probe refuses to pass on one that is not. A number here for the reason `MIN_INSET` gives.
- */
-const PAGES_MINIMUM = 80;
-
-/**
  * The base layer a consuming site puts under the docs, reduced to the rules that restyle
  * an element this renderer emits.
  *
@@ -459,16 +452,20 @@ export function declarationsOf(css) {
 }
 
 /**
- * A value with every `var(--name, fallback)` replaced by its fallback, or `undefined` when a
- * `var()` in it has none.
+ * A value with every `var(--name, fallback)` and `env(name, fallback)` replaced by its
+ * fallback, or `undefined` when a reference in it has none.
  *
- * `CSS.supports` answers true for any value containing a `var()`, because such a value is
- * only checked once the variable is substituted, so a declaration passed through unchanged
- * is valid by definition and the probe would check nothing in a stylesheet where every value
- * is a token chain. Every chain the theme contract generates ends in a literal, which is what
- * makes the fallback the value a page with no overrides actually paints. A `var()` with no
- * fallback has nothing to substitute and is skipped, and the probe counts the skips so a
- * substitution that returned `undefined` for everything cannot pass.
+ * `CSS.supports` answers true for any value containing a `var()` or an `env()`, because such a
+ * value is only checked once the reference is substituted, so a declaration passed through
+ * unchanged is valid by definition and the probe would check nothing in a stylesheet where
+ * every value is a token chain. Measured for `env()` in Chrome 153: `max(4px
+ * env(safe-area-inset-bottom, 0px))`, with its comma missing, is supported and computes 0px.
+ * Every chain the theme contract generates ends in a literal, which is what makes the fallback
+ * the value a page with no overrides actually paints. An `env()` fallback is what a browser that
+ * defines no such variable paints; Chrome defines the safe-area insets, so there the substituted
+ * value holds the whole declaration to the grammar rather than to what the probe page painted. A
+ * reference with no fallback has nothing to substitute and is skipped, and the probe counts the
+ * skips so a substitution that returned `undefined` for everything cannot pass.
  *
  * Self-contained for the same reason as `declarationsOf`: the page runs its source text.
  *
@@ -479,7 +476,10 @@ export function withFallbacks(value) {
 	let result = '';
 	let index = 0;
 	for (;;) {
-		const start = value.indexOf('var(', index);
+		// Both names are three letters and a parenthesis, so everything after this reads either.
+		const nextVar = value.indexOf('var(', index);
+		const nextEnv = value.indexOf('env(', index);
+		const start = nextEnv === -1 || (nextVar !== -1 && nextVar < nextEnv) ? nextVar : nextEnv;
 		if (start === -1) return result + value.slice(index);
 		if (start > 0 && /[\w-]/.test(value[start - 1] ?? '')) {
 			result += value.slice(index, start + 4);
@@ -626,6 +626,57 @@ const SIDE_EXPECTATIONS = {
  */
 const link = (className) =>
 	`<div class="hx-root ${className}"><div class="hx-prose"><p><a id="t" href="#x">x</a></p></div></div>`;
+
+/**
+ * Where each summary's chevron is drawn, as JSON with the points the harness reads back from a
+ * screenshot, whether there is a chevron to read at all, and whether the page is under a forced
+ * palette.
+ *
+ * The chevron is the summary's last flex item, drawn one gap after everything before it, and
+ * centred on the cross axis. A range over the summary's contents covers what comes before it and
+ * not the pseudo-element. It is sampled down its middle, where its point crosses whichever way it
+ * is turned, beside a point of ground just before it.
+ *
+ * `drawn` is what lets a missing chevron say so. A pseudo-element with no `content`, or a summary
+ * that is not displayed, leaves ground at every point, which reads exactly like a chevron painted
+ * in the ground's colour and would blame the palette for a box that was never there.
+ *
+ * `forced` reads the palette itself rather than the media query: an inline colour a forced palette
+ * replaces, which only a page whose colours really were forced reports as something else. A
+ * browser whose emulation matched the media query and forced nothing would pass a query check.
+ */
+const CHEVRONS = `(() => {
+	const points = (name, summary) => {
+		const range = document.createRange();
+		range.selectNodeContents(summary);
+		const before = range.getBoundingClientRect();
+		const box = summary.getBoundingClientRect();
+		const chevron = getComputedStyle(summary, '::after');
+		const width = parseFloat(chevron.width);
+		const height = parseFloat(chevron.height);
+		const left = before.right + parseFloat(getComputedStyle(summary).columnGap);
+		const top = box.top + (box.height - height) / 2;
+		drawn[name] = box.height > 0 && chevron.content !== 'none' && chevron.display !== 'none';
+		return {
+			[name + ' ground']: [Math.floor(left - 4), Math.floor(top + height / 2)],
+			[name + ' chevron 1']: [Math.floor(left + width / 2), Math.floor(top + height * 0.1875)],
+			[name + ' chevron 2']: [Math.floor(left + width / 2), Math.floor(top + height * 0.3125)],
+			[name + ' chevron 3']: [Math.floor(left + width / 2), Math.floor(top + height * 0.6875)],
+			[name + ' chevron 4']: [Math.floor(left + width / 2), Math.floor(top + height * 0.8125)],
+		};
+	};
+	const drawn = {};
+	const marker = document.createElement('span');
+	marker.style.color = 'rgb(1, 2, 3)';
+	document.body.append(marker);
+	const forced = getComputedStyle(marker).color !== 'rgb(1, 2, 3)';
+	marker.remove();
+	const samples = {
+		...points('tree', document.querySelector('.hx-tree-summary')),
+		...points('toc', document.querySelector('.hx-toc-summary')),
+	};
+	return JSON.stringify({ forced, drawn, samples });
+})()`;
 
 /**
  * Exported so `test/paint.test.ts` can hold every class a probe selects on against a
@@ -799,6 +850,7 @@ export const PROBES = [
 			here.textContent = ${JSON.stringify(LONG_HEADING)};
 			const named = getComputedStyle(label).fontSize;
 			const namedHeight = foot.getBoundingClientRect().height;
+			const overflow = getComputedStyle(here).textOverflow;
 			const heading = here.getBoundingClientRect();
 			const target = link.getBoundingClientRect();
 			const rtl = getComputedStyle(foot).direction === 'rtl';
@@ -819,6 +871,7 @@ export const PROBES = [
 			document.querySelector('.hx-toc-disclosure').open = true;
 			const list = document.querySelector('.hx-toc-list');
 			const panel = list.getBoundingClientRect();
+			const bar = foot.getBoundingClientRect();
 			list.scrollTop = list.scrollHeight;
 			const rows = list.querySelectorAll('.hx-toc-link');
 			return JSON.stringify({
@@ -831,16 +884,23 @@ export const PROBES = [
 				namedHeight,
 				clash: target.width === 0 ? 0 : Math.round(rtl ? target.right - heading.left : heading.right - target.left),
 				spill: document.documentElement.scrollWidth - wide,
+				overflow,
 				rings,
 				footGround: getComputedStyle(foot).backgroundColor,
 				panelGround: getComputedStyle(list).backgroundColor,
 				panelBottom: panel.bottom,
-				footTop: foot.getBoundingClientRect().top,
+				footTop: bar.top,
+				rule: parseFloat(getComputedStyle(foot).borderTopWidth),
+				ruleColour: getComputedStyle(foot).borderTopColor,
+				end: parseFloat(getComputedStyle(list).borderBottomWidth),
+				endColour: getComputedStyle(list).borderBottomColor,
+				panelInline: [panel.left, panel.right],
+				barInline: [bar.left, bar.right],
 				panelHeight: Math.round(panel.height),
 				lastBottom: rows[rows.length - 1].getBoundingClientRect().bottom,
 			});
 		})()`,
-		why: 'On a phone the table of contents is a bar with its own ground, stuck to the bottom of the viewport, under the thumb, on a page long enough to scroll. At rest its label is the control, at the size of the link beside it; once a heading is named the label becomes a caption above one line of heading that ellipsises beside the link, the bar keeps its height, and a focus ring on either control stays on screen. The outline opens above the bar, on a ground of its own, without covering the bar or moving the article, and a long one scrolls inside a panel no taller than 60% of the screen.',
+		why: "On a phone the table of contents is a bar with its own ground, stuck to the bottom of the viewport, under the thumb, on a page long enough to scroll. At rest its label is the control, at the size of the link beside it; once a heading is named the label becomes a caption above one line of heading that ellipsises beside the link, the bar keeps its height, and a focus ring on either control stays on screen. The outline opens above the bar across the bar's whole width, on a ground of its own, with its last row of pixels on the bar's rule and a border there in the rule's colour, so no row of the article shows between them at any device pixel ratio, and a long one scrolls inside a panel no taller than 60% of the screen.",
 	},
 	{
 		id: 'phone-targets',
@@ -873,9 +933,10 @@ export const PROBES = [
 		body: hosted(shell({ prose: PARAGRAPH })),
 		expression: `JSON.stringify({
 			colour: getComputedStyle(document.querySelector('.hx-foot-pages')).color,
+			ink: getComputedStyle(document.querySelector('.hx-root')).color,
 			decoration: getComputedStyle(document.querySelector('.hx-foot-pages')).textDecorationLine,
 		})`,
-		why: "With no host stylesheet at all, the bar's Pages link is ink with no underline. Only the phone block states either, so the desktop comparison of a bare page with a hosted one never sees the link, and a host whose base layer sets links to inherit hides the browser's own blue.",
+		why: "With no host stylesheet at all, the bar's Pages link is the docs root's ink with no underline. Only the phone block states either, so the desktop comparison of a bare page with a hosted one never sees the link, and a host whose base layer sets links to inherit hides the browser's own blue.",
 	},
 	{
 		id: 'phone-search',
@@ -904,16 +965,30 @@ export const PROBES = [
 			const link = box('.hx-foot-pages');
 			const column = box('.hx-article');
 			const foot = box('.hx-foot');
+			// The label's text rather than the summary's box: padding at the summary's start
+			// moves the words inside the column and leaves the box where it was.
+			const label = document.createRange();
+			label.selectNodeContents(document.querySelector('.hx-toc-summary-label'));
 			return JSON.stringify({
 				column: [column.left, column.right],
 				row: [Math.min(trigger.left, chip.left), Math.max(trigger.right, chip.right)],
-				bar: [link.left, box('.hx-toc-summary').right],
+				bar: [link.left, label.getBoundingClientRect().right],
 				foot: [foot.left, foot.right],
 				width: document.documentElement.clientWidth,
 				link: link.width,
+				minimum: parseFloat(getComputedStyle(document.querySelector('.hx-foot-pages')).minInlineSize),
 			});
 		})()`,
 		why: "At 768px the phone layout centres the column at its measure. The search and Pages row lines up with it, and the bar's ground runs edge to edge while its label starts where the column starts and its Pages link ends where the column ends. In Arabic the word for Pages is wider than the link's minimum, which is where a bar laid out around that minimum sat 10px outside the column at both ends.",
+	},
+	{
+		id: 'phone-chevrons',
+		host: HOST_BASE,
+		width: PHONE,
+		sample: true,
+		body: hosted(shell({ prose: PARAGRAPH })),
+		expression: CHEVRONS,
+		why: "The chevron on the Pages chip and on the bar is the only sign either disclosure is open or closed, and it points where the panel appears: down for the closed tree, up for the closed outline. It is a box clipped to a V and painted in the dim token, so down its middle a closed tree's chevron is ground and then paint, and a closed outline's is paint and then ground.",
 	},
 	{
 		id: 'phone-forced',
@@ -922,36 +997,7 @@ export const PROBES = [
 		sample: true,
 		media: [{ name: 'forced-colors', value: 'active' }],
 		body: hosted(shell({ prose: PARAGRAPH })),
-		expression: `(() => {
-			const points = (name, summary) => {
-				// The chevron is the summary's last flex item, drawn one gap after everything
-				// before it, and centred on the cross axis. A range over the summary's contents
-				// covers what comes before it and not the pseudo-element.
-				const range = document.createRange();
-				range.selectNodeContents(summary);
-				const before = range.getBoundingClientRect();
-				const box = summary.getBoundingClientRect();
-				const chevron = getComputedStyle(summary, '::after');
-				const width = parseFloat(chevron.width);
-				const height = parseFloat(chevron.height);
-				const left = before.right + parseFloat(getComputedStyle(summary).columnGap);
-				const top = box.top + (box.height - height) / 2;
-				return {
-					[name + ' ground']: [Math.floor(left - 4), Math.floor(top + height / 2)],
-					[name + ' chevron 1']: [Math.floor(left + width / 2), Math.floor(top + height * 0.1875)],
-					[name + ' chevron 2']: [Math.floor(left + width / 2), Math.floor(top + height * 0.3125)],
-					[name + ' chevron 3']: [Math.floor(left + width / 2), Math.floor(top + height * 0.6875)],
-					[name + ' chevron 4']: [Math.floor(left + width / 2), Math.floor(top + height * 0.8125)],
-				};
-			};
-			return JSON.stringify({
-				forced: matchMedia('(forced-colors: active)').matches,
-				samples: {
-					...points('tree', document.querySelector('.hx-tree-summary')),
-					...points('toc', document.querySelector('.hx-toc-summary')),
-				},
-			});
-		})()`,
+		expression: CHEVRONS,
 		why: "The chevron on the Pages chip and on the bar is the only sign either disclosure is open or closed. Under a forced colour palette its token background is repainted as the ground's own colour unless the stylesheet paints it in the palette's text colour. The chevron is sampled down its middle, where its point crosses whichever way it is turned, beside a point of ground just before it.",
 	},
 	{
@@ -1286,7 +1332,7 @@ export async function run(root = ROOT) {
 	let counted = '';
 	try {
 		const reading = JSON.parse(measured.declarations ?? '');
-		counted = `, ${reading.validated} declarations valid, ${reading.skipped.length} skipped for a var() with no fallback`;
+		counted = `, ${reading.validated} declarations valid, ${reading.skipped.length} skipped for a var() or env() with no fallback`;
 	} catch {
 		// Already a problem above. The note is what a passing row prints, and this row is not
 		// passing.
@@ -1317,7 +1363,7 @@ export function declarationProblems(raw) {
 	/** @type {string[]} */
 	const problems = reading.invalid.map(
 		(entry) =>
-			`A declaration the browser does not accept: \`${entry.selector}\` declares \`${entry.property}: ${entry.value}\`${entry.tested === entry.value ? '' : `, tested as \`${entry.tested}\` with each var() replaced by its fallback`}. It is dropped, so the rule paints as if the line were never written.`,
+			`A declaration the browser does not accept: \`${entry.selector}\` declares \`${entry.property}: ${entry.value}\`${entry.tested === entry.value ? '' : `, tested as \`${entry.tested}\` with each var() and env() replaced by its fallback`}. It is dropped, so the rule paints as if the line were never written.`,
 	);
 	if (reading.found < reading.terminators) {
 		problems.push(
@@ -1326,7 +1372,7 @@ export function declarationProblems(raw) {
 	}
 	if (reading.validated === 0) {
 		problems.push(
-			`The declarations probe validated nothing: ${reading.skipped.length} of ${reading.found} declarations were skipped for a var() with no fallback. A probe that skipped everything has checked nothing.`,
+			`The declarations probe validated nothing: ${reading.skipped.length} of ${reading.found} declarations were skipped for a var() or env() with no fallback. A probe that skipped everything has checked nothing.`,
 		);
 	}
 	return problems;
@@ -1337,7 +1383,8 @@ export function declarationProblems(raw) {
  *
  * Measured on macOS, a screenshot of a flat colour comes back exact, and nobody has measured a
  * Linux runner, so the margin is for a capture that turns out to be colour managed. The colours
- * being told apart are at least 200 apart on some channel, so it cannot blur one into the other.
+ * being told apart are at least 145 apart on some channel, the dim chevron on the surface being
+ * the closest pair, so it cannot blur one into the other.
  *
  * @param {number[] | undefined} a
  * @param {number[] | undefined} b
@@ -1565,6 +1612,11 @@ function layoutProblems(measured) {
 		if (foot.spill > 0) {
 			found.push(`the page ${foot.spill}px wider than the screen with a long heading named`);
 		}
+		if (foot.overflow !== 'ellipsis') {
+			found.push(
+				`a long heading cut off with text-overflow ${foot.overflow} rather than an ellipsis`,
+			);
+		}
 		/** @type {{ name: string, drawn: boolean, reach: number }[]} */
 		const rings = foot.rings;
 		if (rings.length === 0 || rings.some((ring) => !ring.drawn)) {
@@ -1583,9 +1635,31 @@ function layoutProblems(measured) {
 		if (foot.panelGround === transparent) {
 			found.push('the open outline with no ground of its own, over the article it covers');
 		}
-		if (foot.panelBottom - foot.footTop > 0.5) {
+		// The panel's last row lies on the bar's rule rather than meeting its outer edge, because
+		// two edges that meet exactly snap to different device rows at a fractional device pixel
+		// ratio and leave a row of the article between them. This runs at a ratio of 1, where they
+		// meet cleanly, so what is held is the overlap and the border that covers it, not a pixel.
+		const overlap = foot.panelBottom - foot.footTop;
+		if (!(overlap > 0 && overlap <= foot.rule)) {
 			found.push(
-				`the open outline's bottom edge ${px(foot.panelBottom - foot.footTop)} below the bar's top, over the rule between them`,
+				`the open outline's bottom edge ${px(overlap)} below the bar's top, where it lies on the bar's ${px(foot.rule)} rule and no further`,
+			);
+		}
+		if (!(foot.end >= foot.rule)) {
+			found.push(
+				`the open outline's end border ${px(foot.end)} wide over the bar's ${px(foot.rule)} rule`,
+			);
+		}
+		if (foot.endColour !== foot.ruleColour) {
+			found.push(
+				`the open outline's end border in ${foot.endColour} over a rule in ${foot.ruleColour}`,
+			);
+		}
+		const [panelStart = Number.NaN, panelEnd = Number.NaN] = foot.panelInline;
+		const [barStart = Number.NaN, barEnd = Number.NaN] = foot.barInline;
+		if (!(Math.abs(panelStart - barStart) <= 0.5 && Math.abs(panelEnd - barEnd) <= 0.5)) {
+			found.push(
+				`the open outline from ${px(panelStart)} to ${px(panelEnd)} where the bar runs from ${px(barStart)} to ${px(barEnd)}`,
 			);
 		}
 		if (foot.panelHeight > 0.6 * foot.viewport) {
@@ -1636,8 +1710,13 @@ function layoutProblems(measured) {
 	if (bareLink !== undefined) {
 		/** @type {string[]} */
 		const found = [];
-		if (bareLink.colour === UA_LINK) {
-			found.push(`the bar's Pages link in the browser's default link blue, ${UA_LINK}`);
+		// The docs root's own colour is the reference rather than the browser's link blue, which
+		// is only one of the wrong answers: the faint token, at 3.3:1 on the bar's ground, and the
+		// bar's own ground, which hides the link, both differ from blue.
+		if (bareLink.colour !== bareLink.ink) {
+			found.push(
+				`the bar's Pages link in ${bareLink.colour}${bareLink.colour === UA_LINK ? ", the browser's default link blue," : ''} rather than the docs root's ink, ${bareLink.ink}`,
+			);
 		}
 		if (bareLink.decoration !== 'none') {
 			found.push(`the bar's Pages link drawn with a ${bareLink.decoration} decoration`);
@@ -1649,7 +1728,9 @@ function layoutProblems(measured) {
 	if (search !== undefined) {
 		/** @type {string[]} */
 		const found = [];
-		if (Math.round(search.start) !== MIN_INSET || Math.round(search.end) !== MIN_INSET) {
+		// Not rounded: the desktop rule's 92vw leaves 15.6px either side at this width, which
+		// rounds to the floor, so a rounded comparison passed with the phone width deleted.
+		if (Math.abs(search.start - MIN_INSET) > 0.25 || Math.abs(search.end - MIN_INSET) > 0.25) {
 			found.push(
 				`the open search dialog ${px(search.start)} from the start edge and ${px(search.end)} from the end edge, where both are ${MIN_INSET}px`,
 			);
@@ -1671,9 +1752,12 @@ function layoutProblems(measured) {
 			Math.abs((edges[1] ?? Number.NaN) - end) > 1;
 		/** @param {number[]} edges */
 		const span = (edges) => `${px(edges[0] ?? Number.NaN)} to ${px(edges[1] ?? Number.NaN)}`;
-		if (tablet.link <= PAGES_MINIMUM + 0.5) {
+		// Measured in the page rather than written here, so a minimum that grew past the Arabic
+		// word cannot quietly stop this probe testing what it is for. Negated, so a minimum that
+		// did not parse fails rather than passes.
+		if (!(tablet.link > tablet.minimum + 0.5)) {
 			found.push(
-				`a Pages link no wider than its ${PAGES_MINIMUM}px minimum, so how a wider one lines up was never examined`,
+				`a Pages link ${px(tablet.link)} wide against its ${px(tablet.minimum)} minimum, so how a wider one lines up was never examined`,
 			);
 		}
 		if (off(tablet.row)) {
@@ -1694,6 +1778,40 @@ function layoutProblems(measured) {
 		report('phone-tablet', found);
 	}
 
+	const chevronNames = [
+		['tree', "the Pages chip's chevron"],
+		['toc', "the bar's chevron"],
+	];
+
+	const plain = read('phone-chevrons');
+	if (plain !== undefined) {
+		/** @type {string[]} */
+		const found = [];
+		// Down the middle of a V pointing down, the ground comes first and the paint second, and
+		// the outline's chevron is turned to point up while it is closed.
+		const expected = {
+			tree: ['ground', 'ground', 'paint', 'paint'],
+			toc: ['paint', 'paint', 'ground', 'ground'],
+		};
+		for (const [name, label] of chevronNames) {
+			if (plain.drawn[name] !== true) {
+				found.push(`${label} not drawn at all`);
+				continue;
+			}
+			const ground = plain.pixels[`${name} ground`];
+			const seen = [1, 2, 3, 4].map((index) =>
+				samePaint(plain.pixels[`${name} chevron ${index}`], ground) ? 'ground' : 'paint',
+			);
+			const want = expected[/** @type {'tree' | 'toc'} */ (name)];
+			if (seen.join() !== want.join()) {
+				found.push(
+					`${label} reading ${seen.join(', ')} down its middle, where a closed one reads ${want.join(', ')}`,
+				);
+			}
+		}
+		report('phone-chevrons', found);
+	}
+
 	const forced = read('phone-forced');
 	if (forced !== undefined) {
 		/** @type {string[]} */
@@ -1703,10 +1821,11 @@ function layoutProblems(measured) {
 				'a page that was not under a forced palette, so what one paints was never examined',
 			);
 		} else {
-			for (const [name, label] of [
-				['tree', "the Pages chip's chevron"],
-				['toc', "the bar's chevron"],
-			]) {
+			for (const [name, label] of chevronNames) {
+				if (forced.drawn[name] !== true) {
+					found.push(`${label} not drawn at all, so there was no chevron for a palette to repaint`);
+					continue;
+				}
 				const ground = forced.pixels[`${name} ground`];
 				const shown = [1, 2, 3, 4].some(
 					(index) => !samePaint(forced.pixels[`${name} chevron ${index}`], ground),

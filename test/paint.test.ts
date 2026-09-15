@@ -254,7 +254,7 @@ describe('the declarations probe, without a browser', () => {
 		expect(terminatorsOf(STYLESHEET())).toBe(declarationsOf(STYLESHEET()).length);
 	});
 
-	test('replaces each var() with its fallback, and gives up on one with none', () => {
+	test('replaces each var() and env() with its fallback, and gives up on one with none', () => {
 		expect(withFallbacks('inset 2px 0 0 var(--hx-accent, #0b76d9)')).toBe('inset 2px 0 0 #0b76d9');
 		expect(withFallbacks('var(--hx-font-body, var(--font-body, system-ui, sans-serif))')).toBe(
 			'system-ui, sans-serif',
@@ -265,6 +265,10 @@ describe('the declarations probe, without a browser', () => {
 		);
 		expect(withFallbacks('1px solid var(--hx-edge)')).toBeUndefined();
 		expect(withFallbacks('calc(var(--a, var(--b)) * 2)')).toBeUndefined();
+		// `CSS.supports` passes a value holding an `env()` just as it passes one holding a `var()`.
+		expect(withFallbacks('max(4px, env(safe-area-inset-bottom, 0px))')).toBe('max(4px, 0px)');
+		expect(withFallbacks('env(a, var(--b, 1px)) var(--c, env(d, 2px))')).toBe('1px 2px');
+		expect(withFallbacks('max(4px, env(safe-area-inset-bottom))')).toBeUndefined();
 	});
 
 	test('a parser that missed declarations fails, and so does one that validated none', () => {
@@ -367,8 +371,8 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 		expect(rows[0]?.state).toBe('PASS');
 		// A literal, so a deleted probe is a failure here rather than a smaller number on the
 		// ladder, which does not fail.
-		expect(rows[0]?.examined).toBe(27);
-		expect(PROBES.length).toBe(27);
+		expect(rows[0]?.examined).toBe(28);
+		expect(PROBES.length).toBe(28);
 		expect(rows[0]?.unit).toBe('probes');
 	}, 60_000);
 
@@ -483,14 +487,46 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 		},
 		{
 			name: 'an outline panel left at its static position',
-			edit: (css) => once(css, '\t\tinset-block-end: calc(100% + 1px);\n', ''),
+			edit: (css) => once(css, '\t\tinset-block-end: 100%;\n', ''),
 			expect: ['The phone-foot probe'],
 		},
 		{
-			name: "an outline panel placed on the bar's padding box, over the bar's top rule",
+			name: "an outline panel with no end border over the bar's top rule",
 			edit: (css) =>
-				once(css, '\t\tinset-block-end: calc(100% + 1px);\n', '\t\tinset-block-end: 100%;\n'),
-			expect: ['The phone-foot probe'],
+				once(
+					css,
+					'\t\tborder-block: 1px solid var(--hx-edge, #2a2621);\n',
+					'\t\tborder-block-start: 1px solid var(--hx-edge, #2a2621);\n',
+				),
+			expect: ["The phone-foot probe found the open outline's end border 0px wide"],
+		},
+		{
+			name: "an outline panel whose end border is not the rule's colour",
+			edit: (css) =>
+				once(
+					css,
+					'\t\tborder-block: 1px solid var(--hx-edge, #2a2621);\n',
+					'\t\tborder-block: 1px solid var(--hx-control, #78716c);\n',
+				),
+			expect: ["The phone-foot probe found the open outline's end border in"],
+		},
+		{
+			// The edges meet exactly at a device pixel ratio of 1 and snap apart at 1.5, 1.75 and
+			// 2.625, where a row of the article showed between the panel and the bar.
+			name: "an outline panel one pixel higher, meeting the rule's outer edge rather than lying on it",
+			edit: (css) =>
+				once(css, '\t\tinset-block-end: 100%;\n', '\t\tinset-block-end: calc(100% + 1px);\n'),
+			expect: ["The phone-foot probe found the open outline's bottom edge 0px below the bar's top"],
+		},
+		{
+			name: 'an outline panel that does not span the bar',
+			edit: (css) =>
+				once(
+					css,
+					'\t\tinset-block-end: 100%;\n\t\tinset-inline: 0;\n',
+					'\t\tinset-block-end: 100%;\n',
+				),
+			expect: ['The phone-foot probe found the open outline from'],
 		},
 		{
 			name: 'a bar label that is small and dim before it has anything to say',
@@ -521,8 +557,13 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 					'\t.hx-root .hx-tree-summary {\n',
 				),
 			// A chip that is not displayed is also missing from the tablet's row, and has no
-			// chevron for the forced palette probe to find: one defect seen from three probes.
-			expect: ['The phone-targets probe', 'The phone-tablet probe', 'The phone-forced probe'],
+			// chevron for either chevron probe to find: one defect seen from four probes.
+			expect: [
+				'The phone-targets probe',
+				'The phone-tablet probe',
+				"The phone-chevrons probe found the Pages chip's chevron not drawn",
+				"The phone-forced probe found the Pages chip's chevron not drawn",
+			],
 		},
 		{
 			name: 'a bar link that stays hidden at phone width',
@@ -564,8 +605,28 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 					'\t.hx-root .hx-tree-disclosure,\n\t.hx-root .hx-toc-disclosure {\n\t\tdisplay: block;\n\t}\n\n',
 					'',
 				),
-			// Both chips gone, seen from the row at 768px and from the forced palette as well.
-			expect: ['The phone-targets probe', 'The phone-tablet probe', 'The phone-forced probe'],
+			// Both chips gone, seen from the row at 768px and from both chevron probes as well.
+			expect: [
+				'The phone-targets probe',
+				'The phone-tablet probe',
+				'The phone-chevrons probe',
+				'The phone-forced probe',
+			],
+		},
+		{
+			name: 'a bar summary padded at its start, so the label sits inside the column',
+			edit: (css) =>
+				once(
+					css,
+					'\t\tpadding-block: 0.375rem;\n\t\tpadding-inline-end: 0.5rem;\n',
+					'\t\tpadding-block: 0.375rem;\n\t\tpadding-inline: 0.5rem;\n',
+				),
+			expect: ['The phone-tablet probe'],
+		},
+		{
+			name: 'a Pages link minimum as wide as the Arabic label, so a wider label is never measured',
+			edit: (css) => once(css, '\t\tmin-inline-size: 5rem;\n', '\t\tmin-inline-size: 6.5rem;\n'),
+			expect: ['The phone-tablet probe found a Pages link 104px wide against its 104px minimum'],
 		},
 		{
 			name: 'a bar padded to the shell inset, which a wide Pages label pushes past the column',
@@ -678,6 +739,16 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 			expect: ['The phone-foot probe'],
 		},
 		{
+			name: 'a heading line clipped with no ellipsis',
+			edit: (css) =>
+				once(
+					css,
+					'\t\tdisplay: block;\n\t\toverflow: hidden;\n\t\ttext-overflow: ellipsis;\n',
+					'\t\tdisplay: block;\n\t\toverflow: hidden;\n',
+				),
+			expect: ['The phone-foot probe found a long heading cut off with text-overflow'],
+		},
+		{
 			name: 'a heading line that is never clipped',
 			edit: (css) =>
 				once(
@@ -711,6 +782,16 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 			name: 'a bar Pages link that leaves its colour to the browser',
 			edit: (css) =>
 				once(css, '\t\tborder: 0;\n\t\tcolor: var(--hx-ink, #f2ede6);\n', '\t\tborder: 0;\n'),
+			expect: ['The phone-bare probe'],
+		},
+		{
+			name: 'a bar Pages link in the faint colour',
+			edit: (css) =>
+				once(
+					css,
+					'\t\tborder: 0;\n\t\tcolor: var(--hx-ink, #f2ede6);\n',
+					'\t\tborder: 0;\n\t\tcolor: var(--hx-faint, #6f675d);\n',
+				),
 			expect: ['The phone-bare probe'],
 		},
 		{
@@ -773,6 +854,11 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 			expect: ['The phone-search probe'],
 		},
 		{
+			name: "a search dialog left at the desktop rule's width",
+			edit: (css) => once(css, `\t\tinline-size: calc(100% - 2 * ${INSET});\n`, ''),
+			expect: ['The phone-search probe'],
+		},
+		{
 			name: 'a search dialog with no phone rule, centred and capped',
 			edit: (css) => {
 				const start = css.indexOf(`\t.hx-search {\n\t\tinline-size: calc(100% - 2 * ${INSET});\n`);
@@ -797,6 +883,60 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 				);
 			},
 			expect: ['The phone-search probe'],
+		},
+		{
+			name: 'the desktop outline heading shown in the phone bar',
+			// The growth arm cannot see this one: the heading is there before a heading is named
+			// and after, so the bar is taller at rest and grows by nothing. Only the height cap does.
+			edit: (css) => once(css, '\t.hx-root .hx-toc-heading {\n\t\tdisplay: none;\n\t}\n\n', ''),
+			expect: ['The phone-foot probe found the bar'],
+		},
+		{
+			name: 'a focus ring taken away',
+			// Deleting the shared rule is not this break: the browser's own `:focus-visible` ring is
+			// `outline: auto`, so the probe still reads a ring drawn and the row stays green.
+			edit: (css) =>
+				once(
+					css,
+					'.hx-root :focus-visible {\n\toutline: 2px solid var(--hx-accent, #0b76d9);',
+					'.hx-root :focus-visible {\n\toutline: none;',
+				),
+			expect: ['The phone-foot probe found a focused control on the bar with no focus ring drawn'],
+		},
+		{
+			name: 'chevrons with no paint of their own',
+			edit: (css) =>
+				once(
+					css,
+					'\t\tblock-size: 0.5rem;\n\t\tbackground: var(--hx-dim, #a89f93);\n',
+					'\t\tblock-size: 0.5rem;\n',
+				),
+			expect: ['The phone-chevrons probe'],
+		},
+		{
+			name: 'chevrons that are solid boxes rather than a V',
+			edit: (css) =>
+				once(css, '\t\tclip-path: polygon(0 0, 16% 0, 50% 62%, 84% 0, 100% 0, 50% 100%);\n', ''),
+			expect: ['The phone-chevrons probe'],
+		},
+		{
+			name: 'a bar chevron that points away from the outline it opens',
+			edit: (css) =>
+				once(
+					css,
+					'\t.hx-root .hx-tree-disclosure[open] > .hx-tree-summary::after,\n\t.hx-root .hx-toc-summary::after {\n\t\ttransform: rotate(180deg);\n\t}\n\n',
+					'',
+				),
+			expect: ["The phone-chevrons probe found the bar's chevron reading"],
+		},
+		{
+			name: 'a chevron with no content',
+			// Blamed on the forced palette until the probes checked a chevron was drawn at all.
+			edit: (css) => once(css, "\t\tcontent: '';\n\t\tflex: none;", '\t\tflex: none;'),
+			expect: [
+				"The phone-chevrons probe found the Pages chip's chevron not drawn",
+				"The phone-forced probe found the Pages chip's chevron not drawn",
+			],
 		},
 		{
 			name: 'chevrons left to a forced palette',
@@ -842,6 +982,20 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 				),
 			expect: [
 				'A declaration the browser does not accept: `.hx-root .hx-step` declares `border-inline-start: 2px solid var(--hx-edge, #2a262)`, tested as `2px solid #2a262`',
+			],
+		},
+		{
+			// Chrome defines the safe-area insets, so the page paints the defined value and no layout
+			// probe can see a typo in the fallback. Only the substitution can.
+			name: 'a typo inside an env() fallback',
+			edit: (css) =>
+				once(
+					css,
+					'padding-block-end: max(4px, env(safe-area-inset-bottom, 0px));',
+					'padding-block-end: max(4px, env(safe-area-inset-bottom, 0pz));',
+				),
+			expect: [
+				'A declaration the browser does not accept: `.hx-root .hx-foot` declares `padding-block-end: max(4px, env(safe-area-inset-bottom, 0pz))`, tested as `max(4px, 0pz)`',
 			],
 		},
 		{
@@ -904,6 +1058,31 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 			],
 		},
 	];
+
+	test('a forced palette probe run with no forced palette says it examined nothing', async () => {
+		// The one arm a stylesheet edit cannot reach: whether the page was under a forced palette
+		// at all is the harness's doing, so the harness is what is taken away.
+		const probe = (PROBES as { id: string; media?: unknown }[]).find(
+			(entry) => entry.id === 'phone-forced',
+		);
+		const media = probe?.media;
+		expect(media).toBeDefined();
+		if (probe === undefined) return;
+		delete probe.media;
+		try {
+			const rows = (await runPaint()) as CheckResult[];
+			expect(rows[0]?.state).toBe('FAIL');
+			const problems = rows[0]?.problems ?? [];
+			expect(problems).toHaveLength(1);
+			expect(
+				problems[0]?.startsWith(
+					'The phone-forced probe found a page that was not under a forced palette',
+				),
+			).toBe(true);
+		} finally {
+			probe.media = media;
+		}
+	}, 60_000);
 
 	test.each([...LAYOUT_BREAKS, ...DIRECTION_BREAKS])(
 		'$name is caught, and only that probe fails',

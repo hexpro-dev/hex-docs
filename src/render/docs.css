@@ -979,11 +979,14 @@
 
 @media (max-width: 60rem) {
 	/*
-	 * A block container rather than a one-column grid. A sticky box is held inside its
-	 * containing block, and a grid item's is its own grid area, which is exactly as tall as the
-	 * item: the bar would have nowhere to stick. A flow root rather than a plain block, because
-	 * a plain block lets the tree's top margin collapse through it and out past the docs root,
-	 * which then starts 12px below the host's header with the host's ground showing in the gap.
+	 * A block container rather than a one-column grid, and not for the bar's sake: a sticky grid
+	 * item is held inside the grid container rather than its own area, and measured in Chrome the
+	 * bar sticks and settles above the host's footer either way. What a grid changes is the rows.
+	 * An auto inline margin stops a grid item stretching, so the centred row and article would
+	 * shrink to their content rather than fill the column, and the desktop's gap would open 2rem
+	 * between rows. A flow root rather than a plain block, because a plain block lets the tree's
+	 * top margin collapse through it and out past the docs root, which then starts 12px below the
+	 * host's header with the host's ground showing in the gap.
 	 */
 	.hx-root .hx-layout {
 		display: flow-root;
@@ -1229,13 +1232,17 @@
 	 * percentage in the inline padding resolves against the bar's full-bleed box rather than
 	 * the column, which is why it is not the column's own centring formula.
 	 *
-	 * The extra pixel is the bar's own top rule. An absolute box is placed against its
-	 * containing block's padding box, which starts inside that rule, so at 100% the panel's
-	 * bottom row of pixels covered it and nothing separated the panel from the bar.
+	 * An absolute box is placed against its containing block's padding box, which starts inside
+	 * the bar's 1px top rule, so the panel's last row of pixels lies on that rule, and the panel
+	 * draws its own end border there in the rule's colour. Placed a pixel higher, its edge met the
+	 * rule's outer edge exactly, and edges that meet exactly snap to different device rows at a
+	 * fractional device pixel ratio: measured at 1.5, 1.75 and 2.625, a row of the article showed
+	 * through between the open panel and the bar. Every box under the docs root is border-box, so
+	 * the border takes nothing past the panel's height cap.
 	 */
 	.hx-root .hx-toc-disclosure + .hx-toc-list {
 		position: absolute;
-		inset-block-end: calc(100% + 1px);
+		inset-block-end: 100%;
 		inset-inline: 0;
 		margin: 0;
 		max-block-size: 60svh;
@@ -1244,7 +1251,7 @@
 		padding-block: 0.5rem;
 		padding-inline: max(var(--hx-shell-inset, clamp(1rem, 2.5vw, 2rem)), calc((100% - var(--hx-measure, 42rem)) / 2));
 		background: var(--hx-surface, #171512);
-		border-block-start: 1px solid var(--hx-edge, #2a2621);
+		border-block: 1px solid var(--hx-edge, #2a2621);
 	}
 
 	.hx-root .hx-foot-pages {

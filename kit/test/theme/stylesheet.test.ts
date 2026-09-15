@@ -701,8 +701,8 @@ describe('the phone layout', () => {
 	test('says what the layout depends on', () => {
 		const phone = phoneBlock();
 		for (const text of [
-			// A block container, so the bar has a containing block taller than itself to stick
-			// in, and a flow root, so the tree's margin stays inside the docs root.
+			// A block container, so the centred rows fill the column rather than shrinking to their
+			// content, and a flow root, so the tree's margin stays inside the docs root.
 			'\t.hx-root .hx-layout {\n\t\tdisplay: flow-root;',
 			// The disclosures a desktop does not display at all.
 			'\t.hx-root .hx-tree-disclosure,\n\t.hx-root .hx-toc-disclosure {\n\t\tdisplay: block;',

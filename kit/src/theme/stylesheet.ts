@@ -5,10 +5,13 @@
  * package's theme contract exists to prevent. Every colour has to be read at its point of
  * use through the full `var()` chain, and a hand-written rule that spells a chain slightly
  * differently, or writes a literal because the chain was long, passes every test that reads
- * the stylesheet and every test that renders it under a theme class. So the only thing in
- * here that can produce a colour is `t()`, which expands a token name through the contract's
- * own `tokenValue` and throws on a name the table does not have. A hard-coded colour is not
- * detected; it is unwriteable.
+ * the stylesheet and every test that renders it under a theme class. So every theme and palette
+ * colour here comes from `t()`, which expands a token name through the contract's own
+ * `tokenValue` and throws on a name the table does not have, and a hex literal anywhere outside
+ * a chain fails `kit/test/theme/stylesheet.test.ts`. The colour values that are not tokens are
+ * `currentColor`, `transparent`, the search dialog's backdrop scrim and one system colour under
+ * a forced palette, and a theme sets none of those. That test scans for hex and nothing else,
+ * so a named colour or an `rgb()` written into a rule is a thing review has to catch.
  *
  * `pnpm schemas` writes the file and CI fails on a diff, the same way the JSON Schemas and
  * the house rule pack are gated, so an edit to the checked-in CSS is caught rather than
@@ -59,9 +62,9 @@ export const STYLESHEET_PATH = 'src/render/docs.css';
  * paints nothing, and a token removed from the table takes every rule that used it down
  * with it rather than leaving a `var()` with no fallback.
  *
- * Exported only so the test can call it. The guarantee this file rests on is that a
- * hard-coded colour is unwriteable rather than merely detectable, and a guarantee nobody
- * has made fail is not known to hold.
+ * Exported only so the test can call it. The guarantee this file rests on is that a token's
+ * chain cannot be spelled any way but the contract's, and a guarantee nobody has made fail is
+ * not known to hold.
  */
 export function t(name: string): string {
 	const token = THEME_TOKENS.find((entry) => entry.name === name);
@@ -1132,11 +1135,14 @@ const PHONE = `/*
 
 @media (max-width: 60rem) {
 	/*
-	 * A block container rather than a one-column grid. A sticky box is held inside its
-	 * containing block, and a grid item's is its own grid area, which is exactly as tall as the
-	 * item: the bar would have nowhere to stick. A flow root rather than a plain block, because
-	 * a plain block lets the tree's top margin collapse through it and out past the docs root,
-	 * which then starts 12px below the host's header with the host's ground showing in the gap.
+	 * A block container rather than a one-column grid, and not for the bar's sake: a sticky grid
+	 * item is held inside the grid container rather than its own area, and measured in Chrome the
+	 * bar sticks and settles above the host's footer either way. What a grid changes is the rows.
+	 * An auto inline margin stops a grid item stretching, so the centred row and article would
+	 * shrink to their content rather than fill the column, and the desktop's gap would open 2rem
+	 * between rows. A flow root rather than a plain block, because a plain block lets the tree's
+	 * top margin collapse through it and out past the docs root, which then starts 12px below the
+	 * host's header with the host's ground showing in the gap.
 	 */
 	.hx-root .hx-layout {
 		display: flow-root;
@@ -1382,13 +1388,17 @@ const PHONE = `/*
 	 * percentage in the inline padding resolves against the bar's full-bleed box rather than
 	 * the column, which is why it is not the column's own centring formula.
 	 *
-	 * The extra pixel is the bar's own top rule. An absolute box is placed against its
-	 * containing block's padding box, which starts inside that rule, so at 100% the panel's
-	 * bottom row of pixels covered it and nothing separated the panel from the bar.
+	 * An absolute box is placed against its containing block's padding box, which starts inside
+	 * the bar's 1px top rule, so the panel's last row of pixels lies on that rule, and the panel
+	 * draws its own end border there in the rule's colour. Placed a pixel higher, its edge met the
+	 * rule's outer edge exactly, and edges that meet exactly snap to different device rows at a
+	 * fractional device pixel ratio: measured at 1.5, 1.75 and 2.625, a row of the article showed
+	 * through between the open panel and the bar. Every box under the docs root is border-box, so
+	 * the border takes nothing past the panel's height cap.
 	 */
 	.hx-root .hx-toc-disclosure + .hx-toc-list {
 		position: absolute;
-		inset-block-end: calc(100% + 1px);
+		inset-block-end: 100%;
 		inset-inline: 0;
 		margin: 0;
 		max-block-size: 60svh;
@@ -1397,7 +1407,7 @@ const PHONE = `/*
 		padding-block: 0.5rem;
 		padding-inline: max(${t('shell-inset')}, calc((100% - ${t('measure')}) / 2));
 		background: ${t('surface')};
-		border-block-start: 1px solid ${t('edge')};
+		border-block: 1px solid ${t('edge')};
 	}
 
 	.hx-root .hx-foot-pages {
