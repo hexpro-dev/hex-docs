@@ -18,7 +18,16 @@
  * value on the first client pass and mismatches; this one cannot.
  */
 
-import { useCallback, useEffect, useRef, useSyncExternalStore, type RefObject } from 'react';
+import {
+	useCallback,
+	useEffect,
+	useRef,
+	useSyncExternalStore,
+	type KeyboardEvent,
+	type MouseEvent,
+	type RefObject,
+	type SyntheticEvent,
+} from 'react';
 
 import type { PageHeading } from '../contracts/page.js';
 import type { DocsEventMap } from '../contracts/theme.js';
@@ -257,4 +266,119 @@ export function useAliasScroll(aliases: Readonly<Record<string, string>>, reduce
 			.getElementById(target)
 			?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
 	}, [aliases, reduced]);
+}
+
+/**
+ * The two phone disclosures, the page tree and the outline, as the handlers need them.
+ *
+ * Both are native `<details>`, closed in the server's markup, and React never passes `open`,
+ * so a reader who opened one before hydration keeps it open; `src/render/page.tsx` says why
+ * each still carries `suppressHydrationWarning`. Everything below is what script adds on top
+ * of a control that already works without it, and each degrades to nothing when no script
+ * runs.
+ */
+export type DisclosureRef = RefObject<HTMLDetailsElement | null>;
+
+/**
+ * Closes both disclosures when the page changes under a mounted shell.
+ *
+ * A client-side navigation does not reload the document, so a tree the reader opened to pick
+ * a page would otherwise still be open over the page they picked. It has to run before
+ * `useNavigationAnnounce`, which is a later effect in the same commit: that one moves focus
+ * into the article, and focus left on a row in a list that is about to be hidden falls to the
+ * body when the list goes.
+ *
+ * Nothing happens on the first commit, which is why the slug is compared rather than the
+ * effect simply running. Closing on mount would shut a disclosure the reader opened before
+ * hydration finished, which is the one state the native control is there to keep. The refs
+ * are not dependencies: a ref object is stable for the life of the component, and the array
+ * holding them is a new one on every render, so listing it would re-run the effect for nothing.
+ */
+export function useCloseOnNavigate(slug: string, disclosures: readonly DisclosureRef[]): void {
+	const previous = useRef(slug);
+	useEffect(() => {
+		if (previous.current === slug) return;
+		previous.current = slug;
+		for (const disclosure of disclosures) {
+			if (disclosure.current !== null) disclosure.current.open = false;
+		}
+	}, [slug]);
+}
+
+/**
+ * Scrolls an opened panel so its current row sits two fifths of the way down.
+ *
+ * The panel is the element after the `<details>`, which is where both lists sit so that
+ * desktop, where no disclosure is ever shown, keeps today's markup behaviour. The section
+ * above the current row stays in view and its neighbours below it, which is what a reader
+ * looking for the next page wants to see. At fifty pages the current row is otherwise
+ * several screens down a list that opened at its top.
+ *
+ * Arithmetic on `scrollTop` and not `scrollIntoView`, which scrolls every scrollable ancestor
+ * and would move the document under the reader as well as the panel. `offsetTop` is measured
+ * from the panel itself because the stylesheet positions both panels, which makes each the
+ * offset parent of its rows.
+ */
+export function revealCurrent(event: SyntheticEvent<HTMLDetailsElement>): void {
+	const details = event.currentTarget;
+	if (!details.open) return;
+	const panel = details.nextElementSibling;
+	const current = panel?.querySelector('[aria-current]');
+	if (!(panel instanceof HTMLElement) || !(current instanceof HTMLElement)) return;
+	panel.scrollTop = Math.max(0, current.offsetTop - panel.clientHeight * 0.4);
+}
+
+/**
+ * Closes the outline once a row in it has been followed.
+ *
+ * On the next frame, and never with `preventDefault`. The browser's fragment navigation, the
+ * history entry it pushes and the focus starting point it sets all belong to the click, and
+ * closing the panel inside the handler hides the link before its default action runs.
+ */
+export function closeOnLink(disclosure: DisclosureRef): (event: MouseEvent<HTMLElement>) => void {
+	return (event) => {
+		if (!(event.target instanceof Element) || event.target.closest('a') === null) return;
+		requestAnimationFrame(() => {
+			if (disclosure.current !== null) disclosure.current.open = false;
+		});
+	};
+}
+
+/**
+ * The bar's Pages link: closes the outline and opens the tree, then lets the link jump.
+ *
+ * The link is `href="#hx-tree"` and works with no script at all, landing on a closed tree
+ * one tap from open. With script the same tap lands on an open tree, and opening it fires
+ * the tree's own `toggle`, which scrolls its current row into view. The jump is left to the
+ * browser, so the history entry and the focus starting point are the ones any in-page link
+ * gets.
+ */
+export function openTree(
+	tree: DisclosureRef,
+	toc: DisclosureRef,
+): (event: MouseEvent<HTMLAnchorElement>) => void {
+	return () => {
+		if (toc.current !== null) toc.current.open = false;
+		if (tree.current !== null) tree.current.open = true;
+	};
+}
+
+/**
+ * Escape inside an open disclosure closes it and puts focus back on its summary.
+ *
+ * Not when the key was pressed inside a `<dialog>`. The search dialog is rendered inside the
+ * tree's landmark, so its Escape bubbles through this handler on the way out, and the dialog
+ * closing is all that key press means: the tree behind it closing too would take the reader
+ * somewhere they did not ask to go.
+ */
+export function escapeCloses(
+	disclosure: DisclosureRef,
+): (event: KeyboardEvent<HTMLElement>) => void {
+	return (event) => {
+		const details = disclosure.current;
+		if (event.key !== 'Escape' || details === null || !details.open) return;
+		if (event.target instanceof Element && event.target.closest('dialog') !== null) return;
+		details.open = false;
+		details.querySelector('summary')?.focus();
+	};
 }

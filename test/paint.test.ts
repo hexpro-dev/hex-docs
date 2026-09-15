@@ -363,8 +363,8 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 		expect(rows[0]?.state).toBe('PASS');
 		// A literal, so a deleted probe is a failure here rather than a smaller number on the
 		// ladder, which does not fail.
-		expect(rows[0]?.examined).toBe(20);
-		expect(PROBES.length).toBe(20);
+		expect(rows[0]?.examined).toBe(23);
+		expect(PROBES.length).toBe(23);
 		expect(rows[0]?.unit).toBe('probes');
 	}, 60_000);
 
@@ -442,7 +442,10 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 			name: 'a shell with no inset of its own',
 			edit: (css) =>
 				once(css, '\tpadding-inline: var(--hx-shell-inset, clamp(1rem, 2.5vw, 2rem));\n}', '}'),
-			expect: ['The gutter-phone probe', 'The gutter-desktop probe'],
+			// The phone bar pulls out of the layout's inset by exactly that inset and pads back in,
+			// so with no inset to pull out of it runs past both edges and its Pages link ends on
+			// the edge of the screen. That is the same defect seen from the bar, not a neighbour's.
+			expect: ['The gutter-phone probe', 'The gutter-desktop probe', 'The phone-targets probe'],
 		},
 		{
 			name: 'a shell sized to the viewport, which a padded host scrolls sideways',
@@ -458,6 +461,76 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 			name: 'a list marker left to the host',
 			edit: (css) => once(css, '.hx-root ol.hx-list {\n\tlist-style-type: decimal;\n}\n\n', ''),
 			expect: ['A host base layer changed the number:'],
+		},
+		{
+			name: 'the tree list shown while its disclosure is closed',
+			edit: (css) =>
+				once(
+					css,
+					'\t.hx-root .hx-tree-disclosure:not([open]) + .hx-tree-list {\n\t\tdisplay: none;\n\t}\n\n',
+					'',
+				),
+			expect: ['The phone-reading probe'],
+		},
+		{
+			name: 'a bar that scrolls away with the article',
+			edit: (css) => once(css, '\t\tposition: sticky;\n\t\tinset-block-end: 0;\n', ''),
+			expect: ['The phone-foot probe'],
+		},
+		{
+			name: 'an outline panel left at its static position',
+			edit: (css) => once(css, '\t\tinset-block-end: 100%;\n', ''),
+			expect: ['The phone-foot probe'],
+		},
+		{
+			name: 'a bar label that is small and dim before it has anything to say',
+			edit: (css) =>
+				once(
+					css,
+					'\t.hx-root .hx-toc-summary:has(.hx-toc-here:empty) .hx-toc-summary-label {\n\t\tcolor: var(--hx-ink, #f2ede6);\n\t\tfont-size: 0.9375rem;\n\t\tline-height: 1.4;\n\t}\n\n',
+					'',
+				),
+			expect: ['The phone-foot probe'],
+		},
+		{
+			name: 'rows under the 44px floor',
+			edit: (css) =>
+				once(
+					css,
+					'\t\tmin-block-size: 2.75rem;\n\t\tpadding-block: 0.5rem;\n',
+					'\t\tpadding-block: 0.5rem;\n',
+				),
+			expect: ['The phone-targets probe'],
+		},
+		{
+			name: 'a Pages chip that states no display of its own at phone width',
+			edit: (css) =>
+				once(
+					css,
+					'\t.hx-root .hx-tree-summary {\n\t\tdisplay: flex;\n',
+					'\t.hx-root .hx-tree-summary {\n',
+				),
+			expect: ['The phone-targets probe'],
+		},
+		{
+			name: 'a bar link that stays hidden at phone width',
+			edit: (css) =>
+				once(
+					css,
+					'\t.hx-root .hx-foot-pages {\n\t\tdisplay: flex;\n',
+					'\t.hx-root .hx-foot-pages {\n',
+				),
+			expect: ['The phone-targets probe'],
+		},
+		{
+			name: 'a bar that bleeds to the edge and never pads back in',
+			edit: (css) =>
+				once(
+					css,
+					'\t\tpadding-inline: var(--hx-shell-inset, clamp(1rem, 2.5vw, 2rem));\n\t\tpadding-block-end:',
+					'\t\tpadding-block-end:',
+				),
+			expect: ['The phone-targets probe'],
 		},
 	];
 

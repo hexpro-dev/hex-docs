@@ -180,4 +180,45 @@ describe('a client-side navigation between docs pages', () => {
 		await waitFor(() => expect(focus).toHaveBeenCalledWith({ preventScroll: true }));
 		expect(focus.mock.contexts.at(-1)).toBe(document.getElementById('hx-content'));
 	});
+
+	test('closes the phone disclosures a reader opened to get there, before focus moves', async () => {
+		// A client-side navigation does not reload the document, so the tree the reader opened
+		// to pick a page would otherwise still be open over the page they picked. The order is
+		// the other half: focus left on a row in a list that is about to be hidden falls to the
+		// body, so both must already be closed when the article takes focus.
+		const router = await mountRouter();
+		const tree = document.querySelector('.hx-tree-disclosure') as HTMLDetailsElement;
+		const toc = document.querySelector('.hx-toc-disclosure') as HTMLDetailsElement;
+		tree.open = true;
+		toc.open = true;
+		const openWhenFocused: boolean[] = [];
+		const focus = vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(function (
+			this: HTMLElement,
+		) {
+			if (this.id === 'hx-content') openWhenFocused.push(tree.open || toc.open);
+		});
+
+		await act(async () => {
+			await router.navigate('/fixture-app/docs/guide/troubleshooting');
+		});
+		await waitFor(() => expect(focus).toHaveBeenCalledWith({ preventScroll: true }));
+
+		// The same two elements, kept by React across the navigation, now closed.
+		expect(document.querySelector('.hx-tree-disclosure')).toBe(tree);
+		expect(document.querySelector('.hx-toc-disclosure')).toBe(toc);
+		expect([tree.open, toc.open]).toEqual([false, false]);
+		expect(openWhenFocused).toEqual([false]);
+	});
+
+	test('leaves a disclosure the reader opened alone when nothing navigated', async () => {
+		// A re-render on the same page is not a navigation, and neither is the first commit:
+		// closing on either would shut a tree the reader opened before hydration finished.
+		const router = await mountRouter();
+		const tree = document.querySelector('.hx-tree-disclosure') as HTMLDetailsElement;
+		tree.open = true;
+		await act(async () => {
+			await router.navigate('/fixture-app/docs/guide/first-tag#before-you-start');
+		});
+		expect(tree.open).toBe(true);
+	});
 });

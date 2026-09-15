@@ -120,6 +120,8 @@ ${CHROME}
 
 ${SEARCH}
 
+${PHONE}
+
 ${scopeRules()}
 
 ${calloutRules()}
@@ -290,18 +292,6 @@ const LAYOUT = `/*
 
 .hx-root .hx-article:focus {
 	outline: none;
-}
-
-@media (max-width: 60rem) {
-	.hx-root .hx-layout {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.hx-root .hx-tree,
-	.hx-root .hx-toc {
-		position: static;
-		max-block-size: none;
-	}
 }
 
 /*
@@ -1059,6 +1049,350 @@ const SEARCH = `.hx-root .hx-search-trigger {
 	display: block;
 	color: ${t('dim')};
 	font-size: 0.875rem;
+}`;
+
+/**
+ * The smallest touch target on a phone, 44px. Not a token, and neither are the two below: no
+ * host would retheme them, and a token is read through a `var()` chain that only earns its
+ * length when somebody has a reason to override it.
+ */
+const TARGET = '2.75rem';
+
+/** The height of the row in the phone's bottom bar, above any safe-area padding under it. */
+const FOOT = '3rem';
+
+/**
+ * The bar's Pages link at its narrowest. Subtracted from the measure for the outline's basis,
+ * so the two together are as wide as the column and centre over it on a tablet.
+ */
+const PAGES_WIDTH = '5rem';
+
+const PHONE = `/*
+ * The phone layout, below 60rem, and the desktop state of the elements only it shows.
+ *
+ * After CHROME and SEARCH, and that position is load-bearing. The rules for the tree and
+ * outline rows and for the search dialog override rules of exactly the same specificity in
+ * those two blocks, and at equal specificity the later rule wins. Moved above them, every
+ * row falls back to the desktop's 24px target and the dialog to its centred desktop size.
+ * \`kit/test/theme/stylesheet.test.ts\` asserts the order.
+ *
+ * The page tree and search sit at the top of the page in flow and scroll away once reading
+ * starts. The table of contents becomes a bar stuck to the bottom of the viewport, under the
+ * thumb, which names the heading the reader is in and opens the outline upward. Both are
+ * native \`<details>\`, so the whole layout works with no script, and neither adds anything
+ * to the top of the viewport, where the host's own sticky header already is.
+ *
+ * Nothing here is physical. The chevrons are symmetric about the vertical axis, so a turn
+ * needs no mirror, and \`env(safe-area-inset-bottom)\` names an edge of the device rather
+ * than a side of the text.
+ *
+ * The desktop state of the new elements states every property a host's base layer sets on
+ * them, Tailwind's \`summary { display: list-item }\` included, for the reason the generator
+ * gives at its top: an unlayered rule beats a layered one only for the properties it states.
+ */
+.hx-root .hx-tree-summary,
+.hx-root .hx-toc-summary {
+	display: none;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.hx-root .hx-tree-summary::-webkit-details-marker,
+.hx-root .hx-toc-summary::-webkit-details-marker {
+	display: none;
+}
+
+.hx-root .hx-tree-disclosure,
+.hx-root .hx-toc-disclosure {
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+/* It generates no box on a desktop, so the table of contents is still the grid's third item. */
+.hx-root .hx-foot {
+	display: contents;
+}
+
+.hx-root .hx-foot-pages {
+	display: none;
+}
+
+@media (max-width: 60rem) {
+	/*
+	 * A block rather than a one-column grid. A sticky box is held inside its containing block,
+	 * and a grid item's is its own grid area, which is exactly as tall as the item: the bar
+	 * would have nowhere to stick.
+	 */
+	.hx-root .hx-layout {
+		display: block;
+	}
+
+	/*
+	 * The top row: Search taking the room and Pages beside it, with the list on a line of its
+	 * own under them. Static, because the desktop's sticky rail would pin the row, and an
+	 * open tree with it, over the article. The scroll margin is for the bar's Pages link,
+	 * which jumps here and would otherwise land the row under the host's header.
+	 */
+	.hx-root .hx-tree {
+		position: static;
+		max-block-size: none;
+		overflow: visible;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: stretch;
+		gap: 0.5rem;
+		max-inline-size: ${t('measure')};
+		margin-inline: auto;
+		margin-block: 0.75rem 1rem;
+		scroll-margin-block-start: ${t('sticky-offset')};
+	}
+
+	.hx-root .hx-tree > * {
+		flex: 0 0 100%;
+		min-inline-size: 0;
+	}
+
+	.hx-root .hx-tree > .hx-search-trigger {
+		flex: 1 1 0;
+		inline-size: auto;
+		min-block-size: ${TARGET};
+		margin-block-end: 0;
+	}
+
+	.hx-root .hx-tree > .hx-tree-disclosure {
+		flex: 0 0 auto;
+	}
+
+	/* The shortcut is a keyboard's, and a phone reader has none to press it on. */
+	.hx-root .hx-search-hint {
+		display: none;
+	}
+
+	.hx-root .hx-tree-summary {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-block-size: ${TARGET};
+		padding-inline: 0.875rem 0.75rem;
+		background: ${t('surface')};
+		border: 1px solid ${t('control')};
+		border-radius: 8px;
+		color: ${t('ink')};
+		font-size: 0.9375rem;
+		cursor: pointer;
+	}
+
+	/*
+	 * A box clipped to a chevron, painted with a token rather than a glyph some font in seven
+	 * languages has to cover. It points where the panel appears: down for the tree, up for
+	 * the outline, and the other way while each is open.
+	 */
+	.hx-root .hx-tree-summary::after,
+	.hx-root .hx-toc-summary::after {
+		content: '';
+		flex: none;
+		inline-size: 0.75rem;
+		block-size: 0.5rem;
+		background: ${t('dim')};
+		clip-path: polygon(0 0, 16% 0, 50% 62%, 84% 0, 100% 0, 50% 100%);
+	}
+
+	.hx-root .hx-tree-disclosure[open] > .hx-tree-summary::after,
+	.hx-root .hx-toc-summary::after {
+		transform: rotate(180deg);
+	}
+
+	.hx-root .hx-toc-disclosure[open] > .hx-toc-summary::after {
+		transform: none;
+	}
+
+	/*
+	 * The lists are the disclosures' next siblings rather than their content, so a desktop
+	 * never depends on a \`<details>\` being open. Here the closed state hides them.
+	 */
+	.hx-root .hx-tree-disclosure:not([open]) + .hx-tree-list {
+		display: none;
+	}
+
+	/*
+	 * In flow under the row, so the article moves down rather than being covered. Its own
+	 * scroll container, contained, so the page stays still at the end of a long tree.
+	 * Positioned so it is the offset parent of its rows, which is what \`revealCurrent\` in
+	 * \`src/render/client.ts\` measures against.
+	 */
+	.hx-root .hx-tree-disclosure + .hx-tree-list {
+		position: relative;
+		max-block-size: 60svh;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		padding: 0.5rem;
+		background: ${t('surface')};
+		border: 1px solid ${t('edge')};
+		border-radius: ${t('radius')};
+	}
+
+	/* Every row a thumb can hit. \`test/paint.test.ts\` deletes the height and watches the probe fail. */
+	.hx-root .hx-tree-link,
+	.hx-root .hx-tree-section,
+	.hx-root .hx-toc-link {
+		display: flex;
+		align-items: center;
+		min-block-size: ${TARGET};
+		padding-block: 0.5rem;
+		padding-inline: 0.75rem;
+	}
+
+	.hx-root .hx-article {
+		margin-inline: auto;
+		margin-block-end: 2rem;
+	}
+
+	/* The summary carries the same words on a phone, and it is the one that toggles. */
+	.hx-root .hx-toc-heading {
+		display: none;
+	}
+
+	/*
+	 * The bar. It pulls out of the layout's inset and pads back in, so its rule and ground run
+	 * edge to edge while its content lines up with the column. Overflow stays visible: the
+	 * outline panel is drawn outside this box, above it, and a clipped bar would hide it.
+	 * Sticky inside the layout, so at the end of the page it settles into flow above the
+	 * host's footer rather than covering it.
+	 */
+	.hx-root .hx-foot {
+		display: flex;
+		align-items: stretch;
+		justify-content: center;
+		position: sticky;
+		inset-block-end: 0;
+		z-index: 2;
+		margin-inline: calc(-1 * ${t('shell-inset')});
+		padding-inline: ${t('shell-inset')};
+		padding-block-end: env(safe-area-inset-bottom, 0px);
+		background: ${t('surface')};
+		border-block-start: 1px solid ${t('edge')};
+	}
+
+	/*
+	 * Static, so the sticky bar is the outline panel's containing block. Its basis and the
+	 * Pages link's minimum add up to the measure, which is what lines the pair up with the
+	 * column on a tablet.
+	 */
+	.hx-root .hx-toc {
+		position: static;
+		max-block-size: none;
+		overflow: visible;
+		flex: 0 1 calc(${t('measure')} - ${PAGES_WIDTH});
+		min-inline-size: 0;
+	}
+
+	.hx-root .hx-toc-summary {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		min-block-size: ${FOOT};
+		padding-block: 0.375rem;
+		padding-inline-end: 0.5rem;
+		color: ${t('ink')};
+		cursor: pointer;
+	}
+
+	.hx-root .hx-toc-where {
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		flex: 1 1 auto;
+		min-inline-size: 0;
+	}
+
+	.hx-root .hx-toc-summary-label {
+		display: block;
+		color: ${t('dim')};
+		font-size: 0.75rem;
+		line-height: 1.3;
+	}
+
+	/*
+	 * Until the scroll spy names a heading, and for the whole visit with no script, the label
+	 * is the control and reads as one: ink, at the size of the link beside it. Without this
+	 * the bar at rest is a small dim caption for a second line that is not there.
+	 */
+	.hx-root .hx-toc-summary:has(.hx-toc-here:empty) .hx-toc-summary-label {
+		color: ${t('ink')};
+		font-size: 0.9375rem;
+		line-height: 1.4;
+	}
+
+	/* One line whatever the heading, so the bar keeps its height; the accessible name keeps the text. */
+	.hx-root .hx-toc-here {
+		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 0.9375rem;
+		line-height: 1.4;
+	}
+
+	.hx-root .hx-toc-disclosure:not([open]) + .hx-toc-list {
+		display: none;
+	}
+
+	/*
+	 * Above the bar and out of flow, so the article never moves when it opens or closes. The
+	 * percentage in the inline padding resolves against the bar's full-bleed box rather than
+	 * the column, which is why it is not the column's own centring formula.
+	 */
+	.hx-root .hx-toc-disclosure + .hx-toc-list {
+		position: absolute;
+		inset-block-end: 100%;
+		inset-inline: 0;
+		margin: 0;
+		max-block-size: 60svh;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		padding-block: 0.5rem;
+		padding-inline: max(${t('shell-inset')}, calc((100% - ${t('measure')}) / 2));
+		background: ${t('surface')};
+		border-block-start: 1px solid ${t('edge')};
+	}
+
+	.hx-root .hx-foot-pages {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		flex: 0 0 auto;
+		min-inline-size: ${PAGES_WIDTH};
+		min-block-size: ${FOOT};
+		margin: 0;
+		padding-inline: 1.25rem;
+		border: 0;
+		color: ${t('ink')};
+		font-size: 0.9375rem;
+		font-weight: 600;
+		text-decoration: none;
+	}
+
+	/*
+	 * A page with no outline: the link takes the column's width, so the word sits where it
+	 * does on every other page and the whole bar is the target.
+	 */
+	.hx-root .hx-foot-pages:only-child {
+		flex: 0 1 ${t('measure')};
+	}
+
+	/*
+	 * Anchored to the top, so the input does not move as results arrive and stays above the
+	 * on-screen keyboard. The rule outside this block keeps \`margin: auto\`, which centres the
+	 * dialog everywhere else.
+	 */
+	.hx-search {
+		inline-size: calc(100% - 2 * ${t('shell-inset')});
+		max-block-size: 80svh;
+		margin-block: ${t('shell-inset')} auto;
+	}
 }`;
 
 const SCRIPTS = `/*

@@ -339,6 +339,75 @@ describe('the sidebar and the pager', () => {
 		const tree = html.slice(html.indexOf('<nav id="hx-tree"'), html.indexOf('</nav>'));
 		expect(tree).toContain(record?.navTitle as string);
 		expect(tree).not.toContain(record?.title as string);
+		// The phone's Pages control is in the same landmark, named in the reader's language.
+		expect(tree).toContain(UI_STRINGS.ja.pages);
+	});
+});
+
+describe('the phone controls', () => {
+	test('both disclosures render closed, and the outline one only where there is an outline', () => {
+		// Closed in the server's markup and never given `open` by React, so a reader who opens
+		// one before hydration keeps it open and hydration has nothing to disagree about.
+		expect(count(english, /<details class="hx-tree-disclosure">/g)).toBe(1);
+		expect(count(english, /<details class="hx-toc-disclosure">/g)).toBe(1);
+		expect(count(english, /<details[^>]* open/g)).toBe(0);
+		expect(count(japanese, /<details class="hx-tree-disclosure">/g)).toBe(1);
+		expect(japanese).not.toContain('hx-toc-disclosure');
+	});
+
+	test('the open counter can see an open disclosure, so the zero above means something', () => {
+		const planted = english.replace(
+			'<details class="hx-tree-disclosure">',
+			'<details class="hx-tree-disclosure" open="">',
+		);
+		expect(count(planted, /<details[^>]* open/g)).toBe(1);
+	});
+
+	test('the summaries say where the reader is going, and the server never names a heading', () => {
+		// The bar's second line is empty until the scroll spy answers. Filled on the server it
+		// would repeat the page title under the h1, and stay that way with no script.
+		expect(english).toContain(`<summary class="hx-tree-summary">${UI_STRINGS.en.pages}</summary>`);
+		expect(english).toContain(
+			`<summary class="hx-toc-summary"><span class="hx-toc-where"><span class="hx-toc-summary-label">${UI_STRINGS.en.tocLabel}</span><span class="hx-toc-here"></span></span></summary>`,
+		);
+		expect(arabic).toContain(`<summary class="hx-tree-summary">${UI_STRINGS.ar.pages}</summary>`);
+	});
+
+	test('the bar and its Pages link are on every page, the one with no outline included', () => {
+		// The link is how a reader mid-article reaches the tree, and a page with no table of
+		// contents is still a page somebody wants to leave.
+		for (const [html, locale] of [
+			[english, 'en'],
+			[arabic, 'ar'],
+			[japanese, 'ja'],
+		] as const) {
+			expect(count(html, /class="hx-foot"/g)).toBe(1);
+			expect(html).toContain(
+				`<a class="hx-foot-pages" href="#${IDS.tree}">${UI_STRINGS[locale].pages}</a>`,
+			);
+		}
+		expect(japanese).toContain(
+			`<div class="hx-foot"><a class="hx-foot-pages" href="#${IDS.tree}">`,
+		);
+	});
+
+	test('source order is the phone order, top to bottom', () => {
+		// No reordering in CSS, so the tab order and a screen reader's reading order are the
+		// order the phone draws: the Pages control, its rows, the article, the bar, its rows,
+		// and the bar's link last.
+		const at = (needle: string): number => {
+			const index = english.indexOf(needle);
+			expect({ needle, found: index >= 0 }).toEqual({ needle, found: true });
+			return index;
+		};
+		expect(at('class="hx-tree-summary"')).toBeLessThan(at('class="hx-tree-link"'));
+		const order = [
+			at(`id="${IDS.content}"`),
+			at('class="hx-toc-summary"'),
+			at('class="hx-toc-link"'),
+			at('class="hx-foot-pages"'),
+		];
+		expect([...order].sort((a, b) => a - b)).toEqual(order);
 	});
 });
 

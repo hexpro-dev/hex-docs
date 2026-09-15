@@ -536,7 +536,10 @@ describe('the rules a generator cannot enforce', () => {
 	});
 
 	test('every scrollable rail and heading clears the sticky header', () => {
-		expect([...CSS.matchAll(/scroll-margin-block-start/g)].length).toBeGreaterThanOrEqual(2);
+		// A heading, a step and, on a phone, the page tree the bar's Pages link jumps to. An
+		// exact count, so a jump target that lost its margin is a failure rather than a smaller
+		// number over a floor.
+		expect([...CSS.matchAll(/scroll-margin-block-start/g)].length).toBe(3);
 	});
 
 	test('the tree and table of contents links meet the minimum target size', () => {
@@ -622,6 +625,83 @@ describe('the layout a host cannot take away', () => {
 		expect(rule('.hx-root .hx-figure')).toContain('margin-block: 0 1rem');
 		expect(rule('.hx-root .hx-pre code')).toContain('font: inherit');
 		expect(rule('.hx-search')).toContain('margin: auto');
+		// The phone controls, in their desktop state. The preflight sets a summary to
+		// `display: list-item` and zeroes margins, padding and borders, and the two new
+		// wrappers must generate nothing a desktop grid can see.
+		const summaries = rule('.hx-root .hx-tree-summary,\n.hx-root .hx-toc-summary');
+		for (const declaration of [
+			'display: none',
+			'list-style: none',
+			'margin: 0',
+			'padding: 0',
+			'border: 0',
+		]) {
+			expect(summaries).toContain(declaration);
+		}
+		expect(rule('.hx-root .hx-foot')).toContain('display: contents');
+		expect(rule('.hx-root .hx-foot-pages')).toContain('display: none');
+	});
+});
+
+/** The body of the one phone media query, and a failure if there is not exactly one. */
+function phoneBlock(): string {
+	const head = '\n@media (max-width: 60rem) {\n';
+	const parts = CSS.split(head);
+	expect({ phoneBlocks: parts.length - 1 }).toEqual({ phoneBlocks: 1 });
+	const body = parts[1] as string;
+	return body.slice(0, body.indexOf('\n}\n'));
+}
+
+describe('the phone layout', () => {
+	// What the text has to say. Whether a phone reader gets a bar at the bottom of the screen,
+	// rows a thumb can hit and an article on the first screen is `scripts/check-paint.mjs`,
+	// whose phone probes `test/paint.test.ts` breaks one rule at a time.
+
+	test('is one media query, after every rule it overrides', () => {
+		// The phone rules for the rows and the search dialog tie with rules in CHROME and
+		// SEARCH on specificity, and a tie goes to the later rule. Above them, every row is a
+		// 24px desktop target again and the dialog is centred.
+		expect(CSS.indexOf('\n@media (max-width: 60rem) {')).toBeGreaterThan(
+			CSS.indexOf('\n.hx-search .hx-search-heading {'),
+		);
+		expect(CSS.indexOf('\n@media (max-width: 60rem) {')).toBeGreaterThan(
+			CSS.indexOf('\n.hx-root .hx-tree-link,\n.hx-root .hx-tree-section,\n.hx-root .hx-toc-link {'),
+		);
+		phoneBlock();
+	});
+
+	test('says what the layout depends on', () => {
+		const phone = phoneBlock();
+		for (const text of [
+			// A block, so the bar has a containing block taller than itself to stick in.
+			'\t.hx-root .hx-layout {\n\t\tdisplay: block;',
+			// The panels are hidden while their disclosure is closed, and only then.
+			'\t.hx-root .hx-tree-disclosure:not([open]) + .hx-tree-list {\n\t\tdisplay: none;',
+			'\t.hx-root .hx-toc-disclosure:not([open]) + .hx-toc-list {\n\t\tdisplay: none;',
+			// The bar sticks to the bottom of the viewport.
+			'\t\tposition: sticky;\n\t\tinset-block-end: 0;',
+			'env(safe-area-inset-bottom, 0px)',
+			'min-block-size: 2.75rem',
+		]) {
+			expect(phone).toContain(text);
+		}
+		expect(phone.match(/overscroll-behavior: contain;/g)?.length).toBe(2);
+	});
+
+	test('the page tree clears the host header when the bar link jumps to it', () => {
+		const tree = /\t\.hx-root \.hx-tree \{\n([\s\S]*?)\n\t\}/.exec(phoneBlock())?.[1] ?? '';
+		expect(tree).toContain(`\t\tscroll-margin-block-start: ${t('sticky-offset')};`);
+		expect(tree).toContain('\t\tposition: static;');
+	});
+
+	test('sizes nothing by the viewport height, which a phone toolbar changes under it', () => {
+		// `vh` on a phone is the large viewport, measured with the toolbar hidden, so a panel
+		// sized by it is taller than the space it opens into while the toolbar shows. `svh` is
+		// the small viewport. The last line is the positive control for the absence.
+		const phone = phoneBlock();
+		expect(phone).not.toContain('100vh');
+		expect(phone).toContain('60svh');
+		expect(`${phone}\n\t\tmax-block-size: 100vh;`).toContain('100vh');
 	});
 });
 

@@ -136,6 +136,25 @@ const MIN_INSET = 16;
 const UA_LINK = 'rgb(0, 0, 238)';
 
 /**
+ * The smallest touch target on a phone, in CSS pixels. A number here rather than read from the
+ * stylesheet, for the reason `MIN_INSET` gives.
+ */
+const TOUCH = 44;
+
+/**
+ * How far down a 390 by 900 phone viewport the first paragraph may start: 24rem, which leaves
+ * most of the first screen for reading under a 64px host header, the search and Pages row and
+ * a one-line title.
+ */
+const FIRST_SCREEN = 384;
+
+/** The tallest the phone's bottom bar may be with a heading named in it: its 3rem row and room to spare. */
+const FOOT_MAX = 64;
+
+/** A seventy-character heading, the length of a long French or Portuguese one, for the bar's second line. */
+const LONG_HEADING = 'Hold the top edge of your phone flat against the tag for a full second';
+
+/**
  * The base layer a consuming site puts under the docs, reduced to the rules that restyle
  * an element this renderer emits.
  *
@@ -158,6 +177,7 @@ const HOST_BASE = `@layer base {
 	img, svg, video, canvas, audio, iframe, embed, object { vertical-align: middle; display: block; }
 	img, video { max-width: 100%; height: auto; }
 	button, input, select, optgroup, textarea { font: inherit; letter-spacing: inherit; color: inherit; opacity: 1; background-color: transparent; border-radius: 0; }
+	summary { display: list-item; }
 }`;
 
 /**
@@ -193,21 +213,48 @@ export const FRAGMENTS = {
 };
 
 /**
- * The shell around a probe's content, with the class names `DocsPage` renders. Every
- * `hx-` class in any probe's markup is asserted present in a rendered page by
- * `test/paint.test.ts`, which is a check on the names and not on how they nest.
+ * The shell around a probe's content, with the class names `DocsPage` renders, nested the way
+ * it nests them. Every `hx-` class in any probe's markup is asserted present in a rendered
+ * page by `test/paint.test.ts`, which is a check on the names and not on how they nest, so
+ * the nesting here is mirrored from `src/render/page.tsx` by hand: the Pages disclosure after
+ * the search trigger with the tree list as its next sibling, and the table of contents inside
+ * the bar's wrapper with the outline disclosure before its list and the bar's Pages link last.
  *
  * `dir` is the interface direction the root carries, and `article` the attributes the
  * article gains when the content served is in a different language from the interface,
  * which is how an Arabic page serving the English fallback reads left to right inside a
  * right-to-left shell. `current` adds a second tree link and a second table of contents
  * link and marks the first of each current, so a probe can compare a current link with a
- * plain one at the same place.
+ * plain one at the same place. `links` is how many rows the tree has, for a probe that needs
+ * a tree long enough to push the article off the first screen if it were shown.
  *
- * @param {{ prose: string, head?: string, tree?: string, dir?: 'ltr' | 'rtl', article?: string, current?: boolean }} parts
+ * @param {{ prose: string, head?: string, tree?: string, dir?: 'ltr' | 'rtl', article?: string, current?: boolean, links?: number }} parts
  */
-const shell = ({ prose, head = '', tree = '', dir = 'ltr', article = '', current = false }) =>
-	`<div class="hx-root" dir="${dir}">${FRAGMENTS.skip}<div class="hx-layout"><nav id="hx-tree" class="hx-tree" aria-label="Documentation"><button type="button" class="hx-search-trigger" disabled="">Search</button>${tree}<ol class="hx-tree-list"><li class="hx-tree-item"><a class="hx-tree-link" href="#first"${current ? ' aria-current="page"' : ''}>First scan</a></li>${current ? '<li class="hx-tree-item"><a class="hx-tree-link" href="#write">Write a tag</a></li>' : ''}</ol></nav><article id="hx-content" class="hx-article" tabindex="-1"${article}>${head}<h1 id="hx-title" class="hx-title">Scan your first tag</h1><div class="hx-prose">${prose}</div></article><nav id="hx-toc" class="hx-toc" aria-label="On this page"><p class="hx-toc-heading">On this page</p><ol><li class="hx-toc-item" data-depth="2"><a href="#before" class="hx-toc-link"${current ? ' aria-current="true"' : ''}>Before you start</a></li>${current ? '<li class="hx-toc-item" data-depth="2"><a href="#hold" class="hx-toc-link">Hold the tag still</a></li>' : ''}</ol></nav></div></div>`;
+const shell = ({
+	prose,
+	head = '',
+	tree = '',
+	dir = 'ltr',
+	article = '',
+	current = false,
+	links = current ? 2 : 1,
+}) =>
+	`<div class="hx-root" dir="${dir}">${FRAGMENTS.skip}<div class="hx-layout"><nav id="hx-tree" class="hx-tree" aria-label="Documentation"><button type="button" class="hx-search-trigger" disabled="">Search</button>${tree}<details class="hx-tree-disclosure"><summary class="hx-tree-summary">Pages</summary></details><ol class="hx-tree-list">${treeRows(links, current)}</ol></nav><article id="hx-content" class="hx-article" tabindex="-1"${article}>${head}<h1 id="hx-title" class="hx-title">Scan your first tag</h1><div class="hx-prose">${prose}</div></article><div class="hx-foot"><nav id="hx-toc" class="hx-toc" aria-label="On this page"><p class="hx-toc-heading">On this page</p><details class="hx-toc-disclosure"><summary class="hx-toc-summary"><span class="hx-toc-where"><span class="hx-toc-summary-label">On this page</span><span class="hx-toc-here"></span></span></summary></details><ol class="hx-toc-list"><li class="hx-toc-item" data-depth="2"><a href="#before" class="hx-toc-link"${current ? ' aria-current="true"' : ''}>Before you start</a></li>${current ? '<li class="hx-toc-item" data-depth="2"><a href="#hold" class="hx-toc-link">Hold the tag still</a></li>' : ''}</ol></nav><a class="hx-foot-pages" href="#hx-tree">Pages</a></div></div></div>`;
+
+/**
+ * The tree's rows: the first marked current when `current` is set, and the rest plain.
+ *
+ * @param {number} count
+ * @param {boolean} current
+ */
+function treeRows(count, current) {
+	const names = ['First scan', 'Write a tag'];
+	return Array.from(
+		{ length: count },
+		(_, index) =>
+			`<li class="hx-tree-item"><a class="hx-tree-link" href="#${index === 0 ? 'first' : index === 1 ? 'write' : `page-${index + 1}`}"${current && index === 0 ? ' aria-current="page"' : ''}>${names[index] ?? `Page ${index + 1}`}</a></li>`,
+	).join('');
+}
 
 const PARAGRAPH =
 	'<p>A first read takes about ten seconds once the tag is in your hand. Most of that is finding the spot on the phone where the antenna sits, which is further up the back than people expect.</p>';
@@ -237,8 +284,16 @@ const VISIBLE = `((element) => {
 	});
 })`;
 
-/** The distance from the shell's content to each edge of the viewport, as JSON. */
+/**
+ * The distance from the shell's content to each edge of the viewport, as JSON.
+ *
+ * Every disclosure is opened first. On a phone the tree and outline lists are hidden while
+ * their disclosure is closed, and a hidden element's box is all zeros, which would hand the
+ * probe a link at the very edge of the screen, or one exactly at the floor, whatever the
+ * stylesheet did.
+ */
 const EDGES = `(() => {
+	for (const details of document.querySelectorAll('details')) details.open = true;
 	const width = document.documentElement.clientWidth;
 	const boxes = ['.hx-search-trigger', '.hx-tree-link', '.hx-title', '.hx-article p', '.hx-toc-link']
 		.map((selector) => document.querySelector(selector).getBoundingClientRect());
@@ -660,6 +715,66 @@ export const PROBES = [
 		body: `<main style="max-inline-size: 80rem; margin-inline: auto; padding-inline: 1.5rem">${shell({ prose: PARAGRAPH })}</main>`,
 		expression: EDGES,
 		why: 'A host that already pads its container still gets a page that fits. A gutter written as a negative margin or a viewport width is right in a full-bleed main and scrolls sideways in this one.',
+	},
+	{
+		id: 'phone-reading',
+		host: HOST_BASE,
+		width: PHONE,
+		body: hosted(shell({ prose: PARAGRAPH, links: 10 })),
+		expression: `JSON.stringify({
+			list: document.querySelector('.hx-tree-list').getBoundingClientRect().height,
+			paragraph: Math.round(document.querySelector('.hx-article p').getBoundingClientRect().top),
+		})`,
+		why: 'On a phone the page tree sits above the article behind a closed Pages disclosure, so a reader arriving on a page reads it on the first screen. A tree shown before anybody asked for it pushes the article down by the whole length of the tree.',
+	},
+	{
+		id: 'phone-foot',
+		host: HOST_BASE,
+		width: PHONE,
+		body: hosted(shell({ prose: PARAGRAPH.repeat(40) })),
+		expression: `(() => {
+			const foot = document.querySelector('.hx-foot');
+			const label = document.querySelector('.hx-toc-summary-label');
+			const scrollable = document.documentElement.scrollHeight > innerHeight;
+			const bottom = foot.getBoundingClientRect().bottom;
+			const rest = getComputedStyle(label).fontSize;
+			document.querySelector('.hx-toc-here').textContent = ${JSON.stringify(LONG_HEADING)};
+			const named = getComputedStyle(label).fontSize;
+			const height = foot.getBoundingClientRect().height;
+			document.querySelector('.hx-toc-disclosure').open = true;
+			const panel = document.querySelector('.hx-toc-list').getBoundingClientRect();
+			return JSON.stringify({
+				scrollable,
+				bottom: Math.round(bottom),
+				viewport: innerHeight,
+				rest,
+				named,
+				height: Math.round(height),
+				panelBottom: panel.bottom,
+				footTop: foot.getBoundingClientRect().top,
+				panelHeight: Math.round(panel.height),
+			});
+		})()`,
+		why: 'On a phone the table of contents is a bar stuck to the bottom of the viewport, under the thumb, on a page long enough to scroll. At rest its label is the control, at the size of the link beside it; once a heading is named the label becomes a caption above one line of heading, and the outline opens above the bar without moving the article.',
+	},
+	{
+		id: 'phone-targets',
+		host: HOST_BASE,
+		width: PHONE,
+		body: hosted(shell({ prose: PARAGRAPH })),
+		expression: `(() => {
+			for (const details of document.querySelectorAll('details')) details.open = true;
+			const height = (selector) => Math.round(document.querySelector(selector).getBoundingClientRect().height);
+			const pages = document.querySelector('.hx-foot-pages').getBoundingClientRect();
+			return JSON.stringify({
+				heights: Object.fromEntries(
+					['.hx-search-trigger', '.hx-tree-summary', '.hx-toc-summary', '.hx-foot-pages', '.hx-tree-link', '.hx-toc-link'].map((selector) => [selector, height(selector)]),
+				),
+				end: Math.round(document.documentElement.clientWidth - pages.right),
+				summary: getComputedStyle(document.querySelector('.hx-tree-summary')).display,
+			});
+		})()`,
+		why: 'Every control and row on a phone is at least 44px tall, and the bar pads its Pages link in from the edge of the screen though its ground runs edge to edge. The Pages chip has to state its own display at phone width, because otherwise the rule that hides it on a desktop hides it here too.',
 	},
 	{
 		id: 'base-bare',
@@ -1180,6 +1295,80 @@ function layoutProblems(measured) {
 		) {
 			problems.push(
 				`The ${id} probe measured ${edges.start}px to the start edge and ${edges.end}px to the end edge, where ${MIN_INSET}px is the floor, and horizontal overflow ${edges.overflow}. ${why(id)}`,
+			);
+		}
+	}
+
+	// The phone probes. One message each, listing everything that probe found, so a break that
+	// trips two of one probe's checks is still one probe failing and not two.
+	const reading = read('phone-reading');
+	if (reading !== undefined) {
+		/** @type {string[]} */
+		const found = [];
+		if (reading.list > 0) {
+			found.push(`the page tree ${reading.list}px tall while its disclosure is closed`);
+		}
+		if (reading.paragraph > FIRST_SCREEN) {
+			found.push(
+				`the first paragraph starting ${reading.paragraph}px down, where ${FIRST_SCREEN}px is the most the first screen can spare`,
+			);
+		}
+		if (found.length > 0) {
+			problems.push(
+				`The phone-reading probe found ${found.join(', and ')}. ${why('phone-reading')}`,
+			);
+		}
+	}
+
+	const foot = read('phone-foot');
+	if (foot !== undefined) {
+		/** @type {string[]} */
+		const found = [];
+		if (foot.scrollable !== true) {
+			found.push('a page that does not scroll, so whether the bar sticks was never examined');
+		} else if (Math.abs(foot.bottom - foot.viewport) > 1) {
+			found.push(
+				`the bar's bottom edge at ${foot.bottom}px in a ${foot.viewport}px viewport rather than on the bottom of it`,
+			);
+		}
+		if (foot.rest !== '15px' || foot.named !== '12px') {
+			found.push(
+				`the bar's label at ${foot.rest} with no heading and ${foot.named} with one, where it is 15px as the control and 12px as a caption`,
+			);
+		}
+		if (foot.height > FOOT_MAX) {
+			found.push(`the bar ${foot.height}px tall with a long heading named, over ${FOOT_MAX}px`);
+		}
+		if (Math.round(foot.panelBottom - foot.footTop) > 1) {
+			found.push(
+				`the open outline's bottom edge ${Math.round(foot.panelBottom - foot.footTop)}px below the bar's top, where it sits on the bar`,
+			);
+		}
+		if (foot.panelHeight > 0.6 * foot.viewport) {
+			found.push(`the open outline ${foot.panelHeight}px tall, over 60% of the viewport`);
+		}
+		if (found.length > 0) {
+			problems.push(`The phone-foot probe found ${found.join(', and ')}. ${why('phone-foot')}`);
+		}
+	}
+
+	const targets = read('phone-targets');
+	if (targets !== undefined) {
+		/** @type {string[]} */
+		const found = Object.entries(targets.heights)
+			.filter(([, height]) => height < TOUCH)
+			.map(([selector, height]) => `${selector} ${height}px tall, under the ${TOUCH}px floor`);
+		if (targets.end < MIN_INSET) {
+			found.push(
+				`the bar's Pages link ${targets.end}px from the end edge of the screen, under the ${MIN_INSET}px floor`,
+			);
+		}
+		if (targets.summary !== 'flex') {
+			found.push(`the Pages chip computing display ${targets.summary} rather than flex`);
+		}
+		if (found.length > 0) {
+			problems.push(
+				`The phone-targets probe found ${found.join(', and ')}. ${why('phone-targets')}`,
 			);
 		}
 	}
