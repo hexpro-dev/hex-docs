@@ -296,6 +296,13 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 							 * is focusable and toggles, which an inert heading cannot. The current
 							 * heading is empty in the server's markup, because the spy has no answer
 							 * there, so the bar never repeats the page title.
+							 *
+							 * The heading is the article's text inside the interface's chrome, so it
+							 * carries the article's `lang` and `dir` when those differ, as the article
+							 * does. Without them an English heading on an Arabic page is read with
+							 * Arabic phonetics, and laid out right to left in a line that clips at its
+							 * inline end: measured at 390px, the bar showed the tail of a long heading
+							 * with its first words cut off and a question mark drawn before them.
 							 */}
 							<details
 								ref={tocDisclosure}
@@ -308,7 +315,12 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 										<span className="hx-toc-summary-label">
 											{uiString(props.locale, 'tocLabel')}
 										</span>
-										<span className="hx-toc-here">{activeText}</span>
+										<span
+											className="hx-toc-here"
+											{...(content.differs ? { lang: content.lang, dir: content.dir } : {})}
+										>
+											{activeText}
+										</span>
 									</span>
 								</summary>
 							</details>

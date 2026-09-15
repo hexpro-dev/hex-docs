@@ -373,6 +373,19 @@ describe('the phone controls', () => {
 		expect(arabic).toContain(`<summary class="hx-tree-summary">${UI_STRINGS.ar.pages}</summary>`);
 	});
 
+	test('the bar names a heading in the language the article is in', async () => {
+		// The heading is the article's text inside the interface's chrome. On a fallback it is
+		// English inside a French or Arabic bar, and without its own `lang` and `dir` it is read
+		// with the interface's phonetics and laid out in the interface's direction, which in
+		// Arabic clips the start of a long English heading and moves its punctuation.
+		const here = '<span class="hx-toc-here" lang="en" dir="ltr"></span>';
+		expect(fallback).toContain(here);
+		expect((await shell('ar', 'developer/architecture')).html).toContain(here);
+		for (const html of [english, (await shell('ar', 'guide/troubleshooting')).html]) {
+			expect(html).toContain('<span class="hx-toc-here"></span>');
+		}
+	});
+
 	test('the bar and its Pages link are on every page, the one with no outline included', () => {
 		// The link is how a reader mid-article reaches the tree, and a page with no table of
 		// contents is still a page somebody wants to leave.
