@@ -156,11 +156,12 @@ export function useNavigationAnnounce(
  *
  * Taking the last is only right because `passed` holds every heading above the line and none
  * below it, and that is a property of the observer's root rather than of this function. The
- * root reaches far above the viewport, so a heading changes state whenever it crosses the line,
- * however far one scroll carried it. With the root ending at the top of the viewport it did
- * not: an instant jump carries headings from above the viewport to below the line, or back,
- * without either position intersecting, no entry arrives for them, and the set keeps a heading
- * the reader has left. `useHeadingSpy` says what that looked like.
+ * root reaches 100000px above the viewport, so a heading changes state whenever it crosses the
+ * line in a scroll shorter than that; `useHeadingSpy` says what a longer jump leaves behind.
+ * With the root ending at the top of the viewport even a short jump did not: an instant jump
+ * carries headings from above the viewport to below the line, or back, without either position
+ * intersecting, no entry arrives for them, and the set keeps a heading the reader has left.
+ * `useHeadingSpy` says what that looked like.
  */
 export function activeHeading(
 	order: readonly string[],
@@ -193,27 +194,59 @@ export function aliasTarget(
 /**
  * The heading the reader is currently in, for the table of contents.
  *
- * An `IntersectionObserver` rather than a scroll listener, so the work is the browser's
- * and there is nothing to throttle. The heading counted as current is the last one whose
- * top has passed the sticky offset, which is what a reader means by "where I am" and is
- * not what "the topmost visible heading" gives on a page of short sections.
+ * An `IntersectionObserver` rather than a scroll listener measuring every heading, so the work
+ * is the browser's and there is nothing to throttle; the one scroll listener here asks only
+ * whether the page has reached its end. The heading counted as current is the last one whose
+ * top has passed the line, which is what a reader means by "where I am" and is not what "the
+ * topmost visible heading" gives on a page of short sections.
  *
  * The line is 30% down the viewport, and the root's top edge is 100000px above the viewport's,
- * so intersecting means "at or above the line" and an entry arrives exactly when a heading
- * crosses it. An observer only reports a change of state, and with the root's top at the
- * viewport's own top a heading carried from above the screen to below the line in one scroll
- * never changed state. Measured in Chrome at 390 by 844 on a 13000px page: a tap on the bar's
- * Pages link from the end of the page, an outline pick upwards and a jump to the end each
- * delivered no entry for the headings they skipped, and the bar and `aria-current` went on
- * naming a heading the reader had left, while continuous scrolling was right at every step.
+ * so intersecting means at or above the line and no more than 100000px above the viewport, and
+ * a heading crossing the line from anywhere inside that reach sends an entry. An observer only
+ * reports a change of state, and with the root's top at the viewport's own top a heading
+ * carried from above the screen to below the line in one scroll never changed state. Measured
+ * in Chrome at 390 by 844 on a 13000px page: a tap on the bar's Pages link from the end of the
+ * page, an outline pick upwards and a jump to the end each delivered no entry for the headings
+ * they skipped, and the bar and `aria-current` went on naming a heading the reader had left,
+ * while continuous scrolling was right at every step.
+ *
+ * The root is the headings' own document, named, and not left implicit. The implicit root is
+ * the top-level viewport, so in a frame the margin measures the host's screen: a same-origin
+ * frame's own viewport still clips a heading above it, so the reach above the screen never
+ * counts, and a cross-origin frame ignores `rootMargin` altogether. Either way a jump in the
+ * frame reported nothing again. Measured in Chrome with a frame at the top of its host, a frame
+ * lower down it and a cross-site frame: all three named stale headings after jumps without the
+ * named root, and matched the page after every jump with it. WebKit was not measured. A
+ * `Document` root needs Chrome 81, Firefox 76 or Safari 14.
  *
  * A heading more than 100000px above the viewport stops intersecting. Its entry has a negative
  * top, which the callback keeps as passed, so a long section scrolled through still names its
- * heading. What the margin does not cover is a single jump longer than it, from below the line
- * to more than 100000px above: that heading never intersects on either side and is never
- * added. Only the last passed heading counts, so the answer is wrong only when that heading is
- * the one the reader is in, which means landing more than a hundred phone screens into a
- * single section.
+ * heading. The margin is a distance, not a guarantee: on a page taller than it, one scroll
+ * longer than it can leave the set wrong in either direction, and such a jump can deliver no
+ * entry at all, so the callback has nothing to correct it with. Downwards, a heading carried
+ * from below the line to more than 100000px above never intersects and is never added, which
+ * shows only when it is the heading the reader lands in, more than a hundred phone screens into
+ * one section. Upwards, a heading already more than 100000px above is carried below the line
+ * without intersecting either, so it stays in the set and is named until the reader scrolls
+ * back past it, in sections of any length. Measured in Chrome at 390 by 844 on a page of six
+ * 40000px sections, a jump from the end to the top left a heading named that the reader had not
+ * reached. Neither can happen on a page shorter than the margin.
+ *
+ * The last heading counts as passed once the document is scrolled as far as it goes, whether or
+ * not it reached the line. A heading closer to the end of the page than 70% of the viewport can
+ * never reach it, and nothing crosses the line once scrolling stops, so no entry would ever name
+ * it: at the end of such a page, and right after an outline pick of that heading, the bar and
+ * `aria-current` named the heading before it. Measured in Chrome on the compiled pages with a
+ * 64px host header and no host footer: 11 of 26 missed the last heading at 390 by 844, and all
+ * 26 at 768 by 1024. The observer still does every crossing; a scroll listener only asks
+ * whether any scroll is left, reading three numbers an event, which needs no throttle. The
+ * price is on a host with no footer, where an outline pick of a short second-to-last section
+ * lands at the end of the page and names the last heading. A host that scrolls an inner element
+ * rather than the window never reports an end, and gets the observer's answer alone.
+ *
+ * Not a sentinel element after the layout. On a host with a real footer the layout's end is on
+ * screen while the reader can still scroll, so a sentinel named the last heading early and kept
+ * naming it after a scroll back up: measured with a 450px footer, 25 of 26 pages at 1280 by 800.
  *
  * It keeps running under reduced motion. Scroll spy is information, not decoration, and a
  * table of contents that stopped following the reader would be a regression for exactly
@@ -230,6 +263,32 @@ export function useHeadingSpy(
 		(onChange: () => void) => {
 			if (headings.length === 0) return () => undefined;
 			const seen = new Map<string, number>();
+			let atEnd = false;
+			const decide = (): void => {
+				const current = atEnd
+					? headings.at(-1)?.id
+					: activeHeading(
+							headings.map((heading) => heading.id),
+							new Set(seen.keys()),
+						);
+				if (current === active.current) return;
+				active.current = current;
+				onChange();
+				if (current !== undefined && !reduced) {
+					const index = headings.findIndex((heading) => heading.id === current);
+					emit('hexdocs:heading', { id: current, index, total: headings.length });
+				}
+			};
+			const measureEnd = (): void => {
+				// Scrolled at all, and to within a pixel of the end. A page that does not scroll is
+				// never at its end, so its headings keep the line's answer.
+				const now =
+					window.scrollY > 0 &&
+					window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 1;
+				if (now === atEnd) return;
+				atEnd = now;
+				decide();
+			};
 			const observer = new IntersectionObserver(
 				(entries) => {
 					for (const entry of entries) {
@@ -240,25 +299,23 @@ export function useHeadingSpy(
 							seen.delete(entry.target.id);
 						}
 					}
-					const current = activeHeading(
-						headings.map((heading) => heading.id),
-						new Set(seen.keys()),
-					);
-					if (current === active.current) return;
-					active.current = current;
-					onChange();
-					if (current !== undefined && !reduced) {
-						const index = headings.findIndex((heading) => heading.id === current);
-						emit('hexdocs:heading', { id: current, index, total: headings.length });
-					}
+					decide();
 				},
-				{ rootMargin: '100000px 0px -70% 0px' },
+				{ root: document, rootMargin: '100000px 0px -70% 0px' },
 			);
 			for (const heading of headings) {
 				const element = document.getElementById(heading.id);
 				if (element !== null) observer.observe(element);
 			}
-			return () => observer.disconnect();
+			window.addEventListener('scroll', measureEnd, { passive: true });
+			window.addEventListener('resize', measureEnd);
+			// A load that lands on a hash at the end of the page is already there.
+			measureEnd();
+			return () => {
+				observer.disconnect();
+				window.removeEventListener('scroll', measureEnd);
+				window.removeEventListener('resize', measureEnd);
+			};
 		},
 		[headings, emit, reduced],
 	);

@@ -232,7 +232,9 @@ const HEADING_HEIGHT = 32;
  * is the rule a browser follows and the whole of the jump defect: a heading carried across the
  * line without ever being inside the root changes nothing and reports nothing. Only the top and
  * bottom margins are read, in `px` or in `%` of the viewport height, because those are the only
- * two that move the line or the root's far edge; anything else is refused by name.
+ * two that move the line or the root's far edge; anything else is refused by name. So is any
+ * root other than the document itself: the implicit root is the top-level viewport, and in a
+ * frame a margin measured there never counts, which is the jump defect again.
  */
 function layoutObserver(viewport: number): {
 	place: (tops: ReadonlyMap<string, number>) => void;
@@ -258,6 +260,11 @@ function layoutObserver(viewport: number): {
 		class {
 			private readonly record: (typeof records)[number];
 			constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+				if (options?.root !== document) {
+					throw new Error(
+						'The spy must observe against its own document, or a framed page loses every jump',
+					);
+				}
 				// The shorthand's order is top, right, bottom, left, and bottom falls back to top.
 				const tokens = (options?.rootMargin ?? '0px').trim().split(/\s+/);
 				this.record = {
@@ -396,6 +403,58 @@ describe('the heading the table of contents marks', () => {
 		layout.scroll(2000 * 2 - 80);
 		expectNamed('jumped up to the second heading', headings, order[1]);
 		expect(document.querySelectorAll('.hx-toc-link[aria-current]').length).toBe(1);
+	});
+
+	test('names the last heading at the end of the page, though it never reaches the line', async () => {
+		// A heading closer to the end of the page than 70% of the viewport can never reach the
+		// line 30% down it, and nothing crosses the line once the page stops, so no entry would
+		// ever name it. Measured in Chrome with no host footer: the bar named the heading before
+		// the last at the end of 11 of the 26 compiled pages at 390px, and after an outline pick of
+		// that last heading. happy-dom has no layout, so the three numbers the spy reads to know
+		// the page is at its end are given to it, in step with the observer's page.
+		const viewport = 844;
+		const layout = layoutObserver(viewport);
+		const page = await data('en', 'guide/troubleshooting');
+		const headings = page.page.headings;
+		const order = headings.map((heading) => heading.id);
+		layout.place(new Map(order.map((id, index) => [id, 2000 * (index + 1)])));
+		// The last heading 400px above the end, so where the page stops it is 444px down the
+		// screen and the line is 253px down.
+		const height = 2000 * headings.length + 400;
+		const end = height - viewport;
+		const restore: (() => void)[] = [];
+		const define = (target: object, key: string, value: number): void => {
+			const own = Object.getOwnPropertyDescriptor(target, key);
+			Object.defineProperty(target, key, { configurable: true, value });
+			restore.push(() => {
+				if (own === undefined) Reflect.deleteProperty(target, key);
+				else Object.defineProperty(target, key, own);
+			});
+		};
+		const scroll = (y: number): void => {
+			define(window, 'scrollY', y);
+			layout.scroll(y);
+			act(() => {
+				window.dispatchEvent(new Event('scroll'));
+			});
+		};
+		try {
+			define(window, 'innerHeight', viewport);
+			define(document.documentElement, 'scrollHeight', height);
+			render(<DocsPage {...page} />);
+			await layout.ready(headings.length);
+
+			scroll(end - 300);
+			expectNamed('300px before the end', headings, layout.passed(order));
+			scroll(end);
+			// The line alone still says the heading before the last.
+			expect(layout.passed(order)).toBe(order.at(-2));
+			expectNamed('at the end', headings, order.at(-1));
+			scroll(end - 50);
+			expectNamed('scrolled back up from the end', headings, order.at(-2));
+		} finally {
+			for (const undo of restore.reverse()) undo();
+		}
 	});
 
 	test('still names the heading of a section longer than the root reaches above the screen', async () => {
