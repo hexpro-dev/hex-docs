@@ -174,8 +174,16 @@ describe('the probe markup is the markup the renderer emits', () => {
 				{
 					type: 'table',
 					align: [null, null],
-					header: [{ children: [text('Chip')] }, { children: [text('Attribute')] }],
-					rows: [[{ children: [text('NTAG 424 DNA')] }, { children: [token] }]],
+					header: [
+						{ type: 'tableCell', children: [text('Chip')] },
+						{ type: 'tableCell', children: [text('Attribute')] },
+					],
+					rows: [
+						[
+							{ type: 'tableCell', children: [text('NTAG 424 DNA')] },
+							{ type: 'tableCell', children: [token] },
+						],
+					],
 				},
 			]),
 		).toBe(FRAGMENTS.tokenTable);
@@ -400,8 +408,8 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 		expect(rows[0]?.state).toBe('PASS');
 		// A literal, so a deleted probe is a failure here rather than a smaller number on the
 		// ladder, which does not fail.
-		expect(rows[0]?.examined).toBe(31);
-		expect(PROBES.length).toBe(31);
+		expect(rows[0]?.examined).toBe(32);
+		expect(PROBES.length).toBe(32);
 		expect(rows[0]?.unit).toBe('probes');
 	}, 60_000);
 
@@ -1139,6 +1147,32 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 			expect: [
 				'The current-item bar in the sides-ltr probe belongs on the left edge, and it is on the right edge of the tree link and the right edge of the table of contents link.',
 			],
+		},
+		{
+			name: 'a notice whose direction the stylesheet decides instead of the shell',
+			// The shell puts `dir="rtl"` on the notice because the words in it are the reader's.
+			// A rule that states a direction on the same element takes it back, and the sentence
+			// runs as English again with its full stop before its first word.
+			edit: (css) =>
+				once(
+					css,
+					'.hx-root .hx-banner {\n\tbackground:',
+					'.hx-root .hx-banner {\n\tdirection: ltr;\n\tbackground:',
+				),
+			expect: ['The fallback-interface probe found the notice laid out ltr inside it'],
+		},
+		{
+			name: 'a pager whose Next link is placed with physical properties',
+			// Logical spellings are what make the pager mirror once it carries the reader's
+			// direction, and nothing else measures that. The physical pair looks identical in
+			// six languages and puts Next on the wrong side of the seventh.
+			edit: (css) =>
+				once(
+					css,
+					'.hx-root .hx-next {\n\tmargin-inline-start: auto;\n\ttext-align: end;\n}',
+					'.hx-root .hx-next {\n\tmargin-left: auto;\n\ttext-align: right;\n}',
+				),
+			expect: ["The fallback-interface probe found the pager's Next link"],
 		},
 		{
 			name: 'the partial mark as it shipped, with a gradient direction no engine parses',

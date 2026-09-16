@@ -182,6 +182,110 @@ describe('language and direction', () => {
 	});
 });
 
+describe('the shell text inside a fallback article', () => {
+	/**
+	 * Every run of text under `html` that inherits its language rather than declaring one.
+	 *
+	 * A scan rather than a list of selectors, because the list is what goes stale: a piece of
+	 * furniture added to the article a year from now joins the markup without joining any
+	 * assertion, and the first sign is a reader hearing Arabic read as English. What is
+	 * checked instead is a property of the whole subtree, so a new piece is covered the day it
+	 * is written or it fails here.
+	 */
+	const inherited = (html: string): string[] => {
+		const VOID = new Set(['br', 'img', 'input', 'hr', 'meta', 'link', 'source']);
+		const stack: boolean[] = [];
+		const found: string[] = [];
+		const token = /<(\/?)([a-z0-9]+)((?:"[^"]*"|[^>])*)>|([^<]+)/gi;
+		for (let match = token.exec(html); match !== null; match = token.exec(html)) {
+			const [whole, closing, name, attrs, text] = match;
+			if (text !== undefined) {
+				const run = text.trim();
+				if (run !== '' && !stack.some(Boolean)) found.push(run);
+			} else if (closing === '/') {
+				stack.pop();
+			} else if (!whole.endsWith('/>') && !VOID.has((name as string).toLowerCase())) {
+				stack.push(/\slang="/.test(attrs as string));
+			}
+		}
+		return found;
+	};
+
+	/** The Arabic block, which is what an interface string laid out as English shows up as. */
+	const ARABIC = /[؀-ۿ]/;
+
+	/** What the article holds, without the article's own tag, so its `lang` is the baseline. */
+	const inside = (html: string): string => {
+		const open = html.indexOf('<article');
+		const start = html.indexOf('>', open) + 1;
+		return html.slice(start, html.indexOf('</article>', start));
+	};
+
+	let arabicFallback = '';
+
+	beforeAll(async () => {
+		// Arabic asking for a page that exists only in English: the interface is right to left
+		// and the words are left to right, which is the pair that makes every mark visible.
+		arabicFallback = (await shell('ar', 'developer/architecture')).html;
+	});
+
+	test('the article is English and every piece of the shell inside it is Arabic', () => {
+		expect(arabicFallback).toMatch(/<article[^>]*lang="en"[^>]*dir="ltr"/);
+		for (const pattern of [
+			// The notice, which only ever appears on a page in another language.
+			/<aside class="hx-banner" data-banner="fallback" lang="ar" dir="rtl">/,
+			// The trail, whose accessible name is a string from the table.
+			/<nav id="hx-breadcrumb"[^>]*lang="ar" dir="rtl">/,
+			// The reading estimate and the edit link share one line.
+			/<p class="hx-meta" lang="ar" dir="rtl">/,
+			// Previous and next, whose own labels are from the table too.
+			/<nav id="hx-pager"[^>]*lang="ar" dir="rtl">/,
+		]) {
+			expect(arabicFallback).toMatch(pattern);
+		}
+	});
+
+	test('no Arabic is left to inherit the article language', () => {
+		// The sweep. Laid out as English, an Arabic sentence runs the wrong way and its final
+		// full stop paints before its first word, and a screen reader reads it with English
+		// phonetics.
+		const stray = inherited(inside(arabicFallback)).filter((run) => ARABIC.test(run));
+		expect(stray).toEqual([]);
+	});
+
+	test('the sweep can see an unmarked Arabic run, so the empty list above means something', () => {
+		// The positive control, and it is the shape the defect shipped in: the notice's own
+		// sentence with no language of its own, inheriting the English article around it.
+		const planted = arabicFallback.replaceAll(' lang="ar" dir="rtl"', '');
+		expect(planted).not.toBe(arabicFallback);
+		const stray = inherited(inside(planted)).filter((run) => ARABIC.test(run));
+		expect(stray.length).toBeGreaterThan(0);
+		// And it is not a false positive elsewhere: the Arabic it found is in the notice.
+		expect(stray.join(' ')).toContain(UI_STRINGS.ar.noticeReadEnglish);
+	});
+
+	test('a page in the language that was asked for marks nothing inside the article', () => {
+		// The other half of the condition the two marks share. Repeating an attribute an
+		// element already inherits is not harmless: a screen reader announces a language
+		// change into the language it is already reading, on every banner and every pager.
+		for (const html of [english, arabic, japanese]) {
+			expect(inside(html)).not.toContain('lang=');
+		}
+		// The Arabic page here is a stale translation rather than a page with no notice, so
+		// the banner an unconditional mark would have laboured is really in the markup.
+		expect(arabic).toContain('data-banner=');
+	});
+
+	test('the article keeps the page language and the prose keeps it too', () => {
+		// The mirror: nothing marks the content back to the reader's language. The title and
+		// the body are English on this page, and the one place the interface carries the
+		// article's own answer is the heading named in the phone's bar.
+		expect(arabicFallback).toContain('<span class="hx-toc-here" lang="en" dir="ltr">');
+		expect(arabicFallback).not.toMatch(/<h1[^>]*lang=/);
+		expect(arabicFallback).not.toMatch(/<div class="hx-prose"[^>]*lang=/);
+	});
+});
+
 describe('the interface is in the reader language, not the content language', () => {
 	test('a Japanese page reads its chrome in Japanese', () => {
 		expect(japanese).toContain(UI_STRINGS.ja.skipToContent);
@@ -265,7 +369,8 @@ describe('the notices', () => {
 		});
 		const html = renderToStaticMarkup(<DocsPage {...data} Link={Marked} />);
 		const banner =
-			/<aside class="hx-banner" data-banner="fallback">[\s\S]*?<\/aside>/.exec(html)?.[0] ?? '';
+			/<aside class="hx-banner" data-banner="fallback"[^>]*>[\s\S]*?<\/aside>/.exec(html)?.[0] ??
+			'';
 		expect(banner).toContain(
 			'<a href="/fixture-app/docs/developer/architecture" data-consumer-link="">',
 		);

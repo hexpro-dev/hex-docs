@@ -39,7 +39,7 @@ import { directionOf } from '../contracts/locales.js';
 import type { PageHeading } from '../contracts/page.js';
 import type { DocsTranslationNotice } from '../contracts/site.js';
 import { docsHref } from '../site/address.js';
-import { contentAttrs } from '../site/direction.js';
+import { contentMark, interfaceMark, type LangMark } from '../site/direction.js';
 import { IDS } from '../site/ids.js';
 import type { DocsNavNode, DocsPageData } from '../site/route.js';
 import { languageName, uiPlural, uiString } from '../ui/strings.js';
@@ -111,7 +111,17 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 	const reduced = useReducedMotion();
 
 	const page = props.page;
-	const content = contentAttrs(page, props.locale);
+	/**
+	 * What every piece of the shell's own text inside the article carries.
+	 *
+	 * The article is labelled with the language its words are in, so on a fallback everything
+	 * the shell renders inside it inherits the wrong answer: the notice, the reading estimate,
+	 * the edit link, the breadcrumb and the pager are in the reader's language and would be
+	 * announced as the page's and laid out in the page's direction. Drop this and an Arabic
+	 * notice inside an English article paints its final full stop before its first word.
+	 */
+	const chrome: LangMark = interfaceMark(props.locale, page.locale);
+	const body: LangMark = contentMark(props.locale, page.locale);
 	const context = useMemo(
 		() => ({
 			locale: props.locale,
@@ -209,13 +219,19 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 					// The article carries the locale it is actually in. Labelling an English
 					// fallback `lang="ja"` tells a screen reader to read English words with
 					// Japanese phonetics and a translation tool that the job is done.
-					{...(content.differs ? { lang: content.lang, dir: content.dir } : {})}
+					{...body}
 				>
 					{props.breadcrumb.length === 0 ? null : (
+						// The trail is the interface's furniture, the same rows the sidebar carries,
+						// and its accessible name is a string from the table. Its own labels are page
+						// titles, which the manifest gives in the reader's language where the page is
+						// translated and in the source's where it is not, so they are left to the
+						// trail around them exactly as the sidebar's rows are.
 						<nav
 							id={IDS.breadcrumb}
 							className="hx-breadcrumb"
 							aria-label={uiString(props.locale, 'breadcrumbLabel')}
+							{...chrome}
 						>
 							<ol>
 								{props.breadcrumb.map((crumb) => (
@@ -233,6 +249,7 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 						address={props.address}
 						slug={page.slug}
 						Link={Link}
+						mark={chrome}
 					/>
 					<TranslationNotice
 						locale={props.locale}
@@ -242,12 +259,13 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 						slug={page.slug}
 						formatDate={formatDate}
 						Link={Link}
+						mark={chrome}
 					/>
 
 					<h1 id={IDS.title} className="hx-title">
 						{page.title}
 					</h1>
-					<p className="hx-meta">
+					<p className="hx-meta" {...chrome}>
 						<span>{uiPlural(props.locale, 'readingTime', page.reading.minutes)}</span>
 						{props.editUrl === undefined ? null : (
 							<a className="hx-edit" href={props.editUrl}>
@@ -265,6 +283,7 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 							id={IDS.pager}
 							className="hx-pager"
 							aria-label={uiString(props.locale, 'pagerLabel')}
+							{...chrome}
 						>
 							{props.previous === undefined ? null : (
 								<Link to={props.previous.href} className="hx-prev">
@@ -318,10 +337,7 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 										<span className="hx-toc-summary-label">
 											{uiString(props.locale, 'tocLabel')}
 										</span>
-										<span
-											className="hx-toc-here"
-											{...(content.differs ? { lang: content.lang, dir: content.dir } : {})}
-										>
+										<span className="hx-toc-here" {...body}>
 											{activeText}
 										</span>
 									</span>
@@ -403,12 +419,15 @@ function VersionBanner({
 	address,
 	slug,
 	Link,
+	mark,
 }: {
 	locale: Locale;
 	version: DocsPageData['version'];
 	address: DocsPageData['address'];
 	slug: string;
 	Link: DocsLinkComponent;
+	/** The reader's language, where the article's is not it. Every word here is from the table. */
+	mark: LangMark;
 }): ReactElement | null {
 	if (!version.pinned) return null;
 	// The same page at the default version, not the docs home. A reader who pinned 1.0.0
@@ -416,7 +435,7 @@ function VersionBanner({
 	// them to the index makes them find it again, which is why the slug is threaded here.
 	const latest = docsHref({ ...address, version: undefined, slug });
 	return (
-		<aside className="hx-banner" data-banner="version">
+		<aside className="hx-banner" data-banner="version" {...mark}>
 			<p>{uiString(locale, 'versionPinned', { version: version.label })}</p>
 			<Link to={latest}>{uiString(locale, 'versionLatest', { version: version.latest })}</Link>
 		</aside>
@@ -431,6 +450,7 @@ function TranslationNotice({
 	slug,
 	formatDate,
 	Link,
+	mark,
 }: {
 	locale: Locale;
 	sourceLocale: Locale;
@@ -439,6 +459,16 @@ function TranslationNotice({
 	slug: string;
 	formatDate: (iso: string) => string;
 	Link: DocsLinkComponent;
+	/**
+	 * The reader's language, where the article's is not it.
+	 *
+	 * This is the notice that most needs it, because its `fallback` state is the only thing on
+	 * the page that cannot appear except on an article in another language. The `stale` state
+	 * is the opposite case and is exactly why this is a mark and not an unconditional pair: a
+	 * stale translation is a real translation, the article is already in the reader's language,
+	 * and the mark is empty.
+	 */
+	mark: LangMark;
 }): ReactElement | null {
 	if (notice.state === 'current') return null;
 	// The consumer's link, like every other docs link, although this is the one that changes
@@ -452,7 +482,7 @@ function TranslationNotice({
 	// did not revalidate would be wrong for its own picker first, and the fix belongs there.
 	const sourceHref = docsHref({ ...address, locale: sourceLocale, slug });
 	return (
-		<aside className="hx-banner" data-banner={notice.state}>
+		<aside className="hx-banner" data-banner={notice.state} {...mark}>
 			<p>
 				{notice.state === 'stale'
 					? uiString(locale, 'noticeStale', { date: formatDate(notice.sourceUpdated) })

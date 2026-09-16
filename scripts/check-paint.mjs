@@ -249,11 +249,15 @@ const LONG_TOKEN = 'kSecAttrAccessibleWhenUnlockedThisDeviceOnly';
  * which of them is the current page. `tocLinks` is how many rows the outline has, and `pages`
  * the word the Pages chip and the bar's link carry.
  *
- * @param {{ prose: string, head?: string, tree?: string, dir?: 'ltr' | 'rtl', article?: string, current?: boolean, links?: number, mark?: number, tocLinks?: number, pages?: string }} parts
+ * `head` goes above the title inside the article, and `foot` below the prose and still inside
+ * it, which is where the shell puts the pager.
+ *
+ * @param {{ prose: string, head?: string, foot?: string, tree?: string, dir?: 'ltr' | 'rtl', article?: string, current?: boolean, links?: number, mark?: number, tocLinks?: number, pages?: string }} parts
  */
 const shell = ({
 	prose,
 	head = '',
+	foot = '',
 	tree = '',
 	dir = 'ltr',
 	article = '',
@@ -263,7 +267,7 @@ const shell = ({
 	tocLinks = current ? 2 : 1,
 	pages = 'Pages',
 }) =>
-	`<div class="hx-root" dir="${dir}">${FRAGMENTS.skip}<div class="hx-layout"><nav id="hx-tree" class="hx-tree" aria-label="Documentation"><button type="button" class="hx-search-trigger" disabled="">Search</button>${tree}<details class="hx-tree-disclosure"><summary class="hx-tree-summary">${pages}</summary></details><ol class="hx-tree-list">${treeRows(links, mark)}</ol></nav><article id="hx-content" class="hx-article" tabindex="-1"${article}>${head}<h1 id="hx-title" class="hx-title">Scan your first tag</h1><div class="hx-prose">${prose}</div></article><div class="hx-foot"><nav id="hx-toc" class="hx-toc" aria-label="On this page"><p class="hx-toc-heading">On this page</p><details class="hx-toc-disclosure"><summary class="hx-toc-summary"><span class="hx-toc-where"><span class="hx-toc-summary-label">On this page</span><span class="hx-toc-here"></span></span></summary></details><ol class="hx-toc-list">${tocRows(tocLinks, current)}</ol></nav><a class="hx-foot-pages" href="#hx-tree">${pages}</a></div></div></div>`;
+	`<div class="hx-root" dir="${dir}">${FRAGMENTS.skip}<div class="hx-layout"><nav id="hx-tree" class="hx-tree" aria-label="Documentation"><button type="button" class="hx-search-trigger" disabled="">Search</button>${tree}<details class="hx-tree-disclosure"><summary class="hx-tree-summary">${pages}</summary></details><ol class="hx-tree-list">${treeRows(links, mark)}</ol></nav><article id="hx-content" class="hx-article" tabindex="-1"${article}>${head}<h1 id="hx-title" class="hx-title">Scan your first tag</h1><div class="hx-prose">${prose}</div>${foot}</article><div class="hx-foot"><nav id="hx-toc" class="hx-toc" aria-label="On this page"><p class="hx-toc-heading">On this page</p><details class="hx-toc-disclosure"><summary class="hx-toc-summary"><span class="hx-toc-where"><span class="hx-toc-summary-label">On this page</span><span class="hx-toc-here"></span></span></summary></details><ol class="hx-toc-list">${tocRows(tocLinks, current)}</ol></nav><a class="hx-foot-pages" href="#hx-tree">${pages}</a></div></div></div>`;
 
 /**
  * The tree's rows, with the one at `mark` marked as the current page.
@@ -464,6 +468,68 @@ const BASE_STYLES = `(() => {
 		'fence font': style('.hx-pre').fontFamily,
 		'fence code font': style('.hx-pre code').fontFamily,
 		'search dialog inline margin': style('dialog.hx-search').marginInlineStart,
+	});
+})()`;
+
+/**
+ * The shell's own words inside an article whose words are somebody else's.
+ *
+ * An Arabic reader on a page that exists only in English. The article carries `lang="en"
+ * dir="ltr"` because that is what its words are, and every piece of furniture the shell puts
+ * inside it carries `lang="ar" dir="rtl"` because that is what those words are. The Arabic is
+ * escaped rather than typed: a right-to-left run in a source file reorders everything around
+ * it in a diff, and the two lines below are exactly where a reviewer needs to read the
+ * characters in the order they are written.
+ *
+ * The notice is one short sentence ending in a full stop, and the full stop is the whole
+ * point. It is a neutral character, so the direction of the paragraph around it is what
+ * decides where it lands: at the left end of the sentence when the paragraph is right to
+ * left, and past the right end when the paragraph is left to right and the Arabic is one
+ * isolated run inside it. That is the shape of the defect, on the page, and it is what the
+ * `stop` reading below measures.
+ */
+const NOTICE_TEXT = 'لم تُترجم هذه.';
+const PAGER_KIND = 'التالي';
+const FALLBACK_PAGE = shell({
+	dir: 'rtl',
+	article: ' lang="en" dir="ltr"',
+	head: `<aside class="hx-banner" data-banner="fallback" lang="ar" dir="rtl"><p>${NOTICE_TEXT}</p><a href="/fixture-app/docs/developer/architecture">${PAGER_KIND}</a></aside>`,
+	prose: PARAGRAPH,
+	foot: `<nav id="hx-pager" class="hx-pager" aria-label="${PAGER_KIND}" lang="ar" dir="rtl"><a href="/fixture-app/docs/guide/first-tag" class="hx-prev"><span class="hx-pager-kind">${PAGER_KIND}</span><span class="hx-pager-title">First scan</span></a><a href="/fixture-app/docs/reference/index" class="hx-next"><span class="hx-pager-kind">${PAGER_KIND}</span><span class="hx-pager-title">Reference</span></a></nav>`,
+});
+
+/**
+ * Which way the shell's own words run inside a fallback article, as JSON.
+ *
+ * Two readings, because the defect had two halves. The notice is text, and where its full
+ * stop lands says which way the sentence runs. The pager is a box, and where its Next link
+ * lands says whether the logical spellings in the stylesheet mirrored with it: the rule is
+ * `margin-inline-start: auto` with `text-align: end`, which is right in both directions only
+ * for as long as nobody rewrites it as `margin-left` and `text-align: right`.
+ */
+const NOTICE = `(() => {
+	document.documentElement.dir = document.querySelector('.hx-root').dir;
+	const paragraph = document.querySelector('.hx-banner p');
+	const node = paragraph.firstChild;
+	const text = node.textContent;
+	const range = document.createRange();
+	const at = (start, end) => { range.setStart(node, start); range.setEnd(node, end); return range.getBoundingClientRect(); };
+	const first = at(0, 1);
+	const stop = at(text.length - 1, text.length);
+	const box = document.querySelector('.hx-article').getBoundingClientRect();
+	const edges = (selector) => {
+		const link = document.querySelector(selector).getBoundingClientRect();
+		return [Math.round(link.left - box.left), Math.round(box.right - link.right)];
+	};
+	return JSON.stringify({
+		notice: getComputedStyle(paragraph).direction,
+		prose: getComputedStyle(document.querySelector('.hx-prose')).direction,
+		// One line, or the two rects are on different rows and comparing them across the
+		// page says nothing about which way the sentence runs.
+		oneLine: Math.abs(first.top - stop.top) < 1,
+		stopFirst: stop.right <= first.left + 0.5,
+		previous: edges('.hx-prev'),
+		next: edges('.hx-next'),
 	});
 })()`;
 
@@ -1173,6 +1239,12 @@ export const PROBES = [
 		body: shell({ prose: FRAGMENTS.status, current: true }),
 		expression: SIDES,
 		why: 'The control for the Arabic probe. A stylesheet that put the fill or the bar on one side in both directions passes whichever of the two probes that side happens to suit, and fails the other.',
+	},
+	{
+		id: 'fallback-interface',
+		body: FALLBACK_PAGE,
+		expression: NOTICE,
+		why: "An Arabic reader on a page that exists only in English. The article's words are English and are laid out as English; the shell's words inside it are the reader's and are laid out as the reader's, so the notice runs right to left with its full stop at the left end of the sentence, and the pager's Next link sits at the article's inline end, which here is its left.",
 	},
 ];
 
@@ -2025,6 +2097,41 @@ function layoutProblems(measured) {
 				`The code inside a fence is set in ${bare['fence code font']}, not the fence's ${bare['fence font']}. The browser's own stylesheet gives code a font family, so the token never reaches the text unless a rule makes it inherit.`,
 			);
 		}
+	}
+
+	const notice = read('fallback-interface');
+	if (notice !== undefined) {
+		/** @type {string[]} */
+		const found = [];
+		if (notice.prose !== 'ltr') {
+			found.push(
+				`the article's own prose laid out ${notice.prose}, so the two directions on this page were never actually different`,
+			);
+		}
+		if (notice.notice !== 'rtl') {
+			found.push(
+				`the notice laid out ${notice.notice} inside it, where the reader's language is right to left`,
+			);
+		} else if (!notice.oneLine) {
+			found.push(
+				'the notice wrapped onto a second line, so where its full stop landed says nothing about which way it runs',
+			);
+		} else if (notice.stopFirst !== true) {
+			found.push('the notice with its final full stop painted past the end of its first word');
+		}
+		const [previousStart, previousEnd] = notice.previous;
+		const [nextStart, nextEnd] = notice.next;
+		if (!(previousEnd === 0 && previousStart > 0)) {
+			found.push(
+				`the pager's Previous link ${previousStart}px from the article's left and ${previousEnd}px from its right, where it belongs on the inline start, which here is the right`,
+			);
+		}
+		if (!(nextStart === 0 && nextEnd > 0)) {
+			found.push(
+				`the pager's Next link ${nextStart}px from the article's left and ${nextEnd}px from its right, where it belongs on the inline end, which here is the left`,
+			);
+		}
+		report('fallback-interface', found);
 	}
 	return problems;
 }

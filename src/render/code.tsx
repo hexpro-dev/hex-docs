@@ -19,7 +19,7 @@ import { useState, type ReactElement } from 'react';
 
 import type { Code, CodeLine } from '../contracts/ast.js';
 import { DIFF_GUTTER, scopeClass } from '../contracts/palette.js';
-import { CODE_DIRECTION } from '../site/direction.js';
+import { CODE_DIRECTION, interfaceMark } from '../site/direction.js';
 import { uiString } from '../ui/strings.js';
 import type { RenderContext } from './context.js';
 import { useHydrated } from './client.js';
@@ -137,6 +137,11 @@ function CopyButton({ node, context }: { node: Code; context: RenderContext }): 
 			type="button"
 			className="hx-copy"
 			disabled={!hydrated}
+			// The one piece of the reader's own language inside the article that the shell does
+			// not render. It sits on a fence, which sits in the prose, which on a fallback page
+			// is marked with the language the page is written in, so without this the word Copy
+			// is announced as English on an Arabic page and laid out left to right on it.
+			{...interfaceMark(context.locale, context.contentLocale)}
 			onClick={() => {
 				void navigator.clipboard.writeText(text).then(() => {
 					setCopied(true);

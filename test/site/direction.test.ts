@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 
 import { LOCALES, RTL_LOCALES } from '../../src/contracts/locales.js';
-import { CODE_DIRECTION, contentAttrs, langAttrs } from '../../src/site/direction.js';
+import { CODE_DIRECTION, contentMark, interfaceMark, langAttrs } from '../../src/site/direction.js';
 import { goldenPage } from '../support/golden.js';
 
 describe('the language and direction pair', () => {
@@ -18,9 +18,9 @@ describe('the language and direction pair', () => {
 });
 
 describe('the article carries the locale it is actually in', () => {
-	test('a page in the language that was asked for does not differ', () => {
+	test('a page in the language that was asked for says nothing', () => {
 		const page = goldenPage('ja', 'guide/index').page;
-		expect(contentAttrs(page, 'ja')).toEqual({ lang: 'ja', dir: 'ltr', differs: false });
+		expect(contentMark('ja', page.locale)).toEqual({});
 	});
 
 	test('an English fallback is labelled English, not the language that was asked for', () => {
@@ -28,7 +28,7 @@ describe('the article carries the locale it is actually in', () => {
 		// screen reader to read English words with Japanese phonetics and a translation
 		// tool that the text is already translated.
 		const page = goldenPage('en', 'developer/architecture').page;
-		expect(contentAttrs(page, 'ja')).toEqual({ lang: 'en', dir: 'ltr', differs: true });
+		expect(contentMark('ja', page.locale)).toEqual({ lang: 'en', dir: 'ltr' });
 	});
 
 	test('an Arabic fallback of an English page is laid out left to right', () => {
@@ -36,12 +36,45 @@ describe('the article carries the locale it is actually in', () => {
 		// Arabic-reading session is still an English paragraph, and mirroring it would put
 		// its full stop on the wrong side.
 		const page = goldenPage('en', 'reference/api').page;
-		expect(contentAttrs(page, 'ar')).toEqual({ lang: 'en', dir: 'ltr', differs: true });
+		expect(contentMark('ar', page.locale)).toEqual({ lang: 'en', dir: 'ltr' });
+		// And the shell's own words inside that article are the reader's, which is the half
+		// the article's attribute cannot cover.
+		expect(interfaceMark('ar', page.locale)).toEqual({ lang: 'ar', dir: 'rtl' });
 	});
 
-	test('a real Arabic page is right to left', () => {
+	test('a real Arabic page is right to left at the root and marks nothing below it', () => {
 		const page = goldenPage('ar', 'reference/index').page;
-		expect(contentAttrs(page, 'ar')).toEqual({ lang: 'ar', dir: 'rtl', differs: false });
+		expect(langAttrs(page.locale)).toEqual({ lang: 'ar', dir: 'rtl' });
+		expect(contentMark('ar', page.locale)).toEqual({});
+		expect(interfaceMark('ar', page.locale)).toEqual({});
+	});
+});
+
+describe('the two marks', () => {
+	test('answer opposite sides of the same question, on the same condition', () => {
+		// The pair, on an Arabic reader looking at an English page. The article's own words are
+		// English and every piece of furniture the shell puts inside it is Arabic, so one mark
+		// says English and the other says Arabic about the same page.
+		expect(contentMark('ar', 'en')).toEqual({ lang: 'en', dir: 'ltr' });
+		expect(interfaceMark('ar', 'en')).toEqual({ lang: 'ar', dir: 'rtl' });
+	});
+
+	test('say nothing when the page is in the language that was asked for', () => {
+		// Not an optimisation. An element that repeats the language it already inherits makes
+		// a screen reader announce a language change into the language it is already reading,
+		// on every banner, every pager and every copy button on the page.
+		for (const locale of LOCALES) {
+			expect(contentMark(locale, locale)).toEqual({});
+			expect(interfaceMark(locale, locale)).toEqual({});
+		}
+	});
+
+	test('a fallback in a left-to-right language still marks both, because the language differs', () => {
+		// Direction is the visible half and it is not the only half. French and English are
+		// both left to right, so nothing moves, and a screen reader still needs to be told
+		// which voice to read each part in.
+		expect(contentMark('fr', 'en')).toEqual({ lang: 'en', dir: 'ltr' });
+		expect(interfaceMark('fr', 'en')).toEqual({ lang: 'fr', dir: 'ltr' });
 	});
 });
 
