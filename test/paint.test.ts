@@ -708,9 +708,14 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 			expect: ['The phone-tablet probe'],
 		},
 		{
-			name: 'a Pages link minimum as wide as the Arabic label, so a wider label is never measured',
-			edit: (css) => once(css, '\t\tmin-inline-size: 5rem;\n', '\t\tmin-inline-size: 6.5rem;\n'),
-			expect: ['The phone-tablet probe found a Pages link 104px wide against its 104px minimum'],
+			name: 'a Pages link minimum wider than any label, so a wider label is never measured',
+			// 12rem, not a value just above the Arabic label's width: how wide that word lays
+			// out is the platform's answer (it is 100px at the font this was written against
+			// and wider on the Linux CI image), and a minimum chosen against one of them
+			// leaves the arm asleep on the other. The problem line quotes both widths, so the
+			// prefix stops before them.
+			edit: (css) => once(css, '\t\tmin-inline-size: 5rem;\n', '\t\tmin-inline-size: 12rem;\n'),
+			expect: ['The phone-tablet probe found a Pages link'],
 		},
 		{
 			name: 'a bar padded to the shell inset, which a wide Pages label pushes past the column',
