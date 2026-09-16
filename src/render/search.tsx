@@ -21,6 +21,11 @@
  * dialog's own Escape closes it without telling React, which is why `onClose` dispatches
  * the same action the close button does.
  *
+ * The other cost is the one this file has to pay in code: a modal dialog does not dismiss
+ * itself when the reader clicks the darkened page around it, and readers expect it to.
+ * `onBackdrop` below is that click, and the reason it is not the `closedby` attribute is
+ * written there.
+ *
  * ## When the index is fetched
  *
  * On the first sign the reader intends to search: a pointer entering the trigger, focus
@@ -62,6 +67,37 @@ export interface SearchProps {
 /** The number of results scored. Beyond this a reader refines the query rather than scrolls. */
 const RESULT_LIMIT = 20;
 
+/**
+ * Whether a pointer event landed on the backdrop rather than on the dialog.
+ *
+ * Both halves are load bearing. A click on the backdrop has the dialog itself as its target,
+ * because the backdrop is the dialog's own pseudo-element and there is no node under the
+ * pointer to aim at, so the target is what rules out every click that landed on something
+ * inside. But the dialog's own padding has the dialog as its target too, and a reader who
+ * clicks the gap beside the input has not asked to leave, so the box is what tells those two
+ * apart.
+ *
+ * This is not the `closedby` attribute, and the reason is not its support table. A browser
+ * that honours `closedby="any"` would dismiss the dialog itself, before this ever ran, and
+ * one that does not would fall through to this handler: the behaviour every reader gets
+ * would then depend on their engine, and the path exercised by the tests and by the browser
+ * pass would be the path nobody on a current Chrome or Safari takes. One handler is one
+ * behaviour, measured once.
+ */
+function onBackdrop(
+	event: { target: EventTarget | null; clientX: number; clientY: number },
+	dialog: HTMLDialogElement | null,
+): boolean {
+	if (dialog === null || event.target !== dialog) return false;
+	const box = dialog.getBoundingClientRect();
+	return (
+		event.clientX < box.left ||
+		event.clientX > box.right ||
+		event.clientY < box.top ||
+		event.clientY > box.bottom
+	);
+}
+
 export function DocsSearch(props: SearchProps): ReactElement {
 	const Link = props.Link;
 	const hydrated = useHydrated();
@@ -82,6 +118,17 @@ export function DocsSearch(props: SearchProps): ReactElement {
 	 * close, and a consumer counting them would be counting wrong.
 	 */
 	const chose = useRef<string | null>(null);
+	/**
+	 * Whether the press that this click completes began on the backdrop.
+	 *
+	 * A `click` is dispatched at the common ancestor of where the press went down and where
+	 * it came up, so a reader who selects the last word of a result and releases outside the
+	 * dialog produces a click whose target is the dialog, at a point outside its box: exactly
+	 * what a backdrop click looks like. Pairing the two ends is what tells a dismissal from a
+	 * dragged selection, and without it the dialog closes out from under anybody who tries to
+	 * copy a line out of it.
+	 */
+	const pressedBackdrop = useRef(false);
 
 	const load = useCallback(() => {
 		if (index.current !== null || loading.current) return;
@@ -184,6 +231,18 @@ export function DocsSearch(props: SearchProps): ReactElement {
 				id={IDS.searchDialog}
 				className="hx-search"
 				aria-label={uiString(props.locale, 'searchPlaceholder')}
+				onPointerDown={(event) => {
+					pressedBackdrop.current = onBackdrop(event, dialog.current);
+				}}
+				onClick={(event) => {
+					// Read and cleared together, so a press that never became a click here cannot
+					// leave the flag set for the next one. `dismiss` rather than `dispatch`,
+					// because this is one more path into the single exit and not a second exit
+					// beside it: it calls `close()` and the browser's own event does the rest.
+					const pressed = pressedBackdrop.current;
+					pressedBackdrop.current = false;
+					if (pressed && onBackdrop(event, dialog.current)) dismiss(null);
+				}}
 				onClose={() => {
 					// The single exit. Escape, the backdrop, the close button and choosing a
 					// result all arrive here, so there is one event per close and one place

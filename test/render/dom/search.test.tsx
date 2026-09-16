@@ -205,6 +205,110 @@ describe('the dialog', () => {
 		expect(closes[0]?.detail).toEqual({ query: 'ndef', chose: null });
 	});
 
+	/**
+	 * The backdrop, which is the dialog's own pseudo-element and has no node to aim at.
+	 *
+	 * happy-dom performs no layout, so every box it hands back is all zeros and a click
+	 * "outside" the dialog would be true of every point on the page. The box is stubbed here
+	 * for that reason and for no other: what is under test is which pairs of press and click
+	 * the handler dismisses on, and the geometry is the input to that question rather than
+	 * part of it. Where the box really falls is measured in a browser instead.
+	 */
+	describe('the backdrop', () => {
+		const BOX = { left: 100, top: 100, right: 300, bottom: 200 };
+		const INSIDE = { clientX: 200, clientY: 150 };
+		const OUTSIDE = { clientX: 20, clientY: 400 };
+
+		const dialog = (): HTMLDialogElement => {
+			const element = document.getElementById(IDS.searchDialog) as HTMLDialogElement;
+			element.getBoundingClientRect = (() => ({
+				...BOX,
+				width: BOX.right - BOX.left,
+				height: BOX.bottom - BOX.top,
+				x: BOX.left,
+				y: BOX.top,
+				toJSON: () => BOX,
+			})) as HTMLDialogElement['getBoundingClientRect'];
+			return element;
+		};
+
+		const opened = async (): Promise<HTMLDialogElement> => {
+			mount();
+			fireEvent.click(trigger());
+			await waitFor(() => expect(document.activeElement).toBe(input()));
+			return dialog();
+		};
+
+		const closes = (): number =>
+			events.filter((event) => event.name === 'hexdocs:search-close').length;
+
+		test('a press and a click on it close the dialog once, and focus goes back to the trigger', async () => {
+			const element = await opened();
+			fireEvent.pointerDown(element, OUTSIDE);
+			fireEvent.click(element, OUTSIDE);
+			await waitFor(() => expect(document.activeElement).toBe(trigger()));
+			expect(element.open).toBe(false);
+			// One event, because this path calls `close()` and lets the browser's own `close`
+			// event do the reporting, the same as Escape and the close button.
+			expect(closes()).toBe(1);
+			expect(events.find((event) => event.name === 'hexdocs:search-close')?.detail).toEqual({
+				query: '',
+				chose: null,
+			});
+		});
+
+		test("a click on the dialog's own padding leaves it open", async () => {
+			// The target is the dialog here too, which is why the target alone cannot decide
+			// this: a reader who clicks the gap beside the input has not asked to leave.
+			const element = await opened();
+			fireEvent.pointerDown(element, INSIDE);
+			fireEvent.click(element, INSIDE);
+			expect(element.open).toBe(true);
+			expect(closes()).toBe(0);
+		});
+
+		test('a selection dragged out of the dialog leaves it open', async () => {
+			// The case that makes this a pair of events rather than one. A click is dispatched
+			// at the common ancestor of the press and the release, so releasing on the backdrop
+			// after pressing on a result produces a click on the dialog, outside its box: the
+			// same event a dismissal produces, and the press is the only thing that differs.
+			const element = await opened();
+			fireEvent.pointerDown(input(), INSIDE);
+			fireEvent.click(element, OUTSIDE);
+			expect(element.open).toBe(true);
+			expect(closes()).toBe(0);
+		});
+
+		test('a click on something inside leaves it open', async () => {
+			const element = await opened();
+			fireEvent.pointerDown(input(), INSIDE);
+			fireEvent.click(input(), INSIDE);
+			expect(element.open).toBe(true);
+			expect(closes()).toBe(0);
+		});
+
+		test('a click with no press before it leaves it open', async () => {
+			// A click carrying no pointer press is how a keyboard activation arrives, and its
+			// coordinates are zero, which is outside the dialog's box on any real page. Nothing
+			// can focus the dialog element itself to activate it, so this is a guard rather than
+			// a path, and it is the guard that keeps a stale flag from dismissing later.
+			const element = await opened();
+			fireEvent.click(element, { clientX: 0, clientY: 0, detail: 0 });
+			expect(element.open).toBe(true);
+			expect(closes()).toBe(0);
+		});
+
+		test('a press on the backdrop that is released inside leaves it open', async () => {
+			// The mirror of the dragged selection: the press was on the backdrop, the release
+			// was on a result, and the click that reaches the dialog is at a point inside it.
+			const element = await opened();
+			fireEvent.pointerDown(element, OUTSIDE);
+			fireEvent.click(element, INSIDE);
+			expect(element.open).toBe(true);
+			expect(closes()).toBe(0);
+		});
+	});
+
 	test('choosing a result reports which one', async () => {
 		mount();
 		fireEvent.click(trigger());
