@@ -243,6 +243,20 @@ export const FRAGMENTS = {
 const LONG_TOKEN = 'kSecAttrAccessibleWhenUnlockedThisDeviceOnly';
 
 /**
+ * The same identifier with a suffix, for the places a probe has to overflow on any font.
+ *
+ * The real constant is 44 characters and lays out 390.2px against a 358px column here, and
+ * 30px wider on the Linux image these probes also run on. A margin that small decides which
+ * of the three token probes sees a given mutation, so the same mutation was caught at one
+ * width on one platform and at three on the other, and the expectations could not be true of
+ * both. At 71 characters the token is wider than the column by a third of the screen at every
+ * width and on any system font, so which probes see it is the stylesheet's answer alone. The
+ * sentence, the fence and the table keep the real constant, where the width is not load
+ * bearing.
+ */
+const WIDE_TOKEN = `${LONG_TOKEN}AndTheColumnIsNarrowerStill`;
+
+/**
  * The Arabic the probes carry, escaped rather than typed.
  *
  * A right-to-left run in a source file reorders everything around it in a diff, and these are
@@ -350,10 +364,10 @@ const TOKEN_PAGE = (dir = 'ltr', article = '') =>
 			// page title, a heading, the pager's title for the next page, and the sentence.
 			// Scoped to `.hx-code`, the line breaker reached the sentence and none of the other
 			// three, which is a fix for an author who writes backticks and for nobody else.
-			title: LONG_TOKEN,
+			title: WIDE_TOKEN,
 			prose:
 				PARAGRAPH +
-				`<h2 id="store" class="hx-heading">${LONG_TOKEN}</h2>` +
+				`<h2 id="store" class="hx-heading">${WIDE_TOKEN}</h2>` +
 				FRAGMENTS.longToken +
 				`<div class="hx-fence" data-lang="swift"><pre class="hx-pre" dir="ltr" tabindex="0" role="group" aria-label="Swift code block"><code><span class="hx-line"><span class="hx-s-keyword">let</span> access = ${LONG_TOKEN}</span></code></pre></div>` +
 				FRAGMENTS.tokenTable,
@@ -363,8 +377,8 @@ const TOKEN_PAGE = (dir = 'ltr', article = '') =>
 			// is why it carries the interface's language there and its title carries the page's.
 			foot:
 				dir === 'rtl'
-					? `<nav id="hx-pager" class="hx-pager" aria-label="${PAGER_LABEL}" lang="ar" dir="rtl"><a href="/fixture-app/docs/reference/index" class="hx-next"><span class="hx-pager-kind">${PAGER_KIND}</span><span class="hx-pager-title" lang="en" dir="ltr">${LONG_TOKEN}</span></a></nav>`
-					: `<nav id="hx-pager" class="hx-pager" aria-label="More pages"><a href="/fixture-app/docs/reference/index" class="hx-next"><span class="hx-pager-kind">Next</span><span class="hx-pager-title">${LONG_TOKEN}</span></a></nav>`,
+					? `<nav id="hx-pager" class="hx-pager" aria-label="${PAGER_LABEL}" lang="ar" dir="rtl"><a href="/fixture-app/docs/reference/index" class="hx-next"><span class="hx-pager-kind">${PAGER_KIND}</span><span class="hx-pager-title" lang="en" dir="ltr">${WIDE_TOKEN}</span></a></nav>`
+					: `<nav id="hx-pager" class="hx-pager" aria-label="More pages"><a href="/fixture-app/docs/reference/index" class="hx-next"><span class="hx-pager-kind">Next</span><span class="hx-pager-title">${WIDE_TOKEN}</span></a></nav>`,
 		}),
 	);
 

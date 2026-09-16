@@ -961,8 +961,8 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 					'\tunicode-bidi: isolate;\n\toverflow-wrap: break-word;\n',
 				),
 			expect: [
-				'The phone-token probe found .hx-title text',
-				'The phone-token-rtl probe found .hx-title text',
+				'The phone-token probe found .hx-pager-title',
+				'The phone-token-rtl probe found .hx-pager-title',
 				'The phone-token-narrow probe found .hx-pager-title',
 			],
 		},
@@ -977,14 +977,11 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 					'.hx-root .hx-pager a {\n\tdisplay: block;\n\tmin-inline-size: 0;\n',
 					'.hx-root .hx-pager a {\n\tdisplay: block;\n',
 				),
-			expect: ['The phone-token-narrow probe found .hx-next'],
-			// The link is 390.2px wide at the system font this was written against, against a
-			// 358px column at 390px and a 328px column at 360px, so it spills at both widths.
-			// The macOS font is narrow enough that the title inside it wraps at 390 and the
-			// link keeps to the column; the Linux CI image's is not, and there all three
-			// probes see it. The mutation is caught either way; which widths see it is the
-			// platform's answer, not the stylesheet's.
-			alsoOn: ['The phone-token probe found .hx-next', 'The phone-token-rtl probe found .hx-next'],
+			expect: [
+				'The phone-token probe found .hx-next',
+				'The phone-token-rtl probe found .hx-next',
+				'The phone-token-narrow probe found .hx-next',
+			],
 		},
 		{
 			name: 'a break opportunity that counts towards the minimum content width',
@@ -1321,16 +1318,16 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 	}, 60_000);
 
 	/*
-	 * Every mutation names the problems it must produce, and the run may produce no others.
+	 * Every mutation names the problems it must produce, in order, and the run may produce no
+	 * others. The count is asserted as well as the prefixes, because a mutation that trips a
+	 * second probe is a probe reading something it was not written to read.
 	 *
-	 * The count is asserted as well as the prefixes, because a mutation that trips a second
-	 * probe is a probe reading something it was not written to read, and that is worth
-	 * knowing. `alsoOn` is the one exception and it is narrow: a mutation whose page overflows
-	 * by a few pixels is caught at one width on a platform whose system font is narrow and at
-	 * every width on one whose font is wider, and the runner's platform is not the property
-	 * under test. macOS and the Linux CI image disagree about exactly one entry. An entry with
-	 * no `alsoOn` is held to the exact list as before, and a problem outside both lists still
-	 * fails wherever it appears.
+	 * `alsoOn` widens that to a list a wider system font may add. It exists because these
+	 * probes run on two platforms: a page that overflows by a few pixels at one width on macOS
+	 * overflows at every width on the Linux image, and the runner's platform is not the
+	 * property under test. Nothing uses it today, because the fixture's token was widened past
+	 * any font instead, which is the better answer where it is available. An entry with no
+	 * `alsoOn` is held to its exact list.
 	 */
 	test.each([...LAYOUT_BREAKS, ...DIRECTION_BREAKS])(
 		'$name is caught, and only the probes that can see it fail',
