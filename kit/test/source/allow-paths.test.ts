@@ -57,9 +57,11 @@ import { BUCKET_VARIABLE, ROLE_VARIABLE, publishWorkflow } from '../../src/templ
  * The allowlist of the one repository that has one, in its real shape.
  *
  * Twenty-one entries, each indented by exactly four spaces and double quoted, opened by
- * `readonly ALLOW_PATHS=(` alone on its line and closed by `)` alone on its line. Verified
- * against the real script rather than invented, and the shape is asserted below rather
- * than assumed, because the numbers are load-bearing in two places: `"docs/public"` sits
+ * `readonly ALLOW_PATHS=(` alone on its line and closed by `)` alone on its line. Taken
+ * from the real script as it stood before step 9 wired that repository, which is the
+ * state this file has to cover: `init` inserts into an allowlist that does not carry
+ * `docs/site` yet. The shape is asserted below rather than assumed, because the numbers
+ * are load-bearing in two places: `"docs/public"` sits
  * in the middle of the list, so the insert has to land between two existing lines rather
  * than at either end, and `.github/scripts` sits beside `.github/workflows/ci.yml`, which
  * is the pair that separates the `publish-workflow` refusal from a false positive on every

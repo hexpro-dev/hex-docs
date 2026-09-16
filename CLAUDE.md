@@ -152,15 +152,19 @@ submodules, along with `.gitmodules`, the `pnpm-workspace.yaml` exclusion and th
 ### hex-nfc
 
 Remote `git@github.com:hexpro-dev/hex-nfc.git`. Zero git tags, `MARKETING_VERSION` 1.0,
-nothing released. `docs/public/` holds three engineering documents; `docs/internal/`
-holds App Store review-risk strategy, export-compliance classification, competitor naming
-and a device UDID.
+nothing released. `docs/internal/` holds App Store review-risk strategy,
+export-compliance classification, competitor naming and a device UDID.
+
+Step 9 moved the three engineering documents out of `docs/public/`, which no longer
+exists, into `docs/site/content/en/developer/`, and `scripts/sync-public.sh` lists
+`docs/site` in its place. Anything written about that repository before step 9, here or
+in a fixture, is describing the old tree.
 
 **`docs/internal/` is protected by absence, not by a guard.** `scripts/sync-public.sh`
-has a copy-in `ALLOW_PATHS` listing `docs/public`, and `prune_internal_files()` only
-matches `CLAUDE.md`, `AGENTS.md`, `.claude` and `.agents` by name. Widening that entry to
-`docs/` would push the internal tree to a public repo and nothing would catch it. Add
-exactly `docs/site`, never `docs`, and assert that no bare `docs` entry exists.
+has a copy-in `ALLOW_PATHS`, and `prune_internal_files()` only matches `CLAUDE.md`,
+`AGENTS.md`, `.claude` and `.agents` by name. Widening the docs entry to `docs/` would
+push the internal tree to a public repo and nothing would catch it. The entry is exactly
+`docs/site`, never `docs`, and `hexdocs check` asserts that no bare `docs` entry exists.
 
 The publish workflow is deliberately **not** allowlisted. It carries neither the bucket nor
 the role, which it reads from repository variables, but it describes the shape of the estate
@@ -175,7 +179,8 @@ keys using `variations` rather than a top-level unit). Note `zh-Hans` there agai
 `hi` App Store listing with no app strings behind it.
 
 **`73b7be1ed9a1361bad35091207610e4f331493cf`, the commit cited as the first version,
-touches only `marketing/`.** Nine of roughly a hundred main commits touch `docs/public`.
+touches only `marketing/`.** Nine of roughly a hundred main commits touched the
+documentation tree before step 9 moved it.
 Release commits are precisely the commits least likely to be docs commits, which is why
 the publish workflow has no `paths:` filter.
 
@@ -380,7 +385,7 @@ are data before it decides whether a character is decoration. A table private to
 parser would mean the two had separate ideas of which check mark was content.
 
 **Status glyphs came out of the real corpus, not out of imagination.** A census of
-`hex-nfc/docs/public/` counts 59 U+2705, 16 U+26A0 every one followed by U+FE0F, and 11
+hex-nfc's three engineering documents counts 59 U+2705, 16 U+26A0 every one followed by U+FE0F, and 11
 U+274C, which is exactly the 86 the design records. The fourth spelling is the one that
 matters: **"not applicable" is written as a U+2014 EM DASH**, a character the house rules
 ban outright and this package's own lint would reject in its own source. So the glyph
