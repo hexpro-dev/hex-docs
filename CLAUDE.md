@@ -1873,6 +1873,149 @@ kcalc's own install rather than fixed here: `seo-audit.mjs` expects exactly its 
 the sitemap, `check-assets.mjs` refuses `.png` and `.svg` in `public/`, and `check-forbidden.mjs`
 scans the prefetched trees.
 
+## Language, direction and the phone (step 9)
+
+Step 9 is what a browser found on the running hex-web build that no suite here could see: the
+phone layout, the search dialog's dismissal, a line breaker, and then the whole question of
+which language each run of text on a page is actually in. What follows is what would
+otherwise be rediscovered.
+
+### Two marks, one condition, and the article is the thing they are relative to
+
+`src/site/direction.ts` holds every `lang` and `dir` decision the renderer makes.
+`contentMark(requested, content)` is for the page's own words standing in the interface's
+furniture, `interfaceMark(requested, content)` for the interface's words standing inside the
+article, and both answer nothing when the two locales agree, because an element repeating a
+language it already inherits makes a screen reader announce a change into the language it is
+already reading.
+
+The article carries the locale it is **in**, never the one that was asked for. Measured on
+hex-web's `/ar/hex-nfc/docs`: the translation notice inside an article marked `lang="en"
+dir="ltr"` computed direction `ltr`, sat flush against the left of its box with 443px of empty
+space beside it, painted its final full stop before its first word, and was read to a screen
+reader as English.
+
+`interfaceLang` is the third function and the reason it exists is measured, not stylistic. A
+status mark and a task marker are empty elements whose whole content is an `aria-label`, so
+the exemption `interfaceMark` documents for a fence's region name does not reach them: there
+is no text beside the attribute for the text to win over. They take the `lang` and not the
+`dir`, because `dir="rtl"` makes `.hx-status-half` match its own `:dir(rtl)` rule and fill its
+other half, and a half-filled shape that fills the wrong half says the opposite of what the
+row says. `reference/chip-support` at an Arabic address carries 101 of these.
+
+### Mark the words, never the box
+
+The rule the second review produced, and the case that produced it. `interfaceMark` spread on
+`<button class="hx-copy">` moved the Copy button from the end of the fence bar to its start on
+every right-to-left address serving a fallback page: the button is a flex item in a bar that
+stays left to right, `margin-inline-start: auto` resolves in the **item's** own direction, and
+`dir="rtl"` flipped which side the auto margin absorbed. Measured at 1280px: 12px from the
+bar's start where it belongs 12px from its end, and the same flip at 360, 390 and 768. A bar
+that also carries a language chip did not move, because `.hx-fence-lang + .hx-copy` zeroes
+that margin, so one page could show two fences with the button on opposite sides.
+
+So a mark goes on the smallest element holding nothing but the run of text it describes: the
+copy button's label, a crumb's label, a pager's title and a tree row's label each sit in a
+span of their own. The same trap is one line away in `.hx-next`, which carries
+`margin-inline-start: auto` and `text-align: end`, and in every row of the tree and the trail,
+where the current-item bar is an inset shadow with a `:dir(rtl)` mirror keyed on the element
+itself.
+
+The two exceptions are lists whose every row is in one language: the outline and the search
+results. There the mark is on the list, because the box is what has to mirror. The outline's
+depth indent is `padding-inline-start` on `.hx-toc-item[data-depth]` and the current-item bar
+sits on the inline start, and both belong on the side those words are read from.
+
+### `labelOf` returns the locale it chose
+
+The trail, the pager and the sidebar are the interface's furniture and their rows are other
+pages' titles, which the manifest gives in the reader's language where that page is translated
+and in the source's where it is not. The first version of step 9 marked the containers and
+left the labels, on the grounds that the shell could not say which. It could, one call away:
+`labelOf` picks `record.locales[locale] ?? record.locales[source]`, so the chooser knows. It
+returns `{ label, locale }` now, `DocsCrumb`, `DocsPager` and `DocsNavNode` carry
+`labelLocale`, and each label is marked with it. Marking only the container declared four
+English page titles on hex-web's Arabic architecture page to be Arabic, which is the same
+defect as the notice, in the other direction.
+
+### The sweep is one rule in both directions, over every address twice
+
+`test/render/shell.test.tsx` asserts that every run of text and every accessible name sits
+under a declared language the words in it could be in. One rule: an Arabic interface string
+inside an article marked English breaks it, and so does an English page title inside a
+breadcrumb marked Arabic.
+
+Three things about its shape are load bearing, and each closes a hole the previous version
+had.
+
+**It reads the whole shell, with the reader's locale as the baseline**, because that is what
+both consumers write on `<html>`. The sidebar, the outline and the trail are outside the
+article and every one of them carried the defect.
+
+**It sweeps every locale against every slug, and then the corpus again as an English-only
+bundle.** The first version read one page, and that page was the only page in the corpus
+carrying none of the five node types that emit an interface string inside the article, so its
+empty result was empty partly because nothing on it could have filled it. The English-only
+pass is not padding either: `hexdocs init` publishes exactly that, which is what hex-nfc serves
+today, and without it the corpus has no fallback page carrying an ordered procedure, so the
+step number could be left unmarked with all 56 real addresses green.
+
+**Evidence, not a script range.** The old detector was `/[؀-ۿ]/`, which cannot see a French
+stray, and the one corpus pairing that is a fallback over a page carrying statuses and
+external links is `fr`/`reference/chip-support`. A run is judged against the string tables and
+the manifest's labels: interpolated strings are matched as patterns, because `Step {number}`
+matched literally is how the step number stayed unmarked. A run with no evidence either way is
+skipped, which is why the sweep asserts how many it placed.
+
+There is one exemption list, three keys long, and it is checked in both directions: a fence's
+region name and a table's are interface strings on elements whose content is the page's own,
+and HTML has no way to give an attribute a different language from the text beside it.
+
+### The line breaker belongs on the root
+
+`overflow-wrap: break-word` was scoped to `.hx-code`, which fixed a long identifier for an
+author who writes backticks and for nobody else. Measured at 390px on a page carrying
+`kSecAttrAccessibleWhenUnlockedThisDeviceOnly` as its title, a heading and a pager title: the
+title ran 362px past the screen, the heading 413px, and in Arabic the pager ran 82px off the
+leading edge instead. It is on `.hx-root` now, where every text holder inherits it.
+`break-word` contributes nothing to the minimum content width, which is what lets it sit there
+without collapsing a table's column, and a fence keeps `white-space: pre` and never wraps at
+all.
+
+`.hx-pager a` needed `min-inline-size: 0` beside it, and it is the one holder the inherited
+property could not reach: a flex item's automatic minimum size is its content's, so the link
+held its own width however willing the text inside it was to break.
+
+A block element's box is the column's width whatever its text does inside it, so the spill
+probe reads the **ink** of each block holder as a range as well as its box. Without that, a
+heading whose one unbreakable word runs off the screen reports nothing, and in a
+right-to-left page the page's own `scrollWidth` cannot see it either.
+
+### The dialog's one exit did not include the backdrop
+
+The comment said Escape, the backdrop, the close button and choosing a result all reached one
+exit. The backdrop did not: a modal `<dialog>` does not light dismiss on its own. A click on
+it has the dialog itself as its target, because the backdrop is the dialog's own
+pseudo-element, so the target is what rules out clicks on things inside and the box is what
+tells a backdrop click from a click on the dialog's own padding. The press has to be paired
+with the click, because a click is dispatched at the common ancestor of where the press went
+down and where it came up: a reader selecting the last word of a result and releasing outside
+produces exactly the event a dismissal produces.
+
+Not the `closedby` attribute, and the reason is not its support table. An engine that honours
+`closedby="any"` dismisses before any handler runs and one that does not falls through, so the
+behaviour would depend on the reader's browser and the path under test would be the path
+nobody takes.
+
+### The public surface is pinned, and `contentAttrs` is the reason
+
+`contentAttrs` and `ContentAttrs` were the whole of `direction.ts`'s public surface, the
+barrel re-exports that module wholesale, and step 9 replaced them. Nothing here noticed and
+neither consumer did, because neither called them. `test/exports.test.ts` holds both barrels'
+runtime names in both directions, the types a consuming site annotates with as `import type`
+bindings, and a `WITHDRAWN` list with a reason per name, so a removal leaves a record and a
+name cannot quietly come back under a different meaning.
+
 ## Code style
 
 Tabs. TypeScript strict, `verbatimModuleSyntax`, ES2022 / ESNext / bundler. Prettier with
