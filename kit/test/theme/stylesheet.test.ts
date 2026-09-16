@@ -536,7 +536,10 @@ describe('the rules a generator cannot enforce', () => {
 	});
 
 	test('every scrollable rail and heading clears the sticky header', () => {
-		expect([...CSS.matchAll(/scroll-margin-block-start/g)].length).toBeGreaterThanOrEqual(2);
+		// A heading, a step and, on a phone, the page tree the bar's Pages link jumps to. An
+		// exact count, so a jump target that lost its margin is a failure rather than a smaller
+		// number over a floor.
+		expect([...CSS.matchAll(/scroll-margin-block-start/g)].length).toBe(3);
 	});
 
 	test('the tree and table of contents links meet the minimum target size', () => {
@@ -554,7 +557,15 @@ function rule(selector: string): string {
 	const head = `\n${selector} {\n`;
 	const parts = CSS.split(head);
 	expect({ selector, rules: parts.length - 1 }).toEqual({ selector, rules: 1 });
-	return (parts[1] as string).slice(0, (parts[1] as string).indexOf('\n}'));
+	const body = (parts[1] as string).slice(0, (parts[1] as string).indexOf('\n}'));
+	// A rule emptied of its only declaration starts with its own closing brace, so the slice
+	// above reads on to the next rule's. The desktop Pages rule then read the whole phone block,
+	// which says `display: none` several times, and its assertion passed with the line deleted.
+	expect({ selector, readsPastItsBrace: /[{}]/.test(body) }).toEqual({
+		selector,
+		readsPastItsBrace: false,
+	});
+	return body;
 }
 
 describe('the layout a host cannot take away', () => {
@@ -622,6 +633,132 @@ describe('the layout a host cannot take away', () => {
 		expect(rule('.hx-root .hx-figure')).toContain('margin-block: 0 1rem');
 		expect(rule('.hx-root .hx-pre code')).toContain('font: inherit');
 		expect(rule('.hx-search')).toContain('margin: auto');
+		// The phone controls, in their desktop state. The preflight sets a summary to
+		// `display: list-item` and zeroes margins, padding and borders, and the two new
+		// wrappers must generate nothing a desktop grid can see.
+		const summaries = rule('.hx-root .hx-tree-summary,\n.hx-root .hx-toc-summary');
+		for (const declaration of [
+			'display: none',
+			'list-style: none',
+			'margin: 0',
+			'padding: 0',
+			'border: 0',
+		]) {
+			expect(summaries).toContain(declaration);
+		}
+		expect(rule('.hx-root .hx-foot')).toContain('display: contents');
+		expect(rule('.hx-root .hx-foot-pages')).toContain('display: none');
+		// The two details elements generate no box at all on a desktop, because a displayed
+		// one, however empty, is an unnamed group in the accessibility tree. A browser gives a
+		// details element no margin, padding or border and the preflight zeroes them anyway, so
+		// no probe can see those three go, and they are held here as text.
+		const disclosures = rule('.hx-root .hx-tree-disclosure,\n.hx-root .hx-toc-disclosure');
+		for (const declaration of ['display: none', 'margin: 0', 'padding: 0', 'border: 0']) {
+			expect(disclosures).toContain(declaration);
+		}
+	});
+});
+
+/** The body of the one phone media query, and a failure if there is not exactly one. */
+function phoneBlock(): string {
+	const head = '\n@media (max-width: 60rem) {\n';
+	const parts = CSS.split(head);
+	expect({ phoneBlocks: parts.length - 1 }).toEqual({ phoneBlocks: 1 });
+	const body = parts[1] as string;
+	return body.slice(0, body.indexOf('\n}\n'));
+}
+
+describe('the phone layout', () => {
+	// What the text has to say. Whether a phone reader gets a bar at the bottom of the screen,
+	// rows a thumb can hit and an article on the first screen is `scripts/check-paint.mjs`,
+	// whose phone probes `test/paint.test.ts` breaks one rule at a time.
+	//
+	// Not every phone declaration is held by either. Measured by deleting each of the 176
+	// declarations and rules in the phone section in turn (142 declarations, 34 rules) and
+	// running both suites: 42 turned no test red, and 18 more only broke a search string in
+	// `test/paint.test.ts` rather than failing a probe. The 42 are the look of the Pages chip and
+	// the tree panel (ground, border, radius, text colour, inline padding, font size), the font
+	// size of the bar's link and heading, the label's caption colour and display, the summaries'
+	// colour and cursor, the flex alignment inside the bar, its link and its label, the rows'
+	// flex display and inline padding, the article's end margin, the top row's block margins and
+	// the search trigger's sizing in it, the chevron's turn back while the outline is open, the
+	// hidden `/` hint, Safari's marker reset, and declarations another rule already makes true in
+	// the hosts the probes reproduce, such as the static rail's and outline's `max-block-size` and
+	// `overflow`. A change to any of those needs a look in a browser at 390px and 768px, in
+	// English and in Arabic, with each disclosure open and closed.
+
+	test('is one media query, after every rule it overrides', () => {
+		// The phone rules for the rows and the search dialog tie with rules in CHROME and
+		// SEARCH on specificity, and a tie goes to the later rule. Above them, every row is a
+		// 24px desktop target again and the dialog is centred.
+		expect(CSS.indexOf('\n@media (max-width: 60rem) {')).toBeGreaterThan(
+			CSS.indexOf('\n.hx-search .hx-search-heading {'),
+		);
+		expect(CSS.indexOf('\n@media (max-width: 60rem) {')).toBeGreaterThan(
+			CSS.indexOf('\n.hx-root .hx-tree-link,\n.hx-root .hx-tree-section,\n.hx-root .hx-toc-link {'),
+		);
+		phoneBlock();
+	});
+
+	test('paints the chevrons in the text colour of a forced palette, after the rule it overrides', () => {
+		// The same tie on specificity, with the phone block's chevron rule. Whether the chevron
+		// is then visible is the `phone-forced` probe's to say.
+		const forced = '\n@media (forced-colors: active) {\n';
+		expect(CSS.split(forced).length - 1).toBe(1);
+		expect(CSS.indexOf(forced)).toBeGreaterThan(CSS.indexOf('\n@media (max-width: 60rem) {'));
+		expect(CSS.split(forced)[1]?.slice(0, CSS.split(forced)[1]?.indexOf('\n}\n'))).toBe(
+			'\t.hx-root .hx-tree-summary::after,\n\t.hx-root .hx-toc-summary::after {\n\t\tbackground: CanvasText;\n\t}',
+		);
+	});
+
+	test('says what the layout depends on', () => {
+		const phone = phoneBlock();
+		for (const text of [
+			// A block container, so the centred rows fill the column rather than shrinking to their
+			// content, and a flow root, so the tree's margin stays inside the docs root.
+			'\t.hx-root .hx-layout {\n\t\tdisplay: flow-root;',
+			// The disclosures a desktop does not display at all.
+			'\t.hx-root .hx-tree-disclosure,\n\t.hx-root .hx-toc-disclosure {\n\t\tdisplay: block;',
+			// The panels are hidden while their disclosure is closed, and only then.
+			'\t.hx-root .hx-tree-disclosure:not([open]) + .hx-tree-list {\n\t\tdisplay: none;',
+			'\t.hx-root .hx-toc-disclosure:not([open]) + .hx-toc-list {\n\t\tdisplay: none;',
+			// The bar sticks to the bottom of the viewport.
+			'\t\tposition: sticky;\n\t\tinset-block-end: 0;',
+			'env(safe-area-inset-bottom, 0px)',
+			'min-block-size: 2.75rem',
+		]) {
+			expect(phone).toContain(text);
+		}
+		expect(phone.match(/overscroll-behavior: contain;/g)?.length).toBe(2);
+	});
+
+	test('the page tree clears the host header when the bar link jumps to it', () => {
+		const tree = /\t\.hx-root \.hx-tree \{\n([\s\S]*?)\n\t\}/.exec(phoneBlock())?.[1] ?? '';
+		expect(tree).toContain(`\t\tscroll-margin-block-start: ${t('sticky-offset')};`);
+		expect(tree).toContain('\t\tposition: static;');
+	});
+
+	test('sizes nothing by the viewport height, which a phone toolbar changes under it', () => {
+		// `vh` on a phone is the large viewport, measured with the toolbar hidden, so a panel
+		// sized by it is taller than the space it opens into while the toolbar shows. `svh` is
+		// the small viewport. A digit directly before `vh` is the large unit and nothing else,
+		// since `60svh` and `100dvh` have a letter there. The last line runs the same matcher
+		// over both spellings, which proves it finds the large unit and passes the small one.
+		const largeViewport = /\dvh\b/g;
+		const phone = phoneBlock();
+		expect(phone.match(largeViewport)).toBeNull();
+		expect(phone.match(/\b60svh\b/g)?.length).toBe(2);
+		expect(phone.match(/\b80svh\b/g)?.length).toBe(1);
+		expect('\t\tmax-block-size: 60svh;\n\t\tmax-block-size: 60vh;'.match(largeViewport)).toEqual([
+			'0vh',
+		]);
+	});
+
+	test('caps both panels at a scroll container of their own', () => {
+		// Each panel's height cap and its scrolling come as a pair: a cap with no scrolling
+		// leaves the rows past it unreachable, and scrolling with no cap never scrolls. The paint
+		// probes open a tall outline and a tall tree and read both halves of each.
+		expect(phoneBlock().match(/max-block-size: 60svh;\n\t\toverflow-y: auto;/g)?.length).toBe(2);
 	});
 });
 

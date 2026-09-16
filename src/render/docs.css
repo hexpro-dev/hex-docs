@@ -158,18 +158,6 @@
 	outline: none;
 }
 
-@media (max-width: 60rem) {
-	.hx-root .hx-layout {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
-	.hx-root .hx-tree,
-	.hx-root .hx-toc {
-		position: static;
-		max-block-size: none;
-	}
-}
-
 /*
  * The backdrop slot's geometry, copied from the working pattern in hex-web rather than
  * invented. A wrapper with `overflow` would become the scrollport and pin the sticky
@@ -925,6 +913,398 @@
 	display: block;
 	color: var(--hx-dim, #a89f93);
 	font-size: 0.875rem;
+}
+
+/*
+ * The phone layout, below 60rem, and the desktop state of the elements only it shows.
+ *
+ * After CHROME and SEARCH, and that position is load-bearing. The rules for the tree and
+ * outline rows and for the search dialog override rules of exactly the same specificity in
+ * those two blocks, and at equal specificity the later rule wins. Moved above them, every
+ * row falls back to the desktop's 24px target and the dialog to its centred desktop size.
+ * `kit/test/theme/stylesheet.test.ts` asserts the order.
+ *
+ * The page tree and search sit at the top of the page in flow and scroll away once reading
+ * starts. The table of contents becomes a bar stuck to the bottom of the viewport, under the
+ * thumb, which names the heading the reader is in and opens the outline upward. Both are
+ * native `<details>`, so the whole layout works with no script, and neither adds anything
+ * to the top of the viewport, where the host's own sticky header already is.
+ *
+ * Nothing here is physical. The chevrons are symmetric about the vertical axis, so a turn
+ * needs no mirror, and `env(safe-area-inset-bottom)` names an edge of the device rather
+ * than a side of the text.
+ *
+ * The desktop state of the new elements states every property a host's base layer sets on
+ * them, Tailwind's `summary { display: list-item }` included, for the reason the generator
+ * gives at its top: an unlayered rule beats a layered one only for the properties it states.
+ */
+.hx-root .hx-tree-summary,
+.hx-root .hx-toc-summary {
+	display: none;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.hx-root .hx-tree-summary::-webkit-details-marker,
+.hx-root .hx-toc-summary::-webkit-details-marker {
+	display: none;
+}
+
+/*
+ * Not displayed on a desktop at all. A closed details element that generates a box, even an
+ * empty zero-height one, is an unnamed group in the accessibility tree, so a desktop screen
+ * reader walking the tree or the outline landmark met a group it could do nothing with. The
+ * phone block displays both again, and without that rule the Pages chip and the bar's outline
+ * control are gone at phone width. Not `display: contents`, which Chrome still exposes as a
+ * group.
+ */
+.hx-root .hx-tree-disclosure,
+.hx-root .hx-toc-disclosure {
+	display: none;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+/* It generates no box on a desktop, so the table of contents is still the grid's third item. */
+.hx-root .hx-foot {
+	display: contents;
+}
+
+.hx-root .hx-foot-pages {
+	display: none;
+}
+
+@media (max-width: 60rem) {
+	/*
+	 * A block container rather than a one-column grid, and not for the bar's sake: a sticky grid
+	 * item is held inside the grid container rather than its own area, and measured in Chrome the
+	 * bar sticks and settles above the host's footer either way. What a grid changes is the rows.
+	 * An auto inline margin stops a grid item stretching, so the centred row and article would
+	 * shrink to their content rather than fill the column, and the desktop's gap would open 2rem
+	 * between rows. A flow root rather than a plain block, because a plain block lets the tree's
+	 * top margin collapse through it and out past the docs root, which then starts 12px below the
+	 * host's header with the host's ground showing in the gap.
+	 */
+	.hx-root .hx-layout {
+		display: flow-root;
+	}
+
+	/*
+	 * The top row: Search taking the room and Pages beside it, with the list on a line of its
+	 * own under them. Static, because the desktop's sticky rail would pin the row, and an
+	 * open tree with it, over the article. The scroll margin is for the bar's Pages link,
+	 * which jumps here and would otherwise land the row under the host's header.
+	 */
+	.hx-root .hx-tree {
+		position: static;
+		max-block-size: none;
+		overflow: visible;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: stretch;
+		gap: 0.5rem;
+		max-inline-size: var(--hx-measure, 42rem);
+		margin-inline: auto;
+		margin-block: 0.75rem 1rem;
+		scroll-margin-block-start: var(--hx-sticky-offset, 5rem);
+	}
+
+	.hx-root .hx-tree > * {
+		flex: 0 0 100%;
+		min-inline-size: 0;
+	}
+
+	.hx-root .hx-tree > .hx-search-trigger {
+		flex: 1 1 0;
+		inline-size: auto;
+		min-block-size: 2.75rem;
+		margin-block-end: 0;
+	}
+
+	/* The desktop hides both disclosures outright; here they are the controls. */
+	.hx-root .hx-tree-disclosure,
+	.hx-root .hx-toc-disclosure {
+		display: block;
+	}
+
+	.hx-root .hx-tree > .hx-tree-disclosure {
+		flex: 0 0 auto;
+	}
+
+	/* The shortcut is a keyboard's, and a phone reader has none to press it on. */
+	.hx-root .hx-search-hint {
+		display: none;
+	}
+
+	.hx-root .hx-tree-summary {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-block-size: 2.75rem;
+		padding-inline: 0.875rem 0.75rem;
+		background: var(--hx-surface, #171512);
+		border: 1px solid var(--hx-control, #78716c);
+		border-radius: 8px;
+		color: var(--hx-ink, #f2ede6);
+		font-size: 0.9375rem;
+		cursor: pointer;
+	}
+
+	/*
+	 * A box clipped to a chevron, painted with a token rather than a glyph some font in seven
+	 * languages has to cover. It points where the panel appears: down for the tree, up for
+	 * the outline, and the other way while each is open.
+	 */
+	.hx-root .hx-tree-summary::after,
+	.hx-root .hx-toc-summary::after {
+		content: '';
+		flex: none;
+		inline-size: 0.75rem;
+		block-size: 0.5rem;
+		background: var(--hx-dim, #a89f93);
+		clip-path: polygon(0 0, 16% 0, 50% 62%, 84% 0, 100% 0, 50% 100%);
+	}
+
+	.hx-root .hx-tree-disclosure[open] > .hx-tree-summary::after,
+	.hx-root .hx-toc-summary::after {
+		transform: rotate(180deg);
+	}
+
+	.hx-root .hx-toc-disclosure[open] > .hx-toc-summary::after {
+		transform: none;
+	}
+
+	/*
+	 * The lists are the disclosures' next siblings rather than their content, so a desktop
+	 * never depends on a `<details>` being open. Here the closed state hides them.
+	 */
+	.hx-root .hx-tree-disclosure:not([open]) + .hx-tree-list {
+		display: none;
+	}
+
+	/*
+	 * In flow under the row, so the article moves down rather than being covered. Its own
+	 * scroll container, contained, so the page stays still at the end of a long tree.
+	 * Positioned so it is the offset parent of its rows, which is what `revealCurrent` in
+	 * `src/render/client.ts` measures against.
+	 */
+	.hx-root .hx-tree-disclosure + .hx-tree-list {
+		position: relative;
+		max-block-size: 60svh;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		padding: 0.5rem;
+		background: var(--hx-surface, #171512);
+		border: 1px solid var(--hx-edge, #2a2621);
+		border-radius: var(--hx-radius, 0.75rem);
+	}
+
+	/* Every row a thumb can hit. `test/paint.test.ts` deletes the height and watches the probe fail. */
+	.hx-root .hx-tree-link,
+	.hx-root .hx-tree-section,
+	.hx-root .hx-toc-link {
+		display: flex;
+		align-items: center;
+		min-block-size: 2.75rem;
+		padding-block: 0.5rem;
+		padding-inline: 0.75rem;
+	}
+
+	.hx-root .hx-article {
+		margin-inline: auto;
+		margin-block-end: 2rem;
+	}
+
+	/* The summary carries the same words on a phone, and it is the one that toggles. */
+	.hx-root .hx-toc-heading {
+		display: none;
+	}
+
+	/*
+	 * The bar. It pulls out of the layout's inset and pads back in, so its rule and ground run
+	 * edge to edge while its content lines up with the column. Overflow stays visible: the
+	 * outline panel is drawn outside this box, above it, and a clipped bar would hide it.
+	 * Sticky inside the layout, so at the end of the page it settles into flow above the
+	 * host's footer rather than covering it.
+	 *
+	 * The inline padding is the column's own inset: the shell's inset on a phone, and on a
+	 * tablet the room either side of the centred measure as well, so the label starts at the
+	 * column's start and the link ends at its end whatever width the translated link has. A
+	 * percentage in padding resolves against the layout's content box, which is the box the
+	 * column is centred in. Padding by the shell's inset alone and centring a pair sized around
+	 * the link's minimum lined up only when the word fitted that minimum; in Arabic it did not,
+	 * and at 768px the label and the link each sat 10px outside the column.
+	 *
+	 * The block-end padding is never less than 4px, which is how far the shared focus ring
+	 * reaches outside a control: 2px wide at a 2px offset. The bar is stuck to the bottom of the
+	 * viewport, so with no padding the ring's bottom edge on the summary and the Pages link is
+	 * drawn below the screen. An inset ring was measured and refused: the summary has no
+	 * inline-start padding, and a ring drawn inside it covers the label's first letter.
+	 */
+	.hx-root .hx-foot {
+		display: flex;
+		align-items: stretch;
+		justify-content: center;
+		position: sticky;
+		inset-block-end: 0;
+		z-index: 2;
+		margin-inline: calc(-1 * var(--hx-shell-inset, clamp(1rem, 2.5vw, 2rem)));
+		padding-inline: max(var(--hx-shell-inset, clamp(1rem, 2.5vw, 2rem)), calc((100% - var(--hx-measure, 42rem)) / 2 + var(--hx-shell-inset, clamp(1rem, 2.5vw, 2rem))));
+		padding-block-end: max(4px, env(safe-area-inset-bottom, 0px));
+		background: var(--hx-surface, #171512);
+		border-block-start: 1px solid var(--hx-edge, #2a2621);
+	}
+
+	/*
+	 * Static, so the sticky bar is the outline panel's containing block. It takes whatever the
+	 * Pages link leaves of the bar's content box, which the bar's padding makes the column, so
+	 * nothing here has to know how wide the translated link is.
+	 */
+	.hx-root .hx-toc {
+		position: static;
+		max-block-size: none;
+		overflow: visible;
+		flex: 1 1 auto;
+		min-inline-size: 0;
+	}
+
+	.hx-root .hx-toc-summary {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		min-block-size: 3rem;
+		padding-block: 0.375rem;
+		padding-inline-end: 0.5rem;
+		color: var(--hx-ink, #f2ede6);
+		cursor: pointer;
+	}
+
+	.hx-root .hx-toc-where {
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		flex: 1 1 auto;
+		min-inline-size: 0;
+	}
+
+	.hx-root .hx-toc-summary-label {
+		display: block;
+		color: var(--hx-dim, #a89f93);
+		font-size: 0.75rem;
+		line-height: 1.25;
+	}
+
+	/*
+	 * Until the scroll spy names a heading, and for the whole visit with no script, the label
+	 * is the control and reads as one: ink, at the size of the link beside it. Without this
+	 * the bar at rest is a small dim caption for a second line that is not there.
+	 */
+	.hx-root .hx-toc-summary:has(.hx-toc-here:empty) .hx-toc-summary-label {
+		color: var(--hx-ink, #f2ede6);
+		font-size: 0.9375rem;
+		line-height: 1.4;
+	}
+
+	/*
+	 * One line whatever the heading; the accessible name keeps the whole text. The caption's
+	 * 15px line, this 21px one and the summary's 12px of padding fill its 3rem row exactly, so
+	 * naming a heading changes the bar's height by nothing. A caption at a line height of 1.3
+	 * made the row 48.6px, and the bar's top rule moved the first time the spy answered.
+	 */
+	.hx-root .hx-toc-here {
+		display: block;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 0.9375rem;
+		line-height: 1.4;
+	}
+
+	.hx-root .hx-toc-disclosure:not([open]) + .hx-toc-list {
+		display: none;
+	}
+
+	/*
+	 * Above the bar and out of flow, so the article never moves when it opens or closes. The
+	 * percentage in the inline padding resolves against the bar's full-bleed box rather than
+	 * the column, which is why it is not the column's own centring formula.
+	 *
+	 * An absolute box is placed against its containing block's padding box, which starts inside
+	 * the bar's 1px top rule, so the panel's last row of pixels lies on that rule, and the panel
+	 * draws its own end border there in the rule's colour. Placed a pixel higher, its edge met the
+	 * rule's outer edge exactly, and edges that meet exactly snap to different device rows at a
+	 * fractional device pixel ratio: measured at 1.5, 1.75 and 2.625, a row of the article showed
+	 * through between the open panel and the bar. Every box under the docs root is border-box, so
+	 * the border takes nothing past the panel's height cap.
+	 */
+	.hx-root .hx-toc-disclosure + .hx-toc-list {
+		position: absolute;
+		inset-block-end: 100%;
+		inset-inline: 0;
+		margin: 0;
+		max-block-size: 60svh;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		padding-block: 0.5rem;
+		padding-inline: max(var(--hx-shell-inset, clamp(1rem, 2.5vw, 2rem)), calc((100% - var(--hx-measure, 42rem)) / 2));
+		background: var(--hx-surface, #171512);
+		border-block: 1px solid var(--hx-edge, #2a2621);
+	}
+
+	.hx-root .hx-foot-pages {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		flex: 0 0 auto;
+		min-inline-size: 5rem;
+		min-block-size: 3rem;
+		margin: 0;
+		padding-inline: 1.25rem;
+		border: 0;
+		color: var(--hx-ink, #f2ede6);
+		font-size: 0.9375rem;
+		font-weight: 600;
+		text-decoration: none;
+	}
+
+	/*
+	 * A page with no outline: the link takes the column's width, so the word sits where it
+	 * does on every other page and the whole bar is the target.
+	 */
+	.hx-root .hx-foot-pages:only-child {
+		flex: 0 1 var(--hx-measure, 42rem);
+	}
+
+	/*
+	 * Anchored to the top, so the input does not move as results arrive and stays above the
+	 * on-screen keyboard. The rule outside this block keeps `margin: auto`, which centres the
+	 * dialog everywhere else. The maximum is lifted because the browser's own rule for a modal
+	 * dialog caps it at `calc(100% - 6px - 2em)`, which is narrower than this width below about
+	 * 720px: the dialog was 354px wide with 18px either side, not the shell's 16px.
+	 */
+	.hx-search {
+		inline-size: calc(100% - 2 * var(--hx-shell-inset, clamp(1rem, 2.5vw, 2rem)));
+		max-inline-size: none;
+		max-block-size: 80svh;
+		margin-block: var(--hx-shell-inset, clamp(1rem, 2.5vw, 2rem)) auto;
+	}
+}
+
+/*
+ * A forced palette repaints the chevrons' token background as Canvas, the colour of the ground
+ * under them, and both vanish, which takes away the only open or closed cue either disclosure
+ * has and leaves the bar reading as plain text. CanvasText is the reader's own text colour, so
+ * it follows whichever palette they chose. After the phone block, because the rule it overrides
+ * there has the same specificity; outside it, because the summaries show nowhere else.
+ */
+@media (forced-colors: active) {
+	.hx-root .hx-tree-summary::after,
+	.hx-root .hx-toc-summary::after {
+		background: CanvasText;
+	}
 }
 
 .hx-root .hx-s-variable,

@@ -18,7 +18,16 @@
  * value on the first client pass and mismatches; this one cannot.
  */
 
-import { useCallback, useEffect, useRef, useSyncExternalStore, type RefObject } from 'react';
+import {
+	useCallback,
+	useEffect,
+	useRef,
+	useSyncExternalStore,
+	type KeyboardEvent,
+	type MouseEvent,
+	type RefObject,
+	type SyntheticEvent,
+} from 'react';
 
 import type { PageHeading } from '../contracts/page.js';
 import type { DocsEventMap } from '../contracts/theme.js';
@@ -140,12 +149,26 @@ export function useNavigationAnnounce(
  * means by "where I am", which is the last heading whose top has gone past rather than the
  * topmost visible one. On a page of short sections those are different headings, and the
  * difference is invisible in a screenshot.
+ *
+ * The last, in document order. This used to return the first match, which was the page's
+ * first heading, marked current for the whole read on every page with more than one.
+ *
+ * Taking the last is only right because `passed` holds every heading above the line and none
+ * below it, and that is a property of the observer's root rather than of this function. The
+ * root reaches 100000px above the viewport, so a heading changes state whenever it crosses the
+ * line in a scroll shorter than that; `useHeadingSpy` says what a longer jump leaves behind.
+ * With the root ending at the top of the viewport even a short jump did not: an instant jump
+ * carries headings from above the viewport to below the line, or back, without either position
+ * intersecting, no entry arrives for them, and the set keeps a heading the reader has left.
+ * `useHeadingSpy` says what that looked like.
  */
 export function activeHeading(
 	order: readonly string[],
 	passed: ReadonlySet<string>,
 ): string | undefined {
-	return order.find((id) => passed.has(id));
+	let current: string | undefined;
+	for (const id of order) if (passed.has(id)) current = id;
+	return current;
 }
 
 /**
@@ -170,10 +193,59 @@ export function aliasTarget(
 /**
  * The heading the reader is currently in, for the table of contents.
  *
- * An `IntersectionObserver` rather than a scroll listener, so the work is the browser's
- * and there is nothing to throttle. The heading counted as current is the last one whose
- * top has passed the sticky offset, which is what a reader means by "where I am" and is
- * not what "the topmost visible heading" gives on a page of short sections.
+ * An `IntersectionObserver` rather than a scroll listener measuring every heading, so the work
+ * is the browser's and there is nothing to throttle; the one scroll listener here asks only
+ * whether the page has reached its end. The heading counted as current is the last one whose
+ * top has passed the line, which is what a reader means by "where I am" and is not what "the
+ * topmost visible heading" gives on a page of short sections.
+ *
+ * The line is 30% down the viewport, and the root's top edge is 100000px above the viewport's,
+ * so intersecting means at or above the line and no more than 100000px above the viewport, and
+ * a heading crossing the line from anywhere inside that reach sends an entry. An observer only
+ * reports a change of state, and with the root's top at the viewport's own top a heading
+ * carried from above the screen to below the line in one scroll never changed state. Measured
+ * in Chrome at 390 by 844 on a 13000px page: a tap on the bar's Pages link from the end of the
+ * page, an outline pick upwards and a jump to the end each delivered no entry for the headings
+ * they skipped, and the bar and `aria-current` went on naming a heading the reader had left,
+ * while continuous scrolling was right at every step.
+ *
+ * The root is the headings' own document, named, and not left implicit. The implicit root is
+ * the top-level viewport, so in a frame the margin measures the host's screen: a same-origin
+ * frame's own viewport still clips a heading above it, so the reach above the screen never
+ * counts, and a cross-origin frame ignores `rootMargin` altogether. Either way a jump in the
+ * frame reported nothing again. Measured in Chrome with a frame at the top of its host, a frame
+ * lower down it and a cross-site frame: all three named stale headings after jumps without the
+ * named root, and matched the page after every jump with it. WebKit was not measured. A
+ * `Document` root needs Chrome 81, Firefox 76 or Safari 14.
+ *
+ * A heading more than 100000px above the viewport stops intersecting. Its entry has a negative
+ * top, which the callback keeps as passed, so a long section scrolled through still names its
+ * heading. The margin is a distance, not a guarantee: on a page taller than it, one scroll
+ * longer than it can leave the set wrong in either direction, and such a jump can deliver no
+ * entry at all, so the callback has nothing to correct it with. Downwards, a heading carried
+ * from below the line to more than 100000px above never intersects and is never added, which
+ * shows only when it is the heading the reader lands in, more than a hundred phone screens into
+ * one section. Upwards, a heading already more than 100000px above is carried below the line
+ * without intersecting either, so it stays in the set and is named until the reader scrolls
+ * back past it, in sections of any length. Measured in Chrome at 390 by 844 on a page of six
+ * 40000px sections, a jump from the end to the top left a heading named that the reader had not
+ * reached. Neither can happen on a page shorter than the margin.
+ *
+ * The last heading counts as passed once the document is scrolled as far as it goes, whether or
+ * not it reached the line. A heading closer to the end of the page than 70% of the viewport can
+ * never reach it, and nothing crosses the line once scrolling stops, so no entry would ever name
+ * it: at the end of such a page, and right after an outline pick of that heading, the bar and
+ * `aria-current` named the heading before it. Measured in Chrome on the compiled pages with a
+ * 64px host header and no host footer: 11 of 26 missed the last heading at 390 by 844, and all
+ * 26 at 768 by 1024. The observer still does every crossing; a scroll listener only asks
+ * whether any scroll is left, reading three numbers an event, which needs no throttle. The
+ * price is on a host with no footer, where an outline pick of a short second-to-last section
+ * lands at the end of the page and names the last heading. A host that scrolls an inner element
+ * rather than the window never reports an end, and gets the observer's answer alone.
+ *
+ * Not a sentinel element after the layout. On a host with a real footer the layout's end is on
+ * screen while the reader can still scroll, so a sentinel named the last heading early and kept
+ * naming it after a scroll back up: measured with a 450px footer, 25 of 26 pages at 1280 by 800.
  *
  * It keeps running under reduced motion. Scroll spy is information, not decoration, and a
  * table of contents that stopped following the reader would be a regression for exactly
@@ -190,33 +262,59 @@ export function useHeadingSpy(
 		(onChange: () => void) => {
 			if (headings.length === 0) return () => undefined;
 			const seen = new Map<string, number>();
+			let atEnd = false;
+			const decide = (): void => {
+				const current = atEnd
+					? headings.at(-1)?.id
+					: activeHeading(
+							headings.map((heading) => heading.id),
+							new Set(seen.keys()),
+						);
+				if (current === active.current) return;
+				active.current = current;
+				onChange();
+				if (current !== undefined && !reduced) {
+					const index = headings.findIndex((heading) => heading.id === current);
+					emit('hexdocs:heading', { id: current, index, total: headings.length });
+				}
+			};
+			const measureEnd = (): void => {
+				// Scrolled at all, and to within a pixel of the end. A page that does not scroll is
+				// never at its end, so its headings keep the line's answer.
+				const now =
+					window.scrollY > 0 &&
+					window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 1;
+				if (now === atEnd) return;
+				atEnd = now;
+				decide();
+			};
 			const observer = new IntersectionObserver(
 				(entries) => {
 					for (const entry of entries) {
+						// Not intersecting with a positive top is below the line. With a negative top
+						// it is past the root's far edge, which is still a heading the reader passed.
 						seen.set(entry.target.id, entry.boundingClientRect.top);
 						if (!entry.isIntersecting && entry.boundingClientRect.top > 0) {
 							seen.delete(entry.target.id);
 						}
 					}
-					const current = activeHeading(
-						headings.map((heading) => heading.id),
-						new Set(seen.keys()),
-					);
-					if (current === active.current) return;
-					active.current = current;
-					onChange();
-					if (current !== undefined && !reduced) {
-						const index = headings.findIndex((heading) => heading.id === current);
-						emit('hexdocs:heading', { id: current, index, total: headings.length });
-					}
+					decide();
 				},
-				{ rootMargin: '0px 0px -70% 0px' },
+				{ root: document, rootMargin: '100000px 0px -70% 0px' },
 			);
 			for (const heading of headings) {
 				const element = document.getElementById(heading.id);
 				if (element !== null) observer.observe(element);
 			}
-			return () => observer.disconnect();
+			window.addEventListener('scroll', measureEnd, { passive: true });
+			window.addEventListener('resize', measureEnd);
+			// A load that lands on a hash at the end of the page is already there.
+			measureEnd();
+			return () => {
+				observer.disconnect();
+				window.removeEventListener('scroll', measureEnd);
+				window.removeEventListener('resize', measureEnd);
+			};
 		},
 		[headings, emit, reduced],
 	);
@@ -251,4 +349,194 @@ export function useAliasScroll(aliases: Readonly<Record<string, string>>, reduce
 			.getElementById(target)
 			?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
 	}, [aliases, reduced]);
+}
+
+/**
+ * The two phone disclosures, the page tree and the outline, as the handlers need them.
+ *
+ * Both are native `<details>`, closed in the server's markup, and React never passes `open`,
+ * so a reader who opened one before hydration keeps it open; `src/render/page.tsx` says why
+ * each still carries `suppressHydrationWarning`. Everything below is what script adds on top
+ * of a control that already works without it, and each degrades to nothing when no script
+ * runs.
+ */
+export type DisclosureRef = RefObject<HTMLDetailsElement | null>;
+
+/**
+ * Closes both disclosures when the reader's address changes under a mounted shell.
+ *
+ * A client-side navigation does not reload the document, so a tree the reader opened to pick
+ * a page would otherwise still be open over the page they picked. The key is the page's whole
+ * address, and each part of it counts on its own. The locale: changing language on one page is
+ * the same route with a different `:lang`, which is what a host's language picker and the
+ * translation notice's English link both do, and a slug-only key left the tree open in flow
+ * above the new page and the outline open over the bar while `useNavigationAnnounce` moved focus
+ * into the article and announced it. The mount: one route module serves every project on a site,
+ * so two projects share slugs, and every scaffolded home is `index`; moving from one home to the
+ * other keeps the shell mounted exactly as a language change does. The version: a pinned address
+ * of the same page is the same slug again. The address never carries an anchor, so a jump to a
+ * heading on the same page closes nothing.
+ *
+ * Its order against `useNavigationAnnounce` does not matter. Both run in the same passive flush
+ * after the commit that changed the address, with nothing rendered between them, so either
+ * order leaves the disclosures closed and focus on the article. What keeps focus out of a list
+ * that is being hidden is that other hook moving focus into the article; without it, focus left
+ * on a row would fall to the body when the row stopped being displayed.
+ *
+ * Nothing happens on the first commit, which is why the address is compared rather than the
+ * effect simply running. Closing on mount would shut a disclosure the reader opened before
+ * hydration finished, which is the one state the native control is there to keep. The refs
+ * are not dependencies: a ref object is stable for the life of the component, and the array
+ * holding them is a new one on every render, so listing it would re-run the effect for nothing.
+ */
+export function useCloseOnNavigate(address: string, disclosures: readonly DisclosureRef[]): void {
+	const previous = useRef(address);
+	useEffect(() => {
+		if (previous.current === address) return;
+		previous.current = address;
+		for (const disclosure of disclosures) {
+			if (disclosure.current !== null) disclosure.current.open = false;
+		}
+	}, [address]);
+}
+
+/**
+ * Scrolls an opened panel so its current row sits two fifths of the way down.
+ *
+ * The panel is the element after the `<details>`, which is where both lists sit so that
+ * desktop, where no disclosure is ever shown, keeps today's markup behaviour. The section
+ * above the current row stays in view and its neighbours below it, which is what a reader
+ * looking for the next page wants to see. At fifty pages the current row is otherwise
+ * several screens down a list that opened at its top.
+ *
+ * Arithmetic on `scrollTop` and not `scrollIntoView`, which scrolls every scrollable ancestor
+ * and would move the document under the reader as well as the panel. `offsetTop` is measured
+ * from the panel itself because the stylesheet positions both panels, which makes each the
+ * offset parent of its rows.
+ */
+export function revealCurrent(event: SyntheticEvent<HTMLDetailsElement>): void {
+	const details = event.currentTarget;
+	if (!details.open) return;
+	const panel = details.nextElementSibling;
+	const current = panel?.querySelector('[aria-current]');
+	if (!(panel instanceof HTMLElement) || !(current instanceof HTMLElement)) return;
+	panel.scrollTop = Math.max(0, current.offsetTop - panel.clientHeight * 0.4);
+}
+
+/**
+ * Closes the outline once a row in it has been followed.
+ *
+ * On the next frame, and never with `preventDefault`. The browser's fragment navigation, the
+ * history entry it pushes and the focus starting point it sets all belong to the click, and
+ * closing the panel inside the handler hides the link before its default action runs.
+ */
+export function closeOnLink(disclosure: DisclosureRef): (event: MouseEvent<HTMLElement>) => void {
+	return (event) => {
+		if (!(event.target instanceof Element) || event.target.closest('a') === null) return;
+		requestAnimationFrame(() => {
+			if (disclosure.current !== null) disclosure.current.open = false;
+		});
+	};
+}
+
+/**
+ * The bar's Pages link: closes the outline and opens the tree, then lets the link jump.
+ *
+ * The link is `href="#hx-tree"` and works with no script at all, landing on a closed tree
+ * one tap from open. With script the same tap lands on an open tree, and opening it fires
+ * the tree's own `toggle`, which scrolls its current row into view. The jump is left to the
+ * browser, so the history entry and the focus starting point are the ones any in-page link
+ * gets.
+ */
+export function openTree(
+	tree: DisclosureRef,
+	toc: DisclosureRef,
+): (event: MouseEvent<HTMLAnchorElement>) => void {
+	return () => {
+		if (toc.current !== null) toc.current.open = false;
+		if (tree.current !== null) tree.current.open = true;
+	};
+}
+
+/**
+ * Closes the outline when focus lands anywhere outside the bar while it is open.
+ *
+ * The open outline is drawn over the article, above the bar, so the pager at the end of the
+ * article can sit entirely under it. Measured at 390px: Shift+Tab from the bar's summary landed
+ * focus on the pager's Next link with none of it visible and nothing that would dismiss the panel
+ * from there, which fails WCAG 2.2's 2.4.11, whose exception for content the reader opened needs
+ * a way to close it without moving focus. Moving between the summary, the rows and the Pages
+ * link stays inside the bar and keeps the outline open.
+ *
+ * The check runs on the element that receives focus, not on the bar losing it. A click on the
+ * bar's own inline padding, or on the panel's padding or scrollbar, clears focus to the body with
+ * no related target, and closing then would shut the panel under the pointer that is scrolling
+ * it. But the next Shift+Tab starts from where that click landed and reaches the pager with no
+ * blur from the bar left to see, and so does a Shift+Tab after a tap that opened the outline
+ * without focusing its summary, which is what Safari does with a tapped summary. Measured in
+ * Chrome at 390px and 768px: a click on the bar's padding and then Shift+Tab put focus on the
+ * pager's Next link under the open panel, with a handler that watched the bar blur. Clearing focus
+ * fires no `focusin`, so that click still leaves the panel open.
+ *
+ * On the document rather than on the bar, because the element focus lands on can be anywhere.
+ */
+export function useCloseOnFocusElsewhere(
+	disclosure: DisclosureRef,
+	bar: RefObject<HTMLElement | null>,
+): void {
+	useEffect(() => {
+		const onFocusIn = (event: globalThis.FocusEvent): void => {
+			const details = disclosure.current;
+			if (details === null || !details.open || !(event.target instanceof Node)) return;
+			if (bar.current?.contains(event.target) === true) return;
+			details.open = false;
+		};
+		document.addEventListener('focusin', onFocusIn);
+		return () => document.removeEventListener('focusin', onFocusIn);
+	}, []);
+}
+
+/**
+ * Escape closes an open disclosure and puts focus back on its summary, when the key was pressed
+ * where the disclosure is.
+ *
+ * `within` says where that is. `'disclosure'` is the `<details>` and the list after it, and the
+ * tree takes it because its landmark also holds the search trigger, the search dialog and
+ * whatever a consumer put in `treeTop` and `treeBottom`. None of those is the tree. Measured with
+ * the whole landmark counting: a reader who pressed Escape once to close search and once more on
+ * the trigger closed the tree they had open, with focus pulled onto its summary.
+ *
+ * `'container'` is the whole element the handler is on, and the bar takes it. The outline is
+ * drawn over the article above the bar, so a reader anywhere in the bar with it open, the Pages
+ * link included, is looking at a panel that covers the page, and Escape there has nothing else to
+ * mean. Bound to the outline's landmark alone, Escape on the Pages link left the panel open.
+ *
+ * Nothing happens for a key another handler already took. A consumer's widget in `treeTop` that
+ * closes its own popup on Escape calls `preventDefault`, and the key press was that widget's. A
+ * key this does act on is marked the same way, so a dialog or popover a consumer put around the
+ * page does not close along with the disclosure: measured in Chrome with the shell inside a
+ * consumer's modal dialog, one Escape on the bar closed the outline and the dialog as well. A key
+ * that closed nothing, Escape in the search dialog included, is left alone, because there the
+ * key is the dialog's own close request and a prevented keydown cancels it.
+ */
+export function escapeCloses(
+	disclosure: DisclosureRef,
+	within: 'disclosure' | 'container' = 'disclosure',
+): (event: KeyboardEvent<HTMLElement>) => void {
+	return (event) => {
+		const details = disclosure.current;
+		if (event.key !== 'Escape' || event.defaultPrevented || details === null || !details.open) {
+			return;
+		}
+		const target = event.target;
+		if (!(target instanceof Node)) return;
+		const inside =
+			within === 'container'
+				? event.currentTarget.contains(target)
+				: details.contains(target) || details.nextElementSibling?.contains(target) === true;
+		if (!inside) return;
+		event.preventDefault();
+		details.open = false;
+		details.querySelector('summary')?.focus();
+	};
 }

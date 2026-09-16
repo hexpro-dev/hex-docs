@@ -44,7 +44,13 @@ import { IDS } from '../site/ids.js';
 import type { DocsNavNode, DocsPageData } from '../site/route.js';
 import { languageName, uiPlural, uiString } from '../ui/strings.js';
 import {
+	closeOnLink,
+	escapeCloses,
+	openTree,
+	revealCurrent,
 	useAliasScroll,
+	useCloseOnFocusElsewhere,
+	useCloseOnNavigate,
 	useDocsEvents,
 	useHeadingSpy,
 	useNavigationAnnounce,
@@ -98,6 +104,9 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 	const root = useRef<HTMLDivElement | null>(null);
 	const article = useRef<HTMLElement | null>(null);
 	const live = useRef<HTMLParagraphElement | null>(null);
+	const treeDisclosure = useRef<HTMLDetailsElement | null>(null);
+	const tocDisclosure = useRef<HTMLDetailsElement | null>(null);
+	const foot = useRef<HTMLDivElement | null>(null);
 	const emit = useDocsEvents(root);
 	const reduced = useReducedMotion();
 
@@ -116,7 +125,15 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 	);
 
 	const active = useHeadingSpy(page.headings, emit, reduced);
+	const activeText = page.headings.find((heading) => heading.id === active)?.text;
 	useAliasScroll(props.aliases, reduced);
+	// The whole address, so a move between two mounts or two versions of one slug counts as the
+	// navigation it is. `props.address` never carries an anchor, so a jump within the page does not.
+	useCloseOnNavigate(docsHref({ ...props.address, slug: page.slug }), [
+		treeDisclosure,
+		tocDisclosure,
+	]);
+	useCloseOnFocusElsewhere(tocDisclosure, foot);
 	useNavigationAnnounce(
 		page.slug,
 		page.title,
@@ -144,7 +161,12 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 			{props.chrome?.backdrop}
 			{props.chrome?.header}
 			<div className="hx-layout">
-				<nav id={IDS.tree} className="hx-tree" aria-label={props.navLabel}>
+				<nav
+					id={IDS.tree}
+					className="hx-tree"
+					aria-label={props.navLabel}
+					onKeyDown={escapeCloses(treeDisclosure)}
+				>
 					{props.chrome?.treeTop}
 					<DocsSearch
 						locale={props.locale}
@@ -154,6 +176,26 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 						Link={Link}
 						emit={emit}
 					/>
+					{/*
+					 * The phone's Pages control. The list is the details' next sibling rather than
+					 * its content, because a closed <details> hides its content in every browser and
+					 * no stylesheet can open it: inside, the tree would be closed on desktop too.
+					 * The summary is display: none outside the phone block.
+					 *
+					 * `open` is the reader's and never React's, so a disclosure opened before the
+					 * script arrived stays open through hydration. React's development build still
+					 * reports the attribute it finds and did not render as a mismatch, on every
+					 * such page load, which is what `suppressHydrationWarning` is for. It reaches
+					 * this element's own attributes and nothing below it.
+					 */}
+					<details
+						ref={treeDisclosure}
+						className="hx-tree-disclosure"
+						onToggle={revealCurrent}
+						suppressHydrationWarning
+					>
+						<summary className="hx-tree-summary">{uiString(props.locale, 'pages')}</summary>
+					</details>
 					<NavList nodes={props.nav} Link={Link} />
 					{props.chrome?.treeBottom}
 				</nav>
@@ -240,18 +282,66 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 					)}
 				</article>
 
-				{page.toc && page.headings.length > 0 ? (
-					<nav id={IDS.toc} className="hx-toc" aria-labelledby={IDS.tocHeading}>
-						<p id={IDS.tocHeading} className="hx-toc-heading">
-							{uiString(props.locale, 'tocLabel')}
-						</p>
-						<ol>
-							{page.headings.map((heading) => (
-								<TocEntry key={heading.id} heading={heading} active={active} />
-							))}
-						</ol>
-					</nav>
-				) : null}
+				{/*
+				 * The phone's bar, on every page, because the Pages link in it is how a reader
+				 * mid-article reaches the tree. It generates no box on desktop, so the table of
+				 * contents is the grid item it always was.
+				 */}
+				<div ref={foot} className="hx-foot" onKeyDown={escapeCloses(tocDisclosure, 'container')}>
+					{page.toc && page.headings.length > 0 ? (
+						<nav id={IDS.toc} className="hx-toc" aria-labelledby={IDS.tocHeading}>
+							<p id={IDS.tocHeading} className="hx-toc-heading">
+								{uiString(props.locale, 'tocLabel')}
+							</p>
+							{/*
+							 * The desktop heading above is the landmark's name, and one of the two
+							 * labels is always display: none. The summary carries its own because it
+							 * is focusable and toggles, which an inert heading cannot. The current
+							 * heading is empty in the server's markup, because the spy has no answer
+							 * there, so the bar never repeats the page title.
+							 *
+							 * The heading is the article's text inside the interface's chrome, so it
+							 * carries the article's `lang` and `dir` when those differ, as the article
+							 * does. Without them an English heading on an Arabic page is read with
+							 * Arabic phonetics, and laid out right to left in a line that clips at its
+							 * inline end: measured at 390px, the bar showed the tail of a long heading
+							 * with its first words cut off and a question mark drawn before them.
+							 */}
+							<details
+								ref={tocDisclosure}
+								className="hx-toc-disclosure"
+								onToggle={revealCurrent}
+								suppressHydrationWarning
+							>
+								<summary className="hx-toc-summary">
+									<span className="hx-toc-where">
+										<span className="hx-toc-summary-label">
+											{uiString(props.locale, 'tocLabel')}
+										</span>
+										<span
+											className="hx-toc-here"
+											{...(content.differs ? { lang: content.lang, dir: content.dir } : {})}
+										>
+											{activeText}
+										</span>
+									</span>
+								</summary>
+							</details>
+							<ol className="hx-toc-list" onClick={closeOnLink(tocDisclosure)}>
+								{page.headings.map((heading) => (
+									<TocEntry key={heading.id} heading={heading} active={active} />
+								))}
+							</ol>
+						</nav>
+					) : null}
+					<a
+						className="hx-foot-pages"
+						href={`#${IDS.tree}`}
+						onClick={openTree(treeDisclosure, tocDisclosure)}
+					>
+						{uiString(props.locale, 'pages')}
+					</a>
+				</div>
 			</div>
 			{props.chrome?.footer}
 			{/*

@@ -222,6 +222,22 @@ describe('the accessors', () => {
 		expect(languageName('ar', 'fr')).toBe('الفرنسية');
 	});
 
+	test('the page list is named as a list where the word for page has no plural', () => {
+		// Chinese and Japanese do not mark number, so the bare word for page, beside the bar's
+		// label for this page's contents, reads as a second control about this page rather than
+		// the list of pages. Held by containment in those two languages only: the others mark the
+		// plural, and in four of them the pager's label contains the same word, so a check over
+		// them would pass or fail on capitalisation alone.
+		for (const locale of ['zh', 'ja'] as const) {
+			const { pages, tocLabel, pagerLabel } = UI_STRINGS[locale];
+			expect({
+				locale,
+				inToc: tocLabel.includes(pages),
+				inPager: pagerLabel.includes(pages),
+			}).toEqual({ locale, inToc: false, inPager: false });
+		}
+	});
+
 	test("the notice reads as a whole sentence in the reader's own language", () => {
 		expect(uiString('ja', 'noticeFallback', { language: languageName('ja', 'ja') })).toBe(
 			'このページはまだ日本語に翻訳されていません。',

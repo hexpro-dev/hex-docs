@@ -174,17 +174,20 @@ export default defineConfig({
 				// as a floor can sit without one new defensive arm being a failure.
 				'src/site/**': { statements: 100, branches: 98, functions: 100, lines: 100 },
 
-				// The React half. Re-measured at step 8: 265/285 statements, 177/195 branches,
-				// 91/96 functions, 235/248 lines. It sits a little below the project floor and
-				// the reason is named here rather than left to be inferred.
+				// The React half. Re-measured with the phone layout: 341/359 statements, 231/247
+				// branches, 108/112 functions, 296/307 lines. Its floors sit a little below the
+				// project's and the reason is named here rather than left to be inferred.
 				//
-				// Everything uncovered is browser-only: `renderToStaticMarkup` produces the
-				// markup an `onClick` is attached to and never calls it, and an effect never
-				// runs at all. Most of that gap is closed by the files under
-				// `test/render/dom/`, which drive the search dialog and the copy button under
-				// happy-dom. What is left is the small residue those cannot reach, chiefly
-				// the media-query listener and the focus and scroll calls in
-				// `useNavigationAnnounce`, which need a viewport rather than a document.
+				// `renderToStaticMarkup` produces the markup an `onClick` is attached to and never
+				// calls it, and an effect never runs at all, so what this half does is driven by the
+				// files under `test/render/dom/`, under happy-dom. What they leave uncovered is not
+				// all browser-only, so it is named rather than characterised: the live region's reset
+				// timer and the arm of `useNavigationAnnounce` with no region; `useHeadingSpy`'s
+				// return for a page with no headings and its arm for a heading with no element;
+				// `useAliasScroll`'s scroll call; the search dialog's focus and `showModal` guards
+				// and its ArrowUp and Enter arms; `page.tsx`'s `themeClass` and `editUrl` arms; the
+				// copy button's reset timer; and two guards no rendered shell reaches, `openTree`
+				// with no tree and `escapeCloses` with an event target that is not a node.
 				//
 				// One thing must never move into that directory to lift these numbers.
 				// Measured this session: happy-dom resolves a CSS custom property at the point
