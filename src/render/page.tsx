@@ -206,7 +206,7 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 					>
 						<summary className="hx-tree-summary">{uiString(props.locale, 'pages')}</summary>
 					</details>
-					<NavList nodes={props.nav} Link={Link} />
+					<NavList nodes={props.nav} locale={props.locale} Link={Link} />
 					{props.chrome?.treeBottom}
 				</nav>
 
@@ -223,10 +223,19 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 				>
 					{props.breadcrumb.length === 0 ? null : (
 						// The trail is the interface's furniture, the same rows the sidebar carries,
-						// and its accessible name is a string from the table. Its own labels are page
-						// titles, which the manifest gives in the reader's language where the page is
-						// translated and in the source's where it is not, so they are left to the
-						// trail around them exactly as the sidebar's rows are.
+						// and its accessible name is a string from the table, so the landmark itself
+						// carries the reader's language and runs the reader's way.
+						//
+						// Its labels do not. Each is another page's title, in the reader's language
+						// where that page is translated and in the source's where it is not, and
+						// `labelLocale` is the route saying which. Marking the landmark alone, which
+						// is what shipped, declared four English page titles on hex-web's Arabic
+						// architecture page to be Arabic; a label ending in a neutral character then
+						// paints that character before its first word, which is the reading the
+						// translation notice was fixed for.
+						//
+						// The mark sits on a span inside the link rather than on the link, so a label
+						// in the other language reads the other way without moving the row it is in.
 						<nav
 							id={IDS.breadcrumb}
 							className="hx-breadcrumb"
@@ -236,7 +245,9 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 							<ol>
 								{props.breadcrumb.map((crumb) => (
 									<li key={crumb.href}>
-										<Link to={crumb.href}>{crumb.label}</Link>
+										<Link to={crumb.href}>
+											<span {...contentMark(props.locale, crumb.labelLocale)}>{crumb.label}</span>
+										</Link>
 									</li>
 								))}
 							</ol>
@@ -279,6 +290,13 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 					{props.chrome?.pageFooter}
 
 					{props.previous === undefined && props.next === undefined ? null : (
+						// Previous and Next are the table's words and the landmark carries the reader's
+						// language for them. The titles beside them are the neighbouring pages' own,
+						// so each carries `labelLocale` on its own span. Never on the link: `.hx-next`
+						// is a flex item with `margin-inline-start: auto` and `text-align: end`, and a
+						// `dir` on it resolves both in the link's direction rather than the pager's,
+						// which puts Next on the wrong side of an Arabic page. The `fallback-interface`
+						// probe measures exactly that.
 						<nav
 							id={IDS.pager}
 							className="hx-pager"
@@ -288,13 +306,23 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 							{props.previous === undefined ? null : (
 								<Link to={props.previous.href} className="hx-prev">
 									<span className="hx-pager-kind">{uiString(props.locale, 'previous')}</span>
-									<span className="hx-pager-title">{props.previous.title}</span>
+									<span
+										className="hx-pager-title"
+										{...contentMark(props.locale, props.previous.labelLocale)}
+									>
+										{props.previous.title}
+									</span>
 								</Link>
 							)}
 							{props.next === undefined ? null : (
 								<Link to={props.next.href} className="hx-next">
 									<span className="hx-pager-kind">{uiString(props.locale, 'next')}</span>
-									<span className="hx-pager-title">{props.next.title}</span>
+									<span
+										className="hx-pager-title"
+										{...contentMark(props.locale, props.next.labelLocale)}
+									>
+										{props.next.title}
+									</span>
 								</Link>
 							)}
 						</nav>
@@ -343,7 +371,22 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 									</span>
 								</summary>
 							</details>
-							<ol className="hx-toc-list" onClick={closeOnLink(tocDisclosure)}>
+							{/*
+							 * The outline is the article's own headings, so the whole list carries the
+							 * article's language. On the list and not on each link, which is the one
+							 * place the rule that marks the words rather than the box does not apply:
+							 * every row here is in the same language, and the box is what has to
+							 * mirror, because `.hx-toc-item[data-depth]` indents with
+							 * `padding-inline-start` and the current-item bar is drawn on the inline
+							 * start. Both belong on the side these words are read from.
+							 *
+							 * The bar's copy of the current heading above carries the same mark and did
+							 * from the start; the list of the same headings did not. Measured at 1280px
+							 * on hex-web's Arabic address of an English page, an English heading in the
+							 * outline was laid out right to left and hugged the trailing edge with
+							 * 121px of empty space before it.
+							 */}
+							<ol className="hx-toc-list" {...body} onClick={closeOnLink(tocDisclosure)}>
 								{page.headings.map((heading) => (
 									<TocEntry key={heading.id} heading={heading} active={active} />
 								))}
@@ -392,7 +435,25 @@ function TocEntry({
 	);
 }
 
-function NavList({ nodes, Link }: { nodes: DocsNavNode[]; Link: DocsLinkComponent }): ReactElement {
+/**
+ * The sidebar, whose rows are the same list the trail and the pager draw from.
+ *
+ * `locale` is the reader's, and every row's label carries its own `labelLocale` where the
+ * two differ. The mark is on a span inside the link rather than on the link, for the reason
+ * the trail gives: the row's box belongs to a list that runs the reader's way, and the
+ * current-item bar is an inset shadow with a `:dir(rtl)` mirror keyed on the element itself,
+ * so a `dir` on the link would move the bar to the other edge of one row in the middle of a
+ * list whose other rows keep theirs.
+ */
+function NavList({
+	nodes,
+	locale,
+	Link,
+}: {
+	nodes: DocsNavNode[];
+	locale: Locale;
+	Link: DocsLinkComponent;
+}): ReactElement {
 	return (
 		<ol className="hx-tree-list">
 			{nodes.map((node) => (
@@ -402,10 +463,10 @@ function NavList({ nodes, Link }: { nodes: DocsNavNode[]; Link: DocsLinkComponen
 						className={node.kind === 'section' ? 'hx-tree-section' : 'hx-tree-link'}
 						{...(node.current ? { 'aria-current': 'page' as const } : {})}
 					>
-						{node.label}
+						<span {...contentMark(locale, node.labelLocale)}>{node.label}</span>
 					</Link>
 					{node.kind === 'section' && node.items.length > 0 ? (
-						<NavList nodes={node.items} Link={Link} />
+						<NavList nodes={node.items} locale={locale} Link={Link} />
 					) : null}
 				</li>
 			))}

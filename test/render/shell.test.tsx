@@ -5,7 +5,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeAll, describe, expect, test } from 'vitest';
 
 import { CONSUMER_ROOT } from '../../fixtures/index.js';
-import type { Locale } from '../../src/contracts/locales.js';
+import { LOCALES, isLocale, type Locale } from '../../src/contracts/locales.js';
+import type { BundleManifest } from '../../src/contracts/manifest.js';
 import type { CompiledPage } from '../../src/contracts/page.js';
 import type { DocsSiteConfig } from '../../src/contracts/site.js';
 import type { DocsLinkComponent } from '../../src/render/context.js';
@@ -13,7 +14,13 @@ import { DocsPage } from '../../src/render/page.js';
 import { IDS } from '../../src/site/ids.js';
 import type { DocsPageData } from '../../src/site/route.js';
 import { STATUS_LABELS } from '../../src/ui/status.js';
-import { UI_STRINGS } from '../../src/ui/strings.js';
+import {
+	CALLOUT_LABELS,
+	PLURAL_KEYS,
+	PLURAL_STRINGS,
+	UI_STRINGS,
+	type UiKey,
+} from '../../src/ui/strings.js';
 import { goldenManifest, goldenPages } from '../support/golden.js';
 import { pageData } from '../support/render.js';
 
@@ -35,6 +42,25 @@ async function shell(
 ): Promise<{ html: string; data: DocsPageData }> {
 	const data = await pageData({ manifest: MANIFEST, site: SITE, locale, slug, load, ...extra });
 	return { html: renderToStaticMarkup(<DocsPage {...data} />), data };
+}
+
+/**
+ * The manifest with one page's records cut down to the locales named.
+ *
+ * The corpus is deliberately not uniform and still cannot hold every state at once: it has no
+ * untranslated section root, and every right-to-left locale in it has its own support matrix.
+ * Both of those are ordinary states in a real bundle, and hex-nfc's first one is nothing else.
+ * Perturbing the manifest is how the fixture corpus already reaches a scaffolded snippet, and
+ * it is cheaper than a corpus page whose only job is to be missing.
+ */
+function narrowed(slug: string, keep: Locale[]): BundleManifest {
+	const record = MANIFEST.pages[slug];
+	if (record === undefined) throw new Error(`No page ${slug} to narrow; the corpus moved.`);
+	const locales = Object.fromEntries(
+		Object.entries(record.locales).filter(([locale]) => keep.includes(locale as Locale)),
+	);
+	expect(Object.keys(locales).length).toBe(keep.length);
+	return { ...MANIFEST, pages: { ...MANIFEST.pages, [slug]: { ...record, locales } } };
 }
 
 let english = '';
@@ -182,38 +208,301 @@ describe('language and direction', () => {
 	});
 });
 
-describe('the shell text inside a fallback article', () => {
+describe('every run of text is declared to be in a language it could be in', () => {
 	/**
-	 * Every run of text under `html` that inherits its language rather than declaring one.
+	 * One sweep, both directions, over every address the corpus can serve.
 	 *
-	 * A scan rather than a list of selectors, because the list is what goes stale: a piece of
-	 * furniture added to the article a year from now joins the markup without joining any
-	 * assertion, and the first sign is a reader hearing Arabic read as English. What is
-	 * checked instead is a property of the whole subtree, so a new piece is covered the day it
-	 * is written or it fails here.
+	 * The rule is one rule: a run of text, or an accessible name, must sit under a declared
+	 * language the words in it could actually be in. An Arabic interface string inside an
+	 * article marked English breaks it, and so does an English page title inside a breadcrumb
+	 * marked Arabic. Writing it as two rules is what let the second one ship: the first version
+	 * of this sweep looked only for Arabic in runs that declared nothing, so the commit that
+	 * fixed the shell's words introduced the mirror defect in the trail and the pager and this
+	 * file stayed green.
+	 *
+	 * It reads the whole shell rather than the article, with the reader's locale as the
+	 * baseline, because that is what both consumers' `root.tsx` writes on `<html>`. The
+	 * sidebar, the outline and the trail are outside the article and every one of them carried
+	 * the same defect.
+	 *
+	 * ## What it can place, and what it cannot
+	 *
+	 * A run is judged only when there is evidence about which language it is in: it matches an
+	 * interface string in some language, or it is a page label the manifest gives in one, or it
+	 * is the served page's own title or one of its headings. Anything else, a sentence of prose
+	 * or a number, has no evidence and is skipped, which is why `placed` is asserted below: a
+	 * matcher that placed nothing would otherwise report a clean sweep over the whole corpus.
+	 *
+	 * Five interface strings interpolate, so the evidence is a pattern per string rather than a
+	 * set of literals. `'Step {number}'` is one of them, and matching it literally is how the
+	 * step number stayed unmarked while the sweep read every page it appears on.
 	 */
-	const inherited = (html: string): string[] => {
-		const VOID = new Set(['br', 'img', 'input', 'hr', 'meta', 'link', 'source']);
-		const stack: boolean[] = [];
-		const found: string[] = [];
+	const VOID = new Set(['br', 'img', 'input', 'hr', 'meta', 'link', 'source']);
+
+	/** The five escapes `renderToStaticMarkup` writes, undone, so a run compares as authored. */
+	const decode = (value: string): string =>
+		value.replace(
+			/&(?:amp|lt|gt|quot|#x27|#39);/g,
+			(entity) =>
+				({ '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#x27;': "'", '&#39;': "'" })[
+					entity
+				] as string,
+		);
+
+	interface Run {
+		text: string;
+		/** The nearest declared language, the reader's where nothing nearer declares one. */
+		lang: Locale;
+		/** Whether the run is text on the page or an accessible name that is only an attribute. */
+		source: 'text' | 'aria-label';
+		/** The open tag it sat in, so a failure names a place rather than a string. */
+		element: string;
+	}
+
+	/** Every run of text and every accessible name, each with the language declared over it. */
+	const runsIn = (html: string, baseline: Locale): { runs: Run[]; unknown: string[] } => {
+		const stack: Locale[] = [];
+		const runs: Run[] = [];
+		const unknown: string[] = [];
+		const at = (): Locale => stack[stack.length - 1] ?? baseline;
 		const token = /<(\/?)([a-z0-9]+)((?:"[^"]*"|[^>])*)>|([^<]+)/gi;
 		for (let match = token.exec(html); match !== null; match = token.exec(html)) {
 			const [whole, closing, name, attrs, text] = match;
 			if (text !== undefined) {
-				const run = text.trim();
-				if (run !== '' && !stack.some(Boolean)) found.push(run);
-			} else if (closing === '/') {
-				stack.pop();
-			} else if (!whole.endsWith('/>') && !VOID.has((name as string).toLowerCase())) {
-				stack.push(/\slang="/.test(attrs as string));
+				const run = decode(text).trim();
+				if (run !== '') runs.push({ text: run, lang: at(), source: 'text', element: 'text' });
+				continue;
 			}
+			if (closing === '/') {
+				stack.pop();
+				continue;
+			}
+			const declared = /\slang="([^"]*)"/.exec(attrs as string)?.[1];
+			if (declared !== undefined && !isLocale(declared)) unknown.push(whole);
+			const lang = declared !== undefined && isLocale(declared) ? declared : at();
+			// The element's own language, not its parent's: an attribute on an element that
+			// declares one is read in the language that element declares.
+			const label = /\saria-label="([^"]*)"/.exec(attrs as string)?.[1];
+			if (label !== undefined) {
+				const run = decode(label).trim();
+				if (run !== '') runs.push({ text: run, lang, source: 'aria-label', element: whole });
+			}
+			if (!whole.endsWith('/>') && !VOID.has((name as string).toLowerCase())) stack.push(lang);
+		}
+		return { runs, unknown };
+	};
+
+	/** One interface string as a pattern, with each `{token}` standing for whatever filled it. */
+	const patternOf = (template: string): RegExp =>
+		new RegExp(
+			`^${template
+				.split(/\{[A-Za-z]+\}/)
+				.map((literal) => literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+				.join('[\\s\\S]+')}$`,
+		);
+
+	const INTERFACE: Record<Locale, RegExp[]> = Object.fromEntries(
+		LOCALES.map((locale) => [
+			locale,
+			[
+				...Object.values(UI_STRINGS[locale]),
+				...PLURAL_KEYS.flatMap((key) => Object.values(PLURAL_STRINGS[key][locale])),
+				...Object.values(CALLOUT_LABELS[locale]),
+				...Object.values(STATUS_LABELS[locale]),
+			].map(patternOf),
+		]),
+	) as Record<Locale, RegExp[]>;
+
+	/** Every page label the manifest carries, and the languages it is carried in. */
+	const LABELS = new Map<string, Set<Locale>>();
+	for (const record of Object.values(MANIFEST.pages)) {
+		for (const [locale, entry] of Object.entries(record.locales)) {
+			for (const label of [entry?.title, entry?.navTitle]) {
+				if (label === undefined) continue;
+				const seen = LABELS.get(label) ?? new Set<Locale>();
+				seen.add(locale as Locale);
+				LABELS.set(label, seen);
+			}
+		}
+	}
+
+	/** Every language a run could be in. Empty means there is no evidence either way. */
+	const couldBe = (run: string, page: CompiledPage): Set<Locale> => {
+		const found = new Set<Locale>(LABELS.get(run) ?? []);
+		if (page.title === run || page.headings.some((heading) => heading.text === run)) {
+			found.add(page.locale);
+		}
+		for (const locale of LOCALES) {
+			if (INTERFACE[locale].some((pattern) => pattern.test(run))) found.add(locale);
 		}
 		return found;
 	};
 
-	/** The Arabic block, which is what an interface string laid out as English shows up as. */
-	const ARABIC = /[؀-ۿ]/;
+	/**
+	 * The accessible names the shell knowingly leaves in the reader's language on an element
+	 * whose words are the page's own.
+	 *
+	 * The one exemption mechanism this sweep has, and it is the case `direction.ts` states:
+	 * there is no way in HTML to give an attribute a different language from the text beside
+	 * it, and the text is what is read. A status mark is not in this list and must not join it,
+	 * because it has no text for the text to win over, which is why it carries a `lang` of its
+	 * own.
+	 *
+	 * Checked in both directions below. An exemption whose string stopped appearing anywhere in
+	 * the corpus is an exemption covering nothing, which is how a list like this goes stale.
+	 */
+	const ATTRIBUTE_ONLY: { key: UiKey; why: string }[] = [
+		{
+			key: 'tableRegion',
+			why: "The scroll region's name sits on the element holding the table, whose cells are the page's own words.",
+		},
+		{
+			key: 'codeRegion',
+			why: "A fence's region name sits on the `pre` holding the code, and code is nobody's language.",
+		},
+		{
+			key: 'codeRegionNamed',
+			why: 'The same name with the language label in it, which is the form every labelled fence takes.',
+		},
+	];
 
+	interface Swept {
+		misplaced: { where: string; text: string; declared: Locale; could: Locale[] }[];
+		placed: number;
+		exempted: Set<UiKey>;
+		unknown: string[];
+	}
+
+	const sweep = (html: string, locale: Locale, page: CompiledPage): Swept => {
+		const { runs, unknown } = runsIn(html, locale);
+		const exempted = new Set<UiKey>();
+		const misplaced: Swept['misplaced'] = [];
+		let placed = 0;
+		for (const run of runs) {
+			const exemption =
+				run.source === 'aria-label'
+					? ATTRIBUTE_ONLY.find((entry) => patternOf(UI_STRINGS[locale][entry.key]).test(run.text))
+					: undefined;
+			if (exemption !== undefined) {
+				exempted.add(exemption.key);
+				continue;
+			}
+			const could = couldBe(run.text, page);
+			if (could.size === 0) continue;
+			placed += 1;
+			if (!could.has(run.lang)) {
+				misplaced.push({
+					where: `${locale}/${page.slug} ${run.element}`,
+					text: run.text,
+					declared: run.lang,
+					could: [...could],
+				});
+			}
+		}
+		return { misplaced, placed, exempted, unknown };
+	};
+
+	/**
+	 * The corpus twice: as it stands, and as an English-only bundle.
+	 *
+	 * The second pass is not padding. `hexdocs init` publishes an English-only bundle, which is
+	 * what hex-nfc serves today, and in that state every address in six languages is a fallback
+	 * and every node type on every page is inside an article in another language. The corpus as
+	 * it stands has no fallback page carrying an ordered procedure, so the step number could be
+	 * left unmarked with all 56 addresses green, which is the same hole one page wide that this
+	 * sweep was rewritten to close.
+	 */
+	const ENGLISH_ONLY: BundleManifest = {
+		...MANIFEST,
+		pages: Object.fromEntries(
+			Object.entries(MANIFEST.pages).map(([slug, record]) => [
+				slug,
+				{ ...record, locales: { en: record.locales.en } },
+			]),
+		),
+	};
+
+	const ADDRESSES = [
+		{ manifest: MANIFEST, why: 'the corpus as it stands' },
+		{ manifest: ENGLISH_ONLY, why: 'an English-only bundle, which is what hexdocs init writes' },
+	].flatMap(({ manifest, why }) =>
+		LOCALES.flatMap((locale) => SITE.pages.map((slug) => ({ manifest, why, locale, slug }))),
+	);
+
+	let swept: Swept[] = [];
+
+	beforeAll(async () => {
+		swept = await Promise.all(
+			ADDRESSES.map(async ({ manifest, locale, slug }) => {
+				const data = await pageData({ manifest, site: SITE, locale, slug, load });
+				return sweep(renderToStaticMarkup(<DocsPage {...data} />), locale, data.page);
+			}),
+		);
+	});
+
+	test('no run anywhere in the corpus is declared to be in a language it is not', () => {
+		// The whole point of sweeping the pairings rather than one page: the page the first
+		// version of this swept was the only page in the corpus carrying none of the five node
+		// types that emit an interface string inside the article, so its empty result was empty
+		// partly because nothing on it could have filled it.
+		expect(swept.flatMap((entry) => entry.misplaced)).toEqual([]);
+	});
+
+	test('the sweep placed enough runs for an empty list to mean something', () => {
+		// A matcher that placed nothing reports a clean sweep over 112 pages. The floor is well
+		// under what it reaches, because the number moves with the corpus and a literal here
+		// would be a second thing to maintain.
+		const placed = swept.reduce((total, entry) => total + entry.placed, 0);
+		expect(placed).toBeGreaterThan(800);
+		expect(swept.length).toBe(2 * LOCALES.length * SITE.pages.length);
+		expect(swept.flatMap((entry) => entry.unknown)).toEqual([]);
+	});
+
+	test('every declared exemption is one the corpus actually reaches', () => {
+		// The second direction of the exemption list, which is the half worth having: an
+		// exemption whose string no longer appears covers nothing, and the sweep goes on
+		// reporting a clean run with one fewer thing examined.
+		const exempted = new Set(swept.flatMap((entry) => [...entry.exempted]));
+		expect([...exempted].sort()).toEqual(ATTRIBUTE_ONLY.map((entry) => entry.key).sort());
+		for (const entry of ATTRIBUTE_ONLY) expect(entry.why.length).toBeGreaterThan(40);
+	});
+
+	test.each([
+		{
+			name: "the shell's own words unmarked inside a fallback article",
+			// The defect as it shipped, and what the first version of this sweep was written for.
+			edit: (html: string) => html.replaceAll(' lang="fr" dir="ltr"', ''),
+			text: UI_STRINGS.fr.noticeReadEnglish,
+		},
+		{
+			name: 'a status mark named in the reader language with no language of its own',
+			// The `lang` half alone, which no sweep over runs of text could ever see: the mark has
+			// no text, so its name is an attribute and nothing else, and 25 of them sit on this page.
+			edit: (html: string) => html.replaceAll(/(<span class="hx-status[^>]*) lang="fr"/g, '$1'),
+			text: STATUS_LABELS.fr.partial,
+		},
+		{
+			name: "an untranslated neighbour's title declared to be the reader's language",
+			// The mirror, and the one the commit that fixed the first defect introduced.
+			edit: (html: string) =>
+				html.replaceAll(/(<span class="hx-pager-title") lang="en" dir="ltr"/g, '$1'),
+			text: 'Architecture',
+		},
+	])('the sweep sees $name', async ({ edit, text }) => {
+		// Each positive control is the real defect, put back into the markup the renderer emits,
+		// because a sweep that cannot fail proves nothing. French asking for the support matrix is
+		// the one address in the corpus where all three are visible at once: there is no French
+		// file, so the English page is served under a French interface, the page carries 25 status
+		// marks, and the page after it in the order has no French title either.
+		const { html, data } = await shell('fr', 'reference/chip-support');
+		const planted = edit(html);
+		expect(planted).not.toBe(html);
+		const found = sweep(planted, 'fr', data.page).misplaced;
+		expect(found.map((entry) => entry.text)).toContain(text);
+	});
+});
+
+describe('the shell text inside a fallback article', () => {
 	/** What the article holds, without the article's own tag, so its `lang` is the baseline. */
 	const inside = (html: string): string => {
 		const open = html.indexOf('<article');
@@ -240,49 +529,93 @@ describe('the shell text inside a fallback article', () => {
 			/<p class="hx-meta" lang="ar" dir="rtl">/,
 			// Previous and next, whose own labels are from the table too.
 			/<nav id="hx-pager"[^>]*lang="ar" dir="rtl">/,
+			// The copy button's label, and not the button: a `dir` on the button moves it, because
+			// it is a flex item whose `margin-inline-start: auto` resolves in its own direction.
+			new RegExp(
+				`<button type="button" class="hx-copy" disabled=""><span lang="ar" dir="rtl">${UI_STRINGS.ar.copyCode}</span></button>`,
+			),
 		]) {
 			expect(arabicFallback).toMatch(pattern);
 		}
+		// And the button itself carries neither, which is the half a `toMatch` above cannot say.
+		expect(arabicFallback).not.toMatch(/<button[^>]*class="hx-copy"[^>]*lang=/);
 	});
 
-	test('no Arabic is left to inherit the article language', () => {
-		// The sweep. Laid out as English, an Arabic sentence runs the wrong way and its final
-		// full stop paints before its first word, and a screen reader reads it with English
-		// phonetics.
-		const stray = inherited(inside(arabicFallback)).filter((run) => ARABIC.test(run));
-		expect(stray).toEqual([]);
+	test('a marker with no text carries the language and not the direction', async () => {
+		// Every locale in the corpus that reads right to left has its own support matrix, so the
+		// state is made rather than found: the Arabic record is taken away and the English page
+		// is served at the Arabic address, which is what hex-nfc's first bundle does on every
+		// page at once.
+		//
+		// `dir="rtl"` on a partial mark makes it match `.hx-status-half:dir(rtl)`, whose
+		// background fills the other half, so the shape would say the opposite of what the row
+		// says. The mark is a shape as well as a colour precisely because the colour is not
+		// enough, and a shape that says the wrong thing is worse than the glyph it replaced.
+		const thin = narrowed('reference/chip-support', ['en']);
+		const data = await pageData({
+			manifest: thin,
+			site: SITE,
+			locale: 'ar',
+			slug: 'reference/chip-support',
+			load,
+		});
+		const html = renderToStaticMarkup(<DocsPage {...data} />);
+		expect(data.page.locale).toBe('en');
+		expect(html).toContain(
+			`<span class="hx-status hx-status-half" data-status="partial" role="img" aria-label="${STATUS_LABELS.ar.partial}" lang="ar"></span>`,
+		);
+		expect(html).not.toMatch(/<span class="hx-status[^>]*dir=/);
 	});
 
-	test('the sweep can see an unmarked Arabic run, so the empty list above means something', () => {
-		// The positive control, and it is the shape the defect shipped in: the notice's own
-		// sentence with no language of its own, inheriting the English article around it.
-		const planted = arabicFallback.replaceAll(' lang="ar" dir="rtl"', '');
-		expect(planted).not.toBe(arabicFallback);
-		const stray = inherited(inside(planted)).filter((run) => ARABIC.test(run));
-		expect(stray.length).toBeGreaterThan(0);
-		// And it is not a false positive elsewhere: the Arabic it found is in the notice.
-		expect(stray.join(' ')).toContain(UI_STRINGS.ar.noticeReadEnglish);
-	});
-
-	test('a page in the language that was asked for marks nothing inside the article', () => {
-		// The other half of the condition the two marks share. Repeating an attribute an
-		// element already inherits is not harmless: a screen reader announces a language
-		// change into the language it is already reading, on every banner and every pager.
-		for (const html of [english, arabic, japanese]) {
+	test('a page in the language that was asked for marks only what is not in it', () => {
+		// The other half of the condition the two marks share. Repeating an attribute an element
+		// already inherits is not harmless: a screen reader announces a language change into the
+		// language it is already reading. What is left is a different thing: a neighbour's title
+		// that has no translation is English on a Japanese page and says so.
+		for (const html of [english, arabic]) {
 			expect(inside(html)).not.toContain('lang=');
 		}
-		// The Arabic page here is a stale translation rather than a page with no notice, so
-		// the banner an unconditional mark would have laboured is really in the markup.
+		expect(inside(japanese)).toContain(
+			'<span class="hx-pager-title" lang="en" dir="ltr">Architecture</span>',
+		);
+		expect(inside(japanese).replaceAll(' lang="en" dir="ltr"', '')).not.toContain('lang=');
+		// The Arabic page here is a stale translation rather than a page with no notice, so the
+		// banner an unconditional mark would have laboured is really in the markup.
 		expect(arabic).toContain('data-banner=');
 	});
 
 	test('the article keeps the page language and the prose keeps it too', () => {
 		// The mirror: nothing marks the content back to the reader's language. The title and
-		// the body are English on this page, and the one place the interface carries the
-		// article's own answer is the heading named in the phone's bar.
+		// the body are English on this page, and the interface carries the article's own answer
+		// in the bar's current heading and in the outline below it.
 		expect(arabicFallback).toContain('<span class="hx-toc-here" lang="en" dir="ltr">');
+		expect(arabicFallback).toContain('<ol class="hx-toc-list" lang="en" dir="ltr">');
 		expect(arabicFallback).not.toMatch(/<h1[^>]*lang=/);
 		expect(arabicFallback).not.toMatch(/<div class="hx-prose"[^>]*lang=/);
+	});
+
+	test('one trail carries three answers, and each is on the element it is about', async () => {
+		// The corpus has no untranslated section root, so the state is made rather than found:
+		// `reference/index` keeps only its English record, which is what an app repository looks
+		// like the week after somebody adds a section and before anyone translates it.
+		//
+		// Three decisions land on one trail. The landmark carries the reader's language, because
+		// its accessible name and its separators are the interface's words. The crumb whose page
+		// has a French title says nothing, because it already inherits French. The crumb whose
+		// page has only an English one says English. Marking the landmark alone, which is what
+		// shipped, declared that English crumb to be French.
+		const data = await pageData({
+			manifest: narrowed('reference/index', ['en']),
+			site: SITE,
+			locale: 'fr',
+			slug: 'reference/chip-support',
+			load,
+		});
+		const html = renderToStaticMarkup(<DocsPage {...data} />);
+		const trail = /<nav id="hx-breadcrumb"[\s\S]*?<\/nav>/.exec(html)?.[0] ?? '';
+		expect(trail).toMatch(/<nav id="hx-breadcrumb"[^>]*lang="fr" dir="ltr">/);
+		expect(trail).toContain('<span lang="en" dir="ltr">Reference</span>');
+		expect(trail).toContain('<a href="/fr/fixture-app/docs"><span>');
 	});
 });
 

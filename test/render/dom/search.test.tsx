@@ -20,6 +20,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AST_VERSION } from '../../../src/contracts/ast.js';
+import type { Locale } from '../../../src/contracts/locales.js';
 import {
 	DEFAULT_B,
 	DEFAULT_FIELD_WEIGHTS,
@@ -85,12 +86,13 @@ const emit = <K extends keyof DocsEventMap>(name: K, detail: DocsEventMap[K]): v
 	events.push({ name, detail });
 };
 
-function mount(): void {
+function mount(locales: { locale?: Locale; searchLocale?: Locale } = {}): void {
+	const locale = locales.locale ?? 'en';
 	render(
 		<DocsSearch
-			locale="en"
-			searchLocale="en"
-			address={{ basePath: '/fixture-app/docs', locale: 'en' }}
+			locale={locale}
+			searchLocale={locales.searchLocale ?? locale}
+			address={{ basePath: '/fixture-app/docs', locale }}
 			bundleBase="/_docs/fixture-app/1.1.0"
 			Link={PlainLink}
 			emit={emit}
@@ -99,6 +101,9 @@ function mount(): void {
 }
 
 const trigger = (): HTMLButtonElement => screen.getByRole('button', { name: /search/i });
+/** The same control by id, for the two tests whose reader does not read English. */
+const triggerById = (): HTMLButtonElement =>
+	document.getElementById(IDS.searchTrigger) as HTMLButtonElement;
 const input = (): HTMLInputElement => document.getElementById(IDS.searchInput) as HTMLInputElement;
 
 beforeEach(() => {
@@ -321,6 +326,41 @@ describe('the dialog', () => {
 		);
 		const close = events.find((event) => event.name === 'hexdocs:search-close');
 		expect(close?.detail).toEqual({ query: 'ndef', chose: 'guide/first-tag' });
+	});
+
+	test('the results carry the language of the index they came from', async () => {
+		// `docsRoute` falls back to the source locale when the bundle has no index for the
+		// language asked for, which is the day-one state of every project: hex-nfc's first
+		// bundle is English-only, so an Arabic reader's dialog scores English titles.
+		//
+		// The list and not each row. Every row comes out of one index, so the box is what has
+		// to mirror: `.hx-search-results` is where the depth of the list is drawn and the
+		// selected row's bar sits on the inline start, and both belong on the side these words
+		// are read from. Measured at 1280px on hex-web's Arabic docs home before this: an
+		// English result heading was laid out right to left with 435px of empty space before
+		// its first character.
+		mount({ locale: 'ar', searchLocale: 'en' });
+		fireEvent.click(triggerById());
+		fireEvent.change(input(), { target: { value: 'ndef' } });
+		await waitFor(() => expect(screen.getAllByRole('option').length).toBe(1));
+		const results = document.getElementById(IDS.searchResults) as HTMLElement;
+		expect([results.getAttribute('lang'), results.getAttribute('dir')]).toEqual(['en', 'ltr']);
+		// And the dialog's own furniture stays in the reader's, which is what would be lost by
+		// marking the dialog rather than the list.
+		const dialog = document.getElementById(IDS.searchDialog) as HTMLElement;
+		expect(dialog.getAttribute('lang')).toBe(null);
+		expect(results.closest('[lang="en"]')).toBe(results);
+	});
+
+	test('a dialog reading its own language marks nothing', async () => {
+		// The other half of the condition every mark in this package shares. Repeating an
+		// attribute an element already inherits makes a screen reader announce a language
+		// change into the language it is already reading, on every result in the list.
+		mount({ locale: 'ar', searchLocale: 'ar' });
+		fireEvent.click(triggerById());
+		const results = document.getElementById(IDS.searchResults) as HTMLElement;
+		expect(results.getAttribute('lang')).toBe(null);
+		expect(results.getAttribute('dir')).toBe(null);
 	});
 
 	test('an index this runtime cannot query is refused rather than scored', async () => {

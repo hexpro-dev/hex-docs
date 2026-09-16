@@ -189,6 +189,37 @@ describe('the probe markup is the markup the renderer emits', () => {
 		).toBe(FRAGMENTS.tokenTable);
 	});
 
+	test('a fence on a page an Arabic reader is served in English', () => {
+		// The probe reads where the copy button lands in a bar that stays left to right, which
+		// only says something if this is the markup the renderer emits: the label in its own
+		// span with the mark on it, and nothing on the button. `test/render/code.test.tsx` holds
+		// the same pair from the renderer's side; this is what ties the probe to it.
+		const fallback = {
+			...context,
+			locale: 'ar' as const,
+			address: { basePath: '/fixture-app/docs', locale: 'ar' as const },
+		};
+		expect(
+			renderToStaticMarkup(
+				createElement(
+					Fragment,
+					null,
+					renderBlocks(
+						[
+							{
+								type: 'code',
+								highlighted: false,
+								showLineNumbers: false,
+								lines: [{ tokens: [{ text: 'let session = NFCNDEFReaderSession()' }] }],
+							},
+						],
+						fallback,
+					),
+				),
+			),
+		).toBe(FRAGMENTS.fallbackFence);
+	});
+
 	test('a partial status mark in a sentence', () => {
 		expect(
 			blocks([
@@ -1160,6 +1191,20 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 					'.hx-root .hx-banner {\n\tdirection: ltr;\n\tbackground:',
 				),
 			expect: ['The fallback-interface probe found the notice laid out ltr inside it'],
+		},
+		{
+			name: "a copy button whose direction is its own rather than its bar's",
+			// The defect the mark moved off the button for, reproduced from the stylesheet side.
+			// `.hx-copy` is a flex item in a bar that stays left to right, so the auto margin
+			// pushes it to the bar's end; flip which inline side the margin is on and it lands at
+			// the start, which is exactly what `dir="rtl"` on the button itself did.
+			edit: (css) =>
+				once(
+					css,
+					'.hx-root .hx-copy {\n\tmargin-inline-start: auto;',
+					'.hx-root .hx-copy {\n\tmargin-inline-end: auto;',
+				),
+			expect: ['The fallback-interface probe found the copy button'],
 		},
 		{
 			name: 'a pager whose Next link is placed with physical properties',

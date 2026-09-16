@@ -43,6 +43,7 @@ import type { Locale } from '../contracts/locales.js';
 import { STATUS_SHAPE } from '../contracts/palette.js';
 import type { DocsAddress } from '../site/address.js';
 import { bundleUrl, docsHref } from '../site/address.js';
+import { interfaceLang, interfaceMark, type LangMark } from '../site/direction.js';
 import { statusLabel } from '../ui/status.js';
 import { calloutLabel, uiString } from '../ui/strings.js';
 import { CodeBlock } from './code.js';
@@ -89,6 +90,11 @@ function renderLink(node: Link, context: RenderContext, key: number): ReactNode 
 			// `rel` is what `ast.ts` commits to for this kind. The visually hidden suffix
 			// is the announcement: an icon alone is a fact only a sighted reader gets, and
 			// `target="_blank"` with no warning is the WCAG 3.2.5 failure.
+			//
+			// The announcement is the reader's words inside the page's own sentence, so it
+			// carries the reader's language on a fallback. The link text beside it does not:
+			// that is the author's. Measured on hex-web's Arabic docs home, both copies of
+			// this span sat unmarked inside an article marked English.
 			return (
 				<a
 					key={key}
@@ -99,7 +105,9 @@ function renderLink(node: Link, context: RenderContext, key: number): ReactNode 
 					className="hx-external"
 				>
 					{children}
-					<span className="hx-sr">{uiString(context.locale, 'externalLink')}</span>
+					<span className="hx-sr" {...interfaceMark(context.locale, context.contentLocale)}>
+						{uiString(context.locale, 'externalLink')}
+					</span>
 				</a>
 			);
 		case 'mailto':
@@ -168,6 +176,13 @@ export function renderInline(nodes: readonly Inline[], context: RenderContext): 
 				// alone and never on a glyph: `lint.ts` bans the two glyphs an author would
 				// reach for, and no glyph that survives the ban is covered by every font
 				// the seven languages fall back to.
+				//
+				// `interfaceLang` and not `interfaceMark`, and the difference is measured
+				// rather than stylistic: this element has no text, so its `aria-label` is the
+				// whole of what is read and needs the `lang`, while a `dir` on it would make
+				// it match `.hx-status-half:dir(rtl)` and fill its other half. A support
+				// matrix on the Arabic address of an English page carries 101 of these, and
+				// every one was announced as English before the `lang`.
 				return (
 					<span
 						key={index}
@@ -175,6 +190,7 @@ export function renderInline(nodes: readonly Inline[], context: RenderContext): 
 						data-status={node.value}
 						role="img"
 						aria-label={statusLabel(context.locale, node.value)}
+						{...interfaceLang(context.locale, context.contentLocale)}
 					/>
 				);
 			default:
@@ -271,10 +287,12 @@ function renderListItem(node: ListItem, context: RenderContext, key: number): Re
 	const label = uiString(context.locale, node.checked ? 'taskDone' : 'taskTodo');
 	return (
 		<li key={key} className="hx-task-item">
+			{/* The status mark's twin, down to why the mark is the `lang` alone. */}
 			<span
 				className={`hx-task hx-task-${node.checked ? 'done' : 'todo'}`}
 				role="img"
 				aria-label={label}
+				{...interfaceLang(context.locale, context.contentLocale)}
 			/>
 			{renderBlocks(node.children, context)}
 		</li>
@@ -293,13 +311,20 @@ function renderHeading(node: Heading, context: RenderContext, key: number): Reac
 }
 
 function renderCallout(node: Callout, context: RenderContext, key: number): ReactNode {
+	// Only the default label is the reader's language. An author who wrote a title wrote it in
+	// the page's own, so marking the paragraph unconditionally would say the opposite of the
+	// truth on every titled callout, which is most of them in this corpus.
 	const title =
 		node.title === undefined
 			? calloutLabel(context.locale, node.kind)
 			: renderInline(node.title, context);
+	const mark: LangMark =
+		node.title === undefined ? interfaceMark(context.locale, context.contentLocale) : {};
 	return (
 		<aside key={key} className="hx-callout" data-callout={node.kind}>
-			<p className="hx-callout-title">{title}</p>
+			<p className="hx-callout-title" {...mark}>
+				{title}
+			</p>
 			{renderBlocks(node.children, context)}
 		</aside>
 	);
@@ -322,7 +347,14 @@ function renderSteps(node: Steps, context: RenderContext, key: number): ReactNod
 			{node.children.map((step, index) => (
 				<li key={index} id={step.id} className="hx-step">
 					<p className="hx-step-title">
-						<span className="hx-step-number">
+						{/*
+						 * "Step 1" is the shell's word beside the author's title, so it carries the
+						 * reader's language on a fallback and the title next to it does not.
+						 */}
+						<span
+							className="hx-step-number"
+							{...interfaceMark(context.locale, context.contentLocale)}
+						>
 							{uiString(context.locale, 'stepLabel', { number: String(index + 1) })}
 						</span>
 						{renderInline(step.title, context)}

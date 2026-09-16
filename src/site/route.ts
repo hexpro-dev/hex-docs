@@ -54,12 +54,30 @@ export interface DocsRouteInput {
 	load: (locale: Locale, slug: string) => Promise<unknown>;
 }
 
+/**
+ * `labelLocale` is on all three of these for one reason, and it is the same reason each time.
+ *
+ * A row in the tree, a crumb in the trail and a neighbour in the pager are another page's
+ * title, which the manifest gives in the reader's language where that page is translated and
+ * in the source's where it is not. The list around it is the interface's furniture and runs
+ * the reader's way; the row's own words may be in a different language from the row beside
+ * it. Only the manifest read knows which, so it is carried here and the renderer marks each
+ * label with it.
+ */
 export type DocsNavNode =
-	| { kind: 'doc'; slug: string; label: string; href: string; current: boolean }
+	| {
+			kind: 'doc';
+			slug: string;
+			label: string;
+			labelLocale: Locale;
+			href: string;
+			current: boolean;
+	  }
 	| {
 			kind: 'section';
 			slug: string;
 			label: string;
+			labelLocale: Locale;
 			href: string;
 			current: boolean;
 			items: DocsNavNode[];
@@ -67,11 +85,13 @@ export type DocsNavNode =
 
 export interface DocsCrumb {
 	label: string;
+	labelLocale: Locale;
 	href: string;
 }
 
 export interface DocsPager {
 	title: string;
+	labelLocale: Locale;
 	href: string;
 }
 
@@ -237,15 +257,34 @@ export function aliasMap(page: CompiledPage): Record<string, string> {
 	return map;
 }
 
+/**
+ * One page's label for a list, and the language the words in it are actually in.
+ *
+ * The locale used to be thrown away, and throwing it away is what made the trail, the pager
+ * and the sidebar wrong. Those three are the interface's furniture and their rows are other
+ * pages' titles, which this returns in the reader's language where that page is translated
+ * and in the source's where it is not. Marking the whole container the reader's language
+ * therefore declared every untranslated row to be Arabic: measured on hex-web, a crumb whose
+ * label ends in a full stop painted the stop before its first word, and a screen reader was
+ * told four English page titles were Arabic. The chooser is the only thing that knows which
+ * of the two it took, so it says which.
+ */
 function labelOf(
 	record: PageLocaleRecord | undefined,
 	fallback: PageLocaleRecord | undefined,
-): string {
+	requested: Locale,
+	source: Locale,
+): { label: string; locale: Locale } {
 	const chosen = record ?? fallback;
-	// `navTitle` first, because that is the field's entire purpose and the sidebar is the
-	// only place it is read. The title is the fallback, and the slug never appears: a page
-	// with no record in any locale is not in the nav at all.
-	return chosen?.navTitle ?? chosen?.title ?? '';
+	return {
+		// `navTitle` first, because that is the field's entire purpose and the sidebar is the
+		// only place it is read. The title is the fallback, and the slug never appears: a page
+		// with no record in any locale is not in the nav at all.
+		label: chosen?.navTitle ?? chosen?.title ?? '',
+		// The reader's own language when there is no record in either, because the label is
+		// then the empty string and a mark on it would announce a change into nothing.
+		locale: record !== undefined || chosen === undefined ? requested : source,
+	};
 }
 
 /**
@@ -269,12 +308,17 @@ export function buildNav(input: {
 
 	const nodeFor = (slug: string, parsed: ParsedSlug): DocsNavNode => {
 		const record = input.manifest.pages[slug];
-		const label = labelOf(record?.locales[input.locale], record?.locales[source]);
+		const { label, locale: labelLocale } = labelOf(
+			record?.locales[input.locale],
+			record?.locales[source],
+			input.locale,
+			source,
+		);
 		const href = docsHrefFor(parsed, input.address);
 		const current = slug === input.current;
 		return isSectionRoot(parsed)
-			? { kind: 'section', slug, label, href, current, items: [] }
-			: { kind: 'doc', slug, label, href, current };
+			? { kind: 'section', slug, label, labelLocale, href, current, items: [] }
+			: { kind: 'doc', slug, label, labelLocale, href, current };
 	};
 
 	const roots: DocsNavNode[] = [];
@@ -319,8 +363,13 @@ export function pagerFor(
 	const entry = (slug: string | undefined): DocsPager | undefined => {
 		if (slug === undefined) return undefined;
 		const record = manifest.pages[slug];
-		const title = labelOf(record?.locales[locale], record?.locales[source]);
-		return { title, href: docsHref({ ...address, slug }) };
+		const { label, locale: labelLocale } = labelOf(
+			record?.locales[locale],
+			record?.locales[source],
+			locale,
+			source,
+		);
+		return { title: label, labelLocale, href: docsHref({ ...address, slug }) };
 	};
 	const previous = entry(order[at - 1]);
 	const next = entry(order[at + 1]);
@@ -344,10 +393,13 @@ export function breadcrumbFor(
 		const wire = [...parent.section, 'index'].join('/');
 		const record = manifest.pages[wire];
 		if (record !== undefined) {
-			crumbs.unshift({
-				label: labelOf(record.locales[locale], record.locales[source]),
-				href: docsHrefFor(parent, address),
-			});
+			const { label, locale: labelLocale } = labelOf(
+				record.locales[locale],
+				record.locales[source],
+				locale,
+				source,
+			);
+			crumbs.unshift({ label, labelLocale, href: docsHrefFor(parent, address) });
 		}
 		parent = slugParent(parent);
 	}

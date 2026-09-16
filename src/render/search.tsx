@@ -41,6 +41,7 @@ import { searchKey } from '../contracts/manifest.js';
 import { PAGE_ROOT_ANCHOR, type SearchIndex } from '../contracts/search.js';
 import { assertIndexCompatible, searchIndex } from '../search/query.js';
 import { bundleUrl, docsHref, type DocsAddress } from '../site/address.js';
+import { contentMark } from '../site/direction.js';
 import { IDS, searchOptionId } from '../site/ids.js';
 import {
 	INITIAL_SEARCH,
@@ -300,7 +301,26 @@ export function DocsSearch(props: SearchProps): ReactElement {
 					{statusText(state, props.locale)}
 				</p>
 
-				<ul id={IDS.searchResults} className="hx-search-results" role="listbox">
+				{/*
+				 * Every row here is a title and a heading out of one index, and the index is
+				 * not always the reader's: `docsRoute` falls back to the source locale when the
+				 * bundle carries no index for the language asked for, which is the day-one state
+				 * of an English-only project. So the list carries the language its rows are
+				 * actually in, and the dialog's own furniture, the input, the close button and
+				 * the status line, sits outside it and keeps the reader's.
+				 *
+				 * The list and not each link, for the reason the outline gives: every row is in
+				 * the same language and the box is what has to mirror, so the selected row's bar
+				 * lands on the side those words are read from. Measured at 1280px on hex-web's
+				 * Arabic docs home: an English result heading was laid out right to left with
+				 * 435px of empty space before its first character.
+				 */}
+				<ul
+					id={IDS.searchResults}
+					className="hx-search-results"
+					role="listbox"
+					{...contentMark(props.locale, props.searchLocale)}
+				>
 					{state.results.map((hit, position) => (
 						<li
 							key={`${hit.doc.slug}#${hit.doc.anchor}`}

@@ -6,6 +6,7 @@ import { CODE_SCOPES } from '../../src/contracts/ast.js';
 import { SCOPE_COLOUR, scopeClass } from '../../src/contracts/palette.js';
 import { NO_EMIT } from '../../src/render/context.js';
 import { PlainLink, renderBlocks } from '../../src/render/nodes.js';
+import { UI_STRINGS } from '../../src/ui/strings.js';
 import { goldenPage } from '../support/golden.js';
 
 const context = {
@@ -150,6 +151,35 @@ describe('the fence', () => {
 	test('is laid out left to right whatever the page around it is', () => {
 		const fence = fencesOf('en', 'reference/api')[0] as Code;
 		expect(render([fence])).toContain('dir="ltr"');
+	});
+
+	test("the copy button's label carries the reader's language, and the button carries none", () => {
+		// The one piece of the reader's own words inside the article that the shell does not
+		// render, and the one element on the page where the mark had to move off the box.
+		//
+		// `.hx-copy` is a flex item in a bar that stays left to right, and its
+		// `margin-inline-start: auto` is what pushes it to the end of that bar. An inline
+		// margin resolves in the item's own direction, so `dir="rtl"` on the button flipped
+		// which side the auto margin absorbed: measured on hex-web at 1280px, Copy sat 12px
+		// from the start of the bar rather than 12px from its end, on every right-to-left
+		// address serving a fallback page. A bar carrying a language chip did not move, because
+		// `.hx-fence-lang + .hx-copy` zeroes that margin, so one page showed two fences with
+		// the button on opposite sides. `scripts/check-paint.mjs` measures where it lands; this
+		// is the half that says which element the attribute is on.
+		const fence = fencesOf('en', 'reference/api')[0] as Code;
+		const html = renderToStaticMarkup(
+			<>{renderBlocks([fence], { ...context, locale: 'ar', contentLocale: 'en' })}</>,
+		);
+		expect(html).toContain(
+			`<button type="button" class="hx-copy" disabled=""><span lang="ar" dir="rtl">${UI_STRINGS.ar.copyCode}</span></button>`,
+		);
+		expect(html).not.toMatch(/<button[^>]*class="hx-copy"[^>]*(?:lang|dir)=/);
+		// And nothing is said when there is nothing to say: on a page in the reader's own
+		// language the span is bare, because an element repeating the language it already
+		// inherits makes a screen reader announce a change into the language it is reading.
+		expect(render([fence])).toContain(
+			`<button type="button" class="hx-copy" disabled=""><span>${UI_STRINGS.en.copyCode}</span></button>`,
+		);
 	});
 
 	test('wraps only when the fence asks to', () => {

@@ -137,11 +137,6 @@ function CopyButton({ node, context }: { node: Code; context: RenderContext }): 
 			type="button"
 			className="hx-copy"
 			disabled={!hydrated}
-			// The one piece of the reader's own language inside the article that the shell does
-			// not render. It sits on a fence, which sits in the prose, which on a fallback page
-			// is marked with the language the page is written in, so without this the word Copy
-			// is announced as English on an Arabic page and laid out left to right on it.
-			{...interfaceMark(context.locale, context.contentLocale)}
 			onClick={() => {
 				void navigator.clipboard.writeText(text).then(() => {
 					setCopied(true);
@@ -150,7 +145,28 @@ function CopyButton({ node, context }: { node: Code; context: RenderContext }): 
 				});
 			}}
 		>
-			{uiString(context.locale, copied ? 'copied' : 'copyCode')}
+			{/*
+			 * The label and not the button, which is the rule `direction.ts` states and the
+			 * case that produced it. This is the one piece of the reader's own language inside
+			 * the article that the shell does not render: the fence sits in the prose, which on
+			 * a fallback page is marked with the language the page is written in, so without a
+			 * mark the word Copy is announced as English on an Arabic page and laid out left to
+			 * right on it.
+			 *
+			 * On the button itself the mark moved the button. It is a flex item in a bar that
+			 * stays left to right, `margin-inline-start: auto` resolves in the item's own
+			 * direction, and `dir="rtl"` therefore flipped which side the auto margin absorbed:
+			 * measured on hex-web at 1280px, Copy sat 12px from the start of the bar instead of
+			 * 12px from its end, on every right-to-left address serving a fallback page. A bar
+			 * that also carries a language chip did not move, because
+			 * `.hx-fence-lang + .hx-copy` zeroes that margin, so one page could show two fences
+			 * with the button on opposite sides.
+			 *
+			 * The accessible name is computed from the subtree, so it still carries the `lang`.
+			 */}
+			<span {...interfaceMark(context.locale, context.contentLocale)}>
+				{uiString(context.locale, copied ? 'copied' : 'copyCode')}
+			</span>
 		</button>
 	);
 }

@@ -220,6 +220,17 @@ export const FRAGMENTS = {
 		'<p>The store writes each credential with <code class="hx-code">kSecAttrAccessibleWhenUnlockedThisDeviceOnly</code> so it never leaves the phone.</p>',
 	tokenTable:
 		'<div class="hx-scroll" tabindex="0" role="group" aria-label="Table"><table class="hx-table"><thead><tr><th scope="col">Chip</th><th scope="col">Attribute</th></tr></thead><tbody><tr><td>NTAG 424 DNA</td><td><code class="hx-code">kSecAttrAccessibleWhenUnlockedThisDeviceOnly</code></td></tr></tbody></table></div>',
+	/**
+	 * A fence as it is rendered for an Arabic reader on a page written in English.
+	 *
+	 * The bar carries neither a filename nor a language chip, which is the shape that leaves
+	 * `margin-inline-start: auto` on `.hx-copy` doing the work: a bar with a chip zeroes that
+	 * margin through `.hx-fence-lang + .hx-copy` and would move nowhere whatever the button's
+	 * direction said. The label is in its own span and the button carries nothing, which is
+	 * what keeps the auto margin resolving in the bar's direction and not the label's.
+	 */
+	fallbackFence:
+		'<div class="hx-fence"><div class="hx-fence-bar"><button type="button" class="hx-copy" disabled=""><span lang="ar" dir="rtl">\u0646\u0633\u062e</span></button></div><pre class="hx-pre" dir="ltr" tabindex="0" role="group" aria-label="\u0643\u062a\u0644\u0629 \u0628\u0631\u0645\u062c\u064a\u0629"><code><span class="hx-line">let session = NFCNDEFReaderSession()\n</span></code></pre></div>',
 };
 
 /**
@@ -230,6 +241,18 @@ export const FRAGMENTS = {
  * at the shell's phone font it lays out 390.2px wide in a 358px column.
  */
 const LONG_TOKEN = 'kSecAttrAccessibleWhenUnlockedThisDeviceOnly';
+
+/**
+ * The Arabic the probes carry, escaped rather than typed.
+ *
+ * A right-to-left run in a source file reorders everything around it in a diff, and these are
+ * exactly the lines where a reviewer needs to read the characters in the order they are
+ * written. In order: the translation notice's one sentence, the word Next, and the pager's
+ * accessible name.
+ */
+const NOTICE_TEXT = '\u0644\u0645 \u062a\u064f\u062a\u0631\u062c\u0645 \u0647\u0630\u0647.';
+const PAGER_KIND = '\u0627\u0644\u062a\u0627\u0644\u064a';
+const PAGER_LABEL = '\u0635\u0641\u062d\u0627\u062a \u0623\u062e\u0631\u0649';
 
 /**
  * The shell around a probe's content, with the class names `DocsPage` renders, nested the way
@@ -476,10 +499,8 @@ const BASE_STYLES = `(() => {
  *
  * An Arabic reader on a page that exists only in English. The article carries `lang="en"
  * dir="ltr"` because that is what its words are, and every piece of furniture the shell puts
- * inside it carries `lang="ar" dir="rtl"` because that is what those words are. The Arabic is
- * escaped rather than typed: a right-to-left run in a source file reorders everything around
- * it in a diff, and the two lines below are exactly where a reviewer needs to read the
- * characters in the order they are written.
+ * inside it carries `lang="ar" dir="rtl"` because that is what those words are, while the
+ * pager's titles are the neighbouring pages' own and carry English back again.
  *
  * The notice is one short sentence ending in a full stop, and the full stop is the whole
  * point. It is a neutral character, so the direction of the paragraph around it is what
@@ -488,14 +509,12 @@ const BASE_STYLES = `(() => {
  * isolated run inside it. That is the shape of the defect, on the page, and it is what the
  * `stop` reading below measures.
  */
-const NOTICE_TEXT = 'لم تُترجم هذه.';
-const PAGER_KIND = 'التالي';
 const FALLBACK_PAGE = shell({
 	dir: 'rtl',
 	article: ' lang="en" dir="ltr"',
 	head: `<aside class="hx-banner" data-banner="fallback" lang="ar" dir="rtl"><p>${NOTICE_TEXT}</p><a href="/fixture-app/docs/developer/architecture">${PAGER_KIND}</a></aside>`,
-	prose: PARAGRAPH,
-	foot: `<nav id="hx-pager" class="hx-pager" aria-label="${PAGER_KIND}" lang="ar" dir="rtl"><a href="/fixture-app/docs/guide/first-tag" class="hx-prev"><span class="hx-pager-kind">${PAGER_KIND}</span><span class="hx-pager-title">First scan</span></a><a href="/fixture-app/docs/reference/index" class="hx-next"><span class="hx-pager-kind">${PAGER_KIND}</span><span class="hx-pager-title">Reference</span></a></nav>`,
+	prose: PARAGRAPH + FRAGMENTS.fallbackFence,
+	foot: `<nav id="hx-pager" class="hx-pager" aria-label="${PAGER_LABEL}" lang="ar" dir="rtl"><a href="/fixture-app/docs/guide/first-tag" class="hx-prev"><span class="hx-pager-kind">${PAGER_KIND}</span><span class="hx-pager-title" lang="en" dir="ltr">First scan</span></a><a href="/fixture-app/docs/reference/index" class="hx-next"><span class="hx-pager-kind">${PAGER_KIND}</span><span class="hx-pager-title" lang="en" dir="ltr">Reference</span></a></nav>`,
 });
 
 /**
@@ -530,6 +549,20 @@ const NOTICE = `(() => {
 		stopFirst: stop.right <= first.left + 0.5,
 		previous: edges('.hx-prev'),
 		next: edges('.hx-next'),
+		// The copy button, measured from the ends of the bar it is a flex item in rather than
+		// from the article, because the bar is what its auto margin distributes the space of.
+		copy: (() => {
+			const bar = document.querySelector('.hx-fence-bar').getBoundingClientRect();
+			const button = document.querySelector('.hx-copy').getBoundingClientRect();
+			const style = getComputedStyle(document.querySelector('.hx-copy'));
+			return {
+				start: Math.round(button.left - bar.left),
+				end: Math.round(bar.right - button.right),
+				bar: getComputedStyle(document.querySelector('.hx-fence-bar')).direction,
+				label: getComputedStyle(document.querySelector('.hx-copy span')).direction,
+				free: Math.round(bar.width - button.width),
+			};
+		})(),
 	});
 })()`;
 
@@ -2129,6 +2162,31 @@ function layoutProblems(measured) {
 		if (!(nextStart === 0 && nextEnd > 0)) {
 			found.push(
 				`the pager's Next link ${nextStart}px from the article's left and ${nextEnd}px from its right, where it belongs on the inline end, which here is the left`,
+			);
+		}
+		const copy = notice.copy;
+		// The bar stays left to right, because a fence does, so the copy button belongs at its
+		// right end whatever language the word Copy is in. `margin-inline-start: auto` resolves
+		// in the item's own direction, so a `dir` on the button rather than on its label flips
+		// which side the auto margin absorbs and the button lands at the start of the bar.
+		// Measured on hex-web at 1280px before the mark moved: 12px from the start where it
+		// belongs 12px from the end. The free space is read too, because a bar no wider than its
+		// button has nothing for an auto margin to absorb and both ends would read the same.
+		if (copy.bar !== 'ltr') {
+			found.push(
+				`a fence bar laid out ${copy.bar}, where a fence is left to right in every language`,
+			);
+		} else if (copy.label !== 'rtl') {
+			found.push(
+				`the copy button's label laid out ${copy.label}, so the reader's own word is not in the reader's direction`,
+			);
+		} else if (!(copy.free > 40)) {
+			found.push(
+				`a fence bar with ${copy.free}px of free space around its copy button, so which end it sits at was never examined`,
+			);
+		} else if (!(copy.end < copy.start)) {
+			found.push(
+				`the copy button ${copy.start}px from the start of the fence bar and ${copy.end}px from its end, where it belongs at the end`,
 			);
 		}
 		report('fallback-interface', found);
