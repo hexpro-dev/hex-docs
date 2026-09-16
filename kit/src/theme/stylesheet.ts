@@ -150,12 +150,38 @@ const HEADER = `/*
  * never take effect. gzip collapses the repetition to almost nothing.
  */`;
 
-const BASE = `.hx-root {
+const BASE = `/*
+ * \`overflow-wrap\` is on the root because every text holder in the shell inherits it, and
+ * the holder that needed it was not the one it was first written for.
+ *
+ * A symbol name has no space in it, so a long one is a single unbreakable word and a
+ * phone's column is narrower than it: measured on hex-web at 390px,
+ * \`kSecAttrAccessibleWhenUnlockedThisDeviceOnly\` laid out 390.2px wide in a 358px column.
+ * Both consumers set \`overflow-x: hidden\` on the body, so the tail is clipped with nothing
+ * to scroll to and neither the reader nor a find-in-page can reach the characters. Scoped
+ * to \`.hx-code\`, that was fixed for an author who wrote backticks and for nobody else:
+ * measured on a page carrying the same identifier as its title, its heading and a pager
+ * title, the title ran 362px past a 390px screen, the heading 413px, and in Arabic the
+ * pager ran 82px off the leading edge instead.
+ *
+ * \`break-word\` rather than \`anywhere\` or \`break-all\`, and the difference is not
+ * cosmetic. \`break-all\` breaks every word at the edge of the line, so ordinary prose stops
+ * breaking at its spaces and words are chopped for no reason. \`anywhere\` breaks only when a
+ * word would overflow, as this does, but it also makes the broken word's width count as the
+ * minimum content width, which is what a table lays its columns out from: a chip name in a
+ * cell would be squeezed into a stack of fragments instead of leaving the table wide and
+ * scrolling inside \`.hx-scroll\`. \`break-word\` contributes nothing to the minimum, which is
+ * what lets it sit on the root without reaching the table's measure. It reaches no fence
+ * either, because a fence keeps \`white-space: pre\` and never wraps at all, so it goes on
+ * scrolling sideways in the scroller it already owns.
+ */
+.hx-root {
 	color: ${t('ink')};
 	background: ${t('ground')};
 	font-family: ${t('font-body')};
 	font-size: ${t('font-size')};
 	line-height: ${t('leading')};
+	overflow-wrap: break-word;
 	position: relative;
 }
 
@@ -414,22 +440,8 @@ const PROSE = `/*
  * reorders an identifier like NDEFMessage.records against the Arabic around it and the
  * reader sees a mangled symbol name.
  *
- * \`overflow-wrap\` is the other one, and it is why an identifier is readable on a phone.
- * A symbol name has no space in it, so a long one is a single unbreakable word: measured
- * on hex-web at 390px, \`kSecAttrAccessibleWhenUnlockedThisDeviceOnly\` laid out 390.2px
- * wide in a 358px column and ran 32px past the screen, and both consumers set
- * \`overflow-x: hidden\` on the body, so the tail was clipped with nothing to scroll to.
- * Neither the reader nor a search inside the page could reach the characters.
- *
- * \`break-word\` rather than \`anywhere\` or \`break-all\`, and the difference is not
- * cosmetic. \`break-all\` breaks every word at the edge of the line, so ordinary prose
- * stops breaking at its spaces and words are chopped for no reason. \`anywhere\` breaks
- * only when a word would overflow, as this does, but it also makes the broken word's
- * width count as the minimum content width, which is what a table lays its columns out
- * from: a chip name in a cell would be squeezed into a stack of fragments instead of
- * leaving the table wide and scrolling inside \`.hx-scroll\`. This is scoped to inline
- * code and reaches no fence, which is a \`.hx-pre code\` and keeps \`white-space: pre\`,
- * so it goes on scrolling sideways in the scroller it already owns.
+ * The line breaker an identifier needs is on \`.hx-root\`, where every text holder inherits
+ * it, and the paragraph beside that rule says why it is not here.
  */
 .hx-root .hx-code {
 	font-family: ${t('font-mono')};
@@ -438,7 +450,6 @@ const PROSE = `/*
 	padding: 0.15em 0.35em;
 	border-radius: 4px;
 	unicode-bidi: isolate;
-	overflow-wrap: break-word;
 }
 
 .hx-root .hx-list {
@@ -941,8 +952,17 @@ const CHROME = `.hx-root .hx-tree-list {
 	text-align: end;
 }
 
+/*
+ * \`min-inline-size: 0\` is what lets the root's line breaker reach a pager title, and it is
+ * the one holder the inherited property could not fix on its own. These are flex items, and
+ * a flex item's automatic minimum size is its content's, so an unbreakable identifier held
+ * the link at its own width however willing the text inside it was to break: measured at
+ * 390px, a pager title carrying one ran to 451px in English and 82px off the leading edge in
+ * Arabic, where the overflow runs the way a root's scrollable region does not extend.
+ */
 .hx-root .hx-pager a {
 	display: block;
+	min-inline-size: 0;
 	min-block-size: 24px;
 	text-decoration: none;
 	color: ${t('accent-link')};

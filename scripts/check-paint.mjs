@@ -273,9 +273,11 @@ const PAGER_LABEL = '\u0635\u0641\u062d\u0627\u062a \u0623\u062e\u0631\u0649';
  * the word the Pages chip and the bar's link carry.
  *
  * `head` goes above the title inside the article, and `foot` below the prose and still inside
- * it, which is where the shell puts the pager.
+ * it, which is where the shell puts the pager. `title` is the page's own, which is a probe
+ * parameter because the title is one of the holders a long identifier turns up in and the
+ * line breaker that reaches it is inherited from the docs root rather than stated on it.
  *
- * @param {{ prose: string, head?: string, foot?: string, tree?: string, dir?: 'ltr' | 'rtl', article?: string, current?: boolean, links?: number, mark?: number, tocLinks?: number, pages?: string }} parts
+ * @param {{ prose: string, head?: string, foot?: string, tree?: string, dir?: 'ltr' | 'rtl', article?: string, current?: boolean, links?: number, mark?: number, tocLinks?: number, pages?: string, title?: string }} parts
  */
 const shell = ({
 	prose,
@@ -289,8 +291,9 @@ const shell = ({
 	mark = current ? 0 : undefined,
 	tocLinks = current ? 2 : 1,
 	pages = 'Pages',
+	title = 'Scan your first tag',
 }) =>
-	`<div class="hx-root" dir="${dir}">${FRAGMENTS.skip}<div class="hx-layout"><nav id="hx-tree" class="hx-tree" aria-label="Documentation"><button type="button" class="hx-search-trigger" disabled="">Search</button>${tree}<details class="hx-tree-disclosure"><summary class="hx-tree-summary">${pages}</summary></details><ol class="hx-tree-list">${treeRows(links, mark)}</ol></nav><article id="hx-content" class="hx-article" tabindex="-1"${article}>${head}<h1 id="hx-title" class="hx-title">Scan your first tag</h1><div class="hx-prose">${prose}</div>${foot}</article><div class="hx-foot"><nav id="hx-toc" class="hx-toc" aria-label="On this page"><p class="hx-toc-heading">On this page</p><details class="hx-toc-disclosure"><summary class="hx-toc-summary"><span class="hx-toc-where"><span class="hx-toc-summary-label">On this page</span><span class="hx-toc-here"></span></span></summary></details><ol class="hx-toc-list">${tocRows(tocLinks, current)}</ol></nav><a class="hx-foot-pages" href="#hx-tree">${pages}</a></div></div></div>`;
+	`<div class="hx-root" dir="${dir}">${FRAGMENTS.skip}<div class="hx-layout"><nav id="hx-tree" class="hx-tree" aria-label="Documentation"><button type="button" class="hx-search-trigger" disabled="">Search</button>${tree}<details class="hx-tree-disclosure"><summary class="hx-tree-summary">${pages}</summary></details><ol class="hx-tree-list">${treeRows(links, mark)}</ol></nav><article id="hx-content" class="hx-article" tabindex="-1"${article}>${head}<h1 id="hx-title" class="hx-title">${title}</h1><div class="hx-prose">${prose}</div>${foot}</article><div class="hx-foot"><nav id="hx-toc" class="hx-toc" aria-label="On this page"><p class="hx-toc-heading">On this page</p><details class="hx-toc-disclosure"><summary class="hx-toc-summary"><span class="hx-toc-where"><span class="hx-toc-summary-label">On this page</span><span class="hx-toc-here"></span></span></summary></details><ol class="hx-toc-list">${tocRows(tocLinks, current)}</ol></nav><a class="hx-foot-pages" href="#hx-tree">${pages}</a></div></div></div>`;
 
 /**
  * The tree's rows, with the one at `mark` marked as the current page.
@@ -343,11 +346,25 @@ const TOKEN_PAGE = (dir = 'ltr', article = '') =>
 		shell({
 			dir,
 			article,
+			// The same identifier in the four places an author can put it without backticks: the
+			// page title, a heading, the pager's title for the next page, and the sentence.
+			// Scoped to `.hx-code`, the line breaker reached the sentence and none of the other
+			// three, which is a fix for an author who writes backticks and for nobody else.
+			title: LONG_TOKEN,
 			prose:
 				PARAGRAPH +
+				`<h2 id="store" class="hx-heading">${LONG_TOKEN}</h2>` +
 				FRAGMENTS.longToken +
 				`<div class="hx-fence" data-lang="swift"><pre class="hx-pre" dir="ltr" tabindex="0" role="group" aria-label="Swift code block"><code><span class="hx-line"><span class="hx-s-keyword">let</span> access = ${LONG_TOKEN}</span></code></pre></div>` +
 				FRAGMENTS.tokenTable,
+			// The pager is a flex row, and a flex item's automatic minimum size is its content's,
+			// so the link holds its own width however willing the text inside it is to break. On
+			// the right-to-left page it is the shell's furniture inside an English article, which
+			// is why it carries the interface's language there and its title carries the page's.
+			foot:
+				dir === 'rtl'
+					? `<nav id="hx-pager" class="hx-pager" aria-label="${PAGER_LABEL}" lang="ar" dir="rtl"><a href="/fixture-app/docs/reference/index" class="hx-next"><span class="hx-pager-kind">${PAGER_KIND}</span><span class="hx-pager-title" lang="en" dir="ltr">${LONG_TOKEN}</span></a></nav>`
+					: `<nav id="hx-pager" class="hx-pager" aria-label="More pages"><a href="/fixture-app/docs/reference/index" class="hx-next"><span class="hx-pager-kind">Next</span><span class="hx-pager-title">${LONG_TOKEN}</span></a></nav>`,
 		}),
 	);
 
@@ -378,13 +395,29 @@ const SPILL = `(() => {
 		}
 		return false;
 	};
+	const past = (box) => Math.round(Math.max(box.right - width, -box.left));
+	const over = (box) => box.width > 0 && (box.right > width + 0.5 || box.left < -0.5);
+	const named = (element) =>
+		element.className === '' ? element.tagName.toLowerCase() : String(element.className);
 	const spill = [...document.querySelectorAll('.hx-article *')]
 		.map((element) => ({ element, box: element.getBoundingClientRect() }))
-		.filter(({ element, box }) => box.width > 0 && (box.right > width + 0.5 || box.left < -0.5) && !scrolled(element))
-		.map(({ element, box }) => ({
-			name: element.className === '' ? element.tagName.toLowerCase() : String(element.className),
-			past: Math.round(Math.max(box.right - width, -box.left)),
-		}));
+		.filter(({ element, box }) => over(box) && !scrolled(element))
+		.map(({ element, box }) => ({ name: named(element), past: past(box) }));
+	// A block element's box is the column's width whatever its text does inside it, so a
+	// heading whose one unbreakable word runs off the screen has a box that reports nothing.
+	// Measured: with the line breaker taken away, the title's box stayed 358px wide while its
+	// text ran 362px past a 390px screen, and in a right-to-left page the page's own scrollWidth
+	// cannot see that either, because the overflow runs off the leading edge. So the text of
+	// each block holder is measured as a range, which is the ink rather than the box.
+	const inkRange = document.createRange();
+	for (const selector of ['.hx-title', '.hx-heading', '.hx-prose > p']) {
+		for (const element of document.querySelectorAll(selector)) {
+			inkRange.selectNodeContents(element);
+			for (const box of inkRange.getClientRects()) {
+				if (over(box)) spill.push({ name: named(element) + ' text', past: past(box) });
+			}
+		}
+	}
 	const token = document.querySelector('.hx-prose > p .hx-code');
 	const pre = document.querySelector('.hx-pre');
 	const scroller = document.querySelector('.hx-scroll');

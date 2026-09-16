@@ -921,16 +921,52 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 			edit: (css) =>
 				once(
 					css,
-					'\tunicode-bidi: isolate;\n\toverflow-wrap: break-word;\n',
-					'\tunicode-bidi: isolate;\n',
+					'\tline-height: var(--hx-leading, 1.7);\n\toverflow-wrap: break-word;\n',
+					'\tline-height: var(--hx-leading, 1.7);\n',
 				),
 			// One defect at three widths and in two directions. The right-to-left probe reports
-			// the box and not the page, because that is the case scrollWidth cannot see.
+			// the box and the ink and not the page, because that is the case scrollWidth cannot
+			// see: the overflow runs off the leading edge, which the root's scrollable region
+			// does not extend to.
 			expect: [
 				'The phone-token probe',
 				'The phone-token-rtl probe',
 				'The phone-token-narrow probe',
 			],
+		},
+		{
+			name: 'the line breaker scoped back to inline code, which is where it started',
+			// The narrower version of the same rule, and the reason it moved to the root. It
+			// fixes the identifier an author wrapped in backticks and nothing else: the title,
+			// the heading and the pager title on the same page keep running off the screen.
+			edit: (css) =>
+				once(
+					once(
+						css,
+						'\tline-height: var(--hx-leading, 1.7);\n\toverflow-wrap: break-word;\n',
+						'\tline-height: var(--hx-leading, 1.7);\n',
+					),
+					'\tunicode-bidi: isolate;\n',
+					'\tunicode-bidi: isolate;\n\toverflow-wrap: break-word;\n',
+				),
+			expect: [
+				'The phone-token probe found .hx-title text',
+				'The phone-token-rtl probe found .hx-title text',
+				'The phone-token-narrow probe found .hx-pager-title',
+			],
+		},
+		{
+			name: 'a pager link held at the width of its own content',
+			// A flex item's automatic minimum size is its content's, so the link keeps its own
+			// width however willing the text inside it is to break. It is the one holder the
+			// inherited property cannot reach on its own.
+			edit: (css) =>
+				once(
+					css,
+					'.hx-root .hx-pager a {\n\tdisplay: block;\n\tmin-inline-size: 0;\n',
+					'.hx-root .hx-pager a {\n\tdisplay: block;\n',
+				),
+			expect: ['The phone-token-narrow probe found .hx-next'],
 		},
 		{
 			name: 'a break opportunity that counts towards the minimum content width',
