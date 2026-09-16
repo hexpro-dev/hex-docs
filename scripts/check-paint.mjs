@@ -1489,6 +1489,14 @@ async function measure(binary, probes, root) {
 				);
 				width = wanted;
 			}
+			// No scrollbar taking width away from the viewport, which is what a phone does and
+			// what this platform happens to do already. The Linux image these probes also run on
+			// lays out a classic 15px scrollbar instead, so `100vw` is wider than the client area
+			// there and every phone probe reports a page wider than its screen for a stylesheet
+			// nobody changed. Which is a real difference between the two browsers and not
+			// between the two stylesheets, so it is removed rather than described in each
+			// expectation.
+			await send('Emulation.setScrollbarsHidden', { hidden: true }, session);
 			await send(
 				'Page.setDocumentContent',
 				{ frameId, html: page(css, probe.body, probe.host) },
