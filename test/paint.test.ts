@@ -483,7 +483,13 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 	 * probe. "Exactly" is the point: a probe that only failed because a neighbour's edit
 	 * broke the page too would pass here with a count check alone.
 	 */
-	const LAYOUT_BREAKS: { name: string; edit: (css: string) => string; expect: string[] }[] = [
+	const LAYOUT_BREAKS: {
+		name: string;
+		edit: (css: string) => string;
+		expect: string[];
+		/** Problems a wider system font adds; see the runner at the foot of this file. */
+		alsoOn?: string[];
+	}[] = [
 		{
 			name: 'a skip link hidden by moving it above the docs root',
 			edit: (css) =>
@@ -967,6 +973,13 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 					'.hx-root .hx-pager a {\n\tdisplay: block;\n',
 				),
 			expect: ['The phone-token-narrow probe found .hx-next'],
+			// The link is 390.2px wide at the system font this was written against, against a
+			// 358px column at 390px and a 328px column at 360px, so it spills at both widths.
+			// The macOS font is narrow enough that the title inside it wraps at 390 and the
+			// link keeps to the column; the Linux CI image's is not, and there all three
+			// probes see it. The mutation is caught either way; which widths see it is the
+			// platform's answer, not the stylesheet's.
+			alsoOn: ['The phone-token probe found .hx-next', 'The phone-token-rtl probe found .hx-next'],
 		},
 		{
 			name: 'a break opportunity that counts towards the minimum content width',
@@ -1132,7 +1145,12 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 	 * so a probe that passed values through unchanged would accept `#2a262` and every other
 	 * typo inside a token chain.
 	 */
-	const DIRECTION_BREAKS: { name: string; edit: (css: string) => string; expect: string[] }[] = [
+	const DIRECTION_BREAKS: {
+		name: string;
+		edit: (css: string) => string;
+		expect: string[];
+		alsoOn?: string[];
+	}[] = [
 		{
 			name: 'a logical keyword a property does not have',
 			edit: (css) =>
@@ -1297,16 +1315,37 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 		}
 	}, 60_000);
 
+	/*
+	 * Every mutation names the problems it must produce, and the run may produce no others.
+	 *
+	 * The count is asserted as well as the prefixes, because a mutation that trips a second
+	 * probe is a probe reading something it was not written to read, and that is worth
+	 * knowing. `alsoOn` is the one exception and it is narrow: a mutation whose page overflows
+	 * by a few pixels is caught at one width on a platform whose system font is narrow and at
+	 * every width on one whose font is wider, and the runner's platform is not the property
+	 * under test. macOS and the Linux CI image disagree about exactly one entry. An entry with
+	 * no `alsoOn` is held to the exact list as before, and a problem outside both lists still
+	 * fails wherever it appears.
+	 */
 	test.each([...LAYOUT_BREAKS, ...DIRECTION_BREAKS])(
-		'$name is caught, and only that probe fails',
+		'$name is caught, and only the probes that can see it fail',
 		async (entry) => {
 			const rows = await paintWith(entry.edit);
 			expect(rows[0]?.state).toBe('FAIL');
 			const problems = rows[0]?.problems ?? [];
-			expect({ problems, count: problems.length }).toMatchObject({ count: entry.expect.length });
+			const allowed = [...entry.expect, ...(entry.alsoOn ?? [])];
 			entry.expect.forEach((prefix, index) => {
 				expect(problems[index]?.startsWith(prefix)).toBe(true);
 			});
+			problems.forEach((problem) => {
+				expect(allowed.some((prefix) => problem.startsWith(prefix))).toBe(true);
+			});
+			if (entry.alsoOn === undefined) {
+				expect({ problems, count: problems.length }).toMatchObject({ count: entry.expect.length });
+			} else {
+				expect(problems.length).toBeGreaterThanOrEqual(entry.expect.length);
+				expect(problems.length).toBeLessThanOrEqual(allowed.length);
+			}
 		},
 		60_000,
 	);
