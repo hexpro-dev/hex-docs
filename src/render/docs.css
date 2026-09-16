@@ -274,6 +274,23 @@
  * The single highest-value line for Arabic. Without isolation the bidirectional algorithm
  * reorders an identifier like NDEFMessage.records against the Arabic around it and the
  * reader sees a mangled symbol name.
+ *
+ * `overflow-wrap` is the other one, and it is why an identifier is readable on a phone.
+ * A symbol name has no space in it, so a long one is a single unbreakable word: measured
+ * on hex-web at 390px, `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` laid out 390.2px
+ * wide in a 358px column and ran 32px past the screen, and both consumers set
+ * `overflow-x: hidden` on the body, so the tail was clipped with nothing to scroll to.
+ * Neither the reader nor a search inside the page could reach the characters.
+ *
+ * `break-word` rather than `anywhere` or `break-all`, and the difference is not
+ * cosmetic. `break-all` breaks every word at the edge of the line, so ordinary prose
+ * stops breaking at its spaces and words are chopped for no reason. `anywhere` breaks
+ * only when a word would overflow, as this does, but it also makes the broken word's
+ * width count as the minimum content width, which is what a table lays its columns out
+ * from: a chip name in a cell would be squeezed into a stack of fragments instead of
+ * leaving the table wide and scrolling inside `.hx-scroll`. This is scoped to inline
+ * code and reaches no fence, which is a `.hx-pre code` and keeps `white-space: pre`,
+ * so it goes on scrolling sideways in the scroller it already owns.
  */
 .hx-root .hx-code {
 	font-family: var(--hx-font-mono, var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace));
@@ -282,6 +299,7 @@
 	padding: 0.15em 0.35em;
 	border-radius: 4px;
 	unicode-bidi: isolate;
+	overflow-wrap: break-word;
 }
 
 .hx-root .hx-list {

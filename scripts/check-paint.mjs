@@ -125,6 +125,8 @@ const page = (css, body, host) =>
 
 const DESKTOP = 1280;
 const PHONE = 390;
+/** The narrowest phone still in use, where the column is 30px tighter than at `PHONE`. */
+const NARROW = 360;
 /** A tablet held upright, which is still under the phone breakpoint and wider than the column. */
 const TABLET = 768;
 
@@ -214,7 +216,20 @@ export const FRAGMENTS = {
 		'<figure class="hx-figure"><img class="hx-image" src="/_docs/fixture-app/1.1.0/assets/0000.png" alt="The Scan sheet" width="320" height="180" loading="lazy" decoding="async"/><figcaption>The Scan sheet, open</figcaption></figure>',
 	status:
 		'<p>Writing an NTAG424 DNA is <span class="hx-status hx-status-half" data-status="partial" role="img" aria-label="Partial"></span> on iOS 18.2.</p>',
+	longToken:
+		'<p>The store writes each credential with <code class="hx-code">kSecAttrAccessibleWhenUnlockedThisDeviceOnly</code> so it never leaves the phone.</p>',
+	tokenTable:
+		'<div class="hx-scroll" tabindex="0" role="group" aria-label="Table"><table class="hx-table"><thead><tr><th scope="col">Chip</th><th scope="col">Attribute</th></tr></thead><tbody><tr><td>NTAG 424 DNA</td><td><code class="hx-code">kSecAttrAccessibleWhenUnlockedThisDeviceOnly</code></td></tr></tbody></table></div>',
 };
+
+/**
+ * The identifier `FRAGMENTS.longToken` carries, which is the one the defect was measured on.
+ *
+ * A real Keychain constant rather than a made-up string of x's: it is 44 characters with no
+ * space, no hyphen and no underscore, so it offers a line breaker nothing to work with, and
+ * at the shell's phone font it lays out 390.2px wide in a 358px column.
+ */
+const LONG_TOKEN = 'kSecAttrAccessibleWhenUnlockedThisDeviceOnly';
 
 /**
  * The shell around a probe's content, with the class names `DocsPage` renders, nested the way
@@ -284,6 +299,96 @@ function tocRows(count, current) {
 
 const PARAGRAPH =
 	'<p>A first read takes about ten seconds once the tag is in your hand. Most of that is finding the spot on the phone where the antenna sits, which is further up the back than people expect.</p>';
+
+/**
+ * A page carrying a token wider than the phone's column, in the three places one turns up.
+ *
+ * The ordinary paragraph comes first and is what the prose arm reads, so the probe can say
+ * that the line breaker was left alone everywhere the token is not. The fence line is the
+ * same identifier inside a `pre`, which keeps `white-space: pre` and scrolls sideways in its
+ * own scroller; the table cell is the identifier in a `td`, where a break opportunity that
+ * counted towards the minimum content width would collapse the column instead of leaving the
+ * table wide. Both are here because the wrong fix for the paragraph takes one of them with
+ * it, and neither would say so from a page with only the paragraph on it.
+ */
+const TOKEN_PAGE = (dir = 'ltr', article = '') =>
+	hosted(
+		shell({
+			dir,
+			article,
+			prose:
+				PARAGRAPH +
+				FRAGMENTS.longToken +
+				`<div class="hx-fence" data-lang="swift"><pre class="hx-pre" dir="ltr" tabindex="0" role="group" aria-label="Swift code block"><code><span class="hx-line"><span class="hx-s-keyword">let</span> access = ${LONG_TOKEN}</span></code></pre></div>` +
+				FRAGMENTS.tokenTable,
+		}),
+	);
+
+/**
+ * What runs past the edge of the screen, and what the line breaker did to get there, as JSON.
+ *
+ * `scrollingElement.scrollWidth` is read and is not enough on its own, which is the finding
+ * that shaped this. In a right-to-left page the overflow runs off the leading edge, and a
+ * root's scrollable region does not extend that way: measured on the Arabic address of the
+ * same page, the identifier's box ended 41px past a 390px screen while `scrollWidth` read
+ * exactly 390. So the boxes are walked as well, and anything inside a scroll container is
+ * skipped, because a table that is wider than its scroller is reachable by scrolling and is
+ * the point of having one.
+ */
+const SPILL = `(() => {
+	// The document's own direction, which is the reader's: both consumers write it on <html>
+	// from their root loader, and the docs root under it carries the same answer. It has to be
+	// on the document element and not only on the shell, because that is what decides which way
+	// the root's scrollable region extends, and therefore whether scrollWidth can see the
+	// overflow at all.
+	document.documentElement.dir = document.querySelector('.hx-root').dir;
+	const width = document.documentElement.clientWidth;
+	const scrolled = (element) => {
+		for (let node = element.parentElement; node !== null; node = node.parentElement) {
+			const overflow = getComputedStyle(node).overflowX;
+			if (overflow === 'auto' || overflow === 'scroll') return true;
+			if (node.classList.contains('hx-article')) return false;
+		}
+		return false;
+	};
+	const spill = [...document.querySelectorAll('.hx-article *')]
+		.map((element) => ({ element, box: element.getBoundingClientRect() }))
+		.filter(({ element, box }) => box.width > 0 && (box.right > width + 0.5 || box.left < -0.5) && !scrolled(element))
+		.map(({ element, box }) => ({
+			name: element.className === '' ? element.tagName.toLowerCase() : String(element.className),
+			past: Math.round(Math.max(box.right - width, -box.left)),
+		}));
+	const token = document.querySelector('.hx-prose > p .hx-code');
+	const pre = document.querySelector('.hx-pre');
+	const scroller = document.querySelector('.hx-scroll');
+	// Where every line break in the ordinary paragraph fell. A break between two characters
+	// that are both ink is a word split down the middle, which is what a line breaker told to
+	// break anywhere does to prose it was never meant to touch.
+	const words = document.querySelector('.hx-prose > p').firstChild;
+	const range = document.createRange();
+	const text = words.textContent;
+	const split = [];
+	let line = null;
+	for (let index = 0; index < text.length; index += 1) {
+		range.setStart(words, index);
+		range.setEnd(words, index + 1);
+		const box = range.getBoundingClientRect();
+		if (box.height === 0) continue;
+		if (line !== null && box.top > line + 1 && !/\\s/.test(text[index - 1]) && !/\\s/.test(text[index])) {
+			split.push(text.slice(Math.max(0, index - 10), index) + '|' + text.slice(index, index + 6));
+		}
+		line = box.top;
+	}
+	return JSON.stringify({
+		width,
+		scrollWidth: document.scrollingElement.scrollWidth,
+		spill,
+		lines: token.getClientRects().length,
+		fence: { scrolls: pre.scrollWidth > pre.clientWidth, wrap: getComputedStyle(pre).whiteSpace },
+		table: { scrolls: scroller.scrollWidth > scroller.clientWidth },
+		split,
+	});
+})()`;
 
 /**
  * How much of an element is painted inside the viewport, as JSON.
@@ -950,6 +1055,30 @@ export const PROBES = [
 			return JSON.stringify({ start: box.left, end: document.documentElement.clientWidth - box.right, top: box.top });
 		})()`,
 		why: "On a phone the search dialog is anchored to the top of the screen, so its input stays above the keyboard and does not move as results arrive, and it is as wide as the column, 16px from each edge at 390px where the shell's inset sits at its floor. The browser's own rule for a modal dialog caps its width below that, and the rule that centres it on a desktop wins if the phone block comes before it.",
+	},
+	{
+		id: 'phone-token',
+		host: HOST_BASE,
+		width: PHONE,
+		body: TOKEN_PAGE(),
+		expression: SPILL,
+		why: "A symbol name has no space in it, so a long one is one unbreakable word and a phone's column is narrower than it. Both consumers set overflow-x: hidden on the body, so the tail is clipped with nothing to scroll to and the characters cannot be read at all. Inline code may break inside the word; the prose around it may not, the fence keeps its own sideways scroller, and the table stays wide inside the scroller that is there for it.",
+	},
+	{
+		id: 'phone-token-rtl',
+		host: HOST_BASE,
+		width: PHONE,
+		body: TOKEN_PAGE('rtl', ' lang="en" dir="ltr"'),
+		expression: SPILL,
+		why: "The same page at the Arabic address, where the interface is right to left and the article is the English fallback. This is the case scrollWidth cannot see: the overflow runs off the leading edge, which a root's scrollable region does not extend to, so the page measures exactly the width of the screen while the identifier's box ends past it.",
+	},
+	{
+		id: 'phone-token-narrow',
+		host: HOST_BASE,
+		width: NARROW,
+		body: TOKEN_PAGE(),
+		expression: SPILL,
+		why: 'The same page on the narrowest phone still in use, where the column is 30px tighter. A fix that reached only as far as the wider phone would leave this one clipped.',
 	},
 	{
 		id: 'phone-tablet',
@@ -1739,6 +1868,42 @@ function layoutProblems(measured) {
 			found.push(`the open search dialog starting ${px(search.top)} down rather than at the top`);
 		}
 		report('phone-search', found);
+	}
+
+	for (const id of ['phone-token', 'phone-token-rtl', 'phone-token-narrow']) {
+		const token = read(id);
+		if (token === undefined) continue;
+		/** @type {string[]} */
+		const found = [];
+		for (const { name, past } of token.spill) {
+			found.push(`.${name} ending ${past}px past the edge of a ${token.width}px screen`);
+		}
+		if (token.scrollWidth > token.width) {
+			found.push(
+				`the page ${token.scrollWidth - token.width}px wider than its ${token.width}px screen`,
+			);
+		}
+		// Negated, so a token that stopped being wider than the column fails rather than passes:
+		// on one line it fits, and then nothing about breaking it was examined.
+		if (!(token.lines > 1)) {
+			found.push(
+				`the identifier on ${token.lines} line where it is wider than the column, so whether it can break was never examined`,
+			);
+		}
+		for (const split of token.split) {
+			found.push(`an ordinary prose word split down the middle at ${split}`);
+		}
+		if (token.fence.wrap !== 'pre' || token.fence.scrolls !== true) {
+			found.push(
+				`a fence with white-space ${token.fence.wrap} and its own sideways scroll ${token.fence.scrolls}, where it keeps both`,
+			);
+		}
+		if (token.table.scrolls !== true) {
+			found.push(
+				'a table no wider than its scroller, so the cell holding the identifier was squeezed into a column of fragments rather than left to scroll',
+			);
+		}
+		report(id, found);
 	}
 
 	const tablet = read('phone-tablet');

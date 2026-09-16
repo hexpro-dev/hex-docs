@@ -152,6 +152,35 @@ describe('the probe markup is the markup the renderer emits', () => {
 		).toBe(FRAGMENTS.figure);
 	});
 
+	test('an identifier too wide for a phone, in a sentence and in a table cell', () => {
+		const token = {
+			type: 'inlineCode' as const,
+			value: 'kSecAttrAccessibleWhenUnlockedThisDeviceOnly',
+		};
+		expect(
+			blocks([
+				{
+					type: 'paragraph',
+					children: [
+						text('The store writes each credential with '),
+						token,
+						text(' so it never leaves the phone.'),
+					],
+				},
+			]),
+		).toBe(FRAGMENTS.longToken);
+		expect(
+			blocks([
+				{
+					type: 'table',
+					align: [null, null],
+					header: [{ children: [text('Chip')] }, { children: [text('Attribute')] }],
+					rows: [[{ children: [text('NTAG 424 DNA')] }, { children: [token] }]],
+				},
+			]),
+		).toBe(FRAGMENTS.tokenTable);
+	});
+
 	test('a partial status mark in a sentence', () => {
 		expect(
 			blocks([
@@ -371,8 +400,8 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 		expect(rows[0]?.state).toBe('PASS');
 		// A literal, so a deleted probe is a failure here rather than a smaller number on the
 		// ladder, which does not fail.
-		expect(rows[0]?.examined).toBe(28);
-		expect(PROBES.length).toBe(28);
+		expect(rows[0]?.examined).toBe(31);
+		expect(PROBES.length).toBe(31);
 		expect(rows[0]?.unit).toBe('probes');
 	}, 60_000);
 
@@ -452,8 +481,18 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 				once(css, '\tpadding-inline: var(--hx-shell-inset, clamp(1rem, 2.5vw, 2rem));\n}', '}'),
 			// The phone bar pulls out of the layout's inset by exactly that inset and pads back in,
 			// so with no inset to pull out of it runs past both edges and its Pages link ends on
-			// the edge of the screen. That is the same defect seen from the bar, not a neighbour's.
-			expect: ['The gutter-phone probe', 'The gutter-desktop probe', 'The phone-targets probe'],
+			// the edge of the screen. That is the same defect seen from the bar, not a neighbour's,
+			// and the three token probes see the page it leaves 16px wider than the screen. They
+			// see the page and not the identifier: with no inset the column is the whole screen,
+			// which is wider than the token, so it is the bar hanging over the edge they report.
+			expect: [
+				'The gutter-phone probe',
+				'The gutter-desktop probe',
+				'The phone-targets probe',
+				'The phone-token probe found the page',
+				'The phone-token-rtl probe found the page',
+				'The phone-token-narrow probe found the page',
+			],
 		},
 		{
 			name: 'a shell sized to the viewport, which a padded host scrolls sideways',
@@ -837,6 +876,65 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 					'\t\tz-index: 2;\n',
 				),
 			expect: ['The phone-tablet probe'],
+		},
+		{
+			name: 'an identifier with no break opportunity in it, which is how it shipped',
+			edit: (css) =>
+				once(
+					css,
+					'\tunicode-bidi: isolate;\n\toverflow-wrap: break-word;\n',
+					'\tunicode-bidi: isolate;\n',
+				),
+			// One defect at three widths and in two directions. The right-to-left probe reports
+			// the box and not the page, because that is the case scrollWidth cannot see.
+			expect: [
+				'The phone-token probe',
+				'The phone-token-rtl probe',
+				'The phone-token-narrow probe',
+			],
+		},
+		{
+			name: 'a break opportunity that counts towards the minimum content width',
+			// `anywhere` fixes the paragraph and looks identical there. The table is the only
+			// place the two differ: the cell's minimum becomes one character wide, so the column
+			// collapses into a stack of fragments instead of leaving the table to its scroller.
+			edit: (css) => once(css, 'overflow-wrap: break-word;', 'overflow-wrap: anywhere;'),
+			expect: [
+				'The phone-token probe found a table no wider than its scroller',
+				'The phone-token-rtl probe found a table no wider than its scroller',
+				'The phone-token-narrow probe found a table no wider than its scroller',
+			],
+		},
+		{
+			name: 'the line breaker let loose on the prose as well',
+			// The wrong fix that is a one-word edit away from the right one: it breaks the
+			// identifier and it breaks every ordinary word at the edge of a line with it, and on
+			// a narrow phone that is three words in one paragraph.
+			edit: (css) =>
+				once(
+					css,
+					'.hx-root .hx-prose p,\n',
+					'.hx-root .hx-prose {\n\tword-break: break-all;\n}\n\n.hx-root .hx-prose p,\n',
+				),
+			expect: [
+				'The phone-token probe found an ordinary prose word split down the middle',
+				'The phone-token-rtl probe found an ordinary prose word split down the middle',
+				'The phone-token-narrow probe found an ordinary prose word split down the middle',
+			],
+		},
+		{
+			name: 'a fence made to wrap rather than keep its own sideways scroller',
+			edit: (css) =>
+				once(
+					css,
+					'.hx-root .hx-pre {\n\tmargin: 0;',
+					'.hx-root .hx-pre {\n\twhite-space: pre-wrap;\n\tmargin: 0;',
+				),
+			expect: [
+				'The phone-token probe found a fence with white-space pre-wrap',
+				'The phone-token-rtl probe found a fence with white-space pre-wrap',
+				'The phone-token-narrow probe found a fence with white-space pre-wrap',
+			],
 		},
 		{
 			name: 'an article that is not centred at phone width',
