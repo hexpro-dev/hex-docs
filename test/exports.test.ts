@@ -234,6 +234,7 @@ const RUNTIME = {
 		'matchLocale',
 		'navDepth',
 		'navDocs',
+		'navGroupId',
 		'navGroupIds',
 		'normaliseLocale',
 		'normaliseText',

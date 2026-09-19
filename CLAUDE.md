@@ -863,6 +863,16 @@ neither neighbour rather than the two that surrounded it.
 from different sections is a shape no slug hierarchy can express. The sidebar derives its
 nesting from the slugs, where a section root is a real page with a real translated title.
 
+**Groups were flattened away too, and that one shipped.** The sidebar nested by slug alone
+and the compiler dropped every `nav.json` group under a comment claiming the site read their
+labels from `nav.json`, which the bundle does not carry. hex-nfc's guide was written in four
+labelled groups and went live as twenty-two unlabelled rows. Each nav node now carries the
+ids of the groups enclosing it and the manifest carries each label once, in `navGroups`.
+`buildNav` still takes sections from the slugs and draws groups as labelled runs inside
+them, with no heading for a group that opens with a section root (that row already says
+it), and a group spanning two sections drawn once in each. `collapsed` and external `link`
+items are still accepted and not rendered.
+
 **`navTitle` never reached the manifest.** Its whole purpose is the sidebar, the sidebar is
 built from the manifest, and the bundle carries no `nav.json`, so the one field that exists
 for the sidebar was the one field the sidebar could not see.

@@ -16,7 +16,11 @@
  */
 
 import { AST_VERSION } from '../../../src/contracts/ast.js';
-import type { TranslationRecord, TranslationState } from '../../../src/contracts/frontmatter.js';
+import type {
+	LocalisedLabel,
+	TranslationRecord,
+	TranslationState,
+} from '../../../src/contracts/frontmatter.js';
 import { SOURCE_LOCALE, sortLocales, type Locale } from '../../../src/contracts/locales.js';
 import { navDocs } from '../../../src/contracts/nav.js';
 import {
@@ -40,7 +44,7 @@ import type { DiagnosticEnvelope } from '../../../src/contracts/diagnostics.js';
 import { compareSlugStrings } from '../../../src/contracts/slug.js';
 import { blockText } from '../../../src/ast/text.js';
 import { countWords } from '../../../src/search/tokenise.js';
-import { isNavGroup, type NavItem } from '../../../src/contracts/nav.js';
+import { isNavGroup, type NavGroupItem, type NavItem } from '../../../src/contracts/nav.js';
 
 import { probeAsset } from './assets.js';
 import { readFrontMatter } from './frontmatter.js';
@@ -648,7 +652,7 @@ export function buildBundle(appRoot: string, options: BuildOptions): BuildResult
 		locales,
 		sourceLocale: config.i18n.sourceLocale,
 		pages: sortedRecord(pageRecords),
-		nav: manifestNav(project.nav.items, pageRecords),
+		...manifestNav(project.nav.items, pageRecords),
 		redirects: sortedRecord(
 			Object.fromEntries(
 				[...redirects].filter(([from, to]) => to in pageRecords && !(from in pageRecords)),
@@ -746,26 +750,37 @@ function sortedRecord<T>(record: Record<string, T>): Record<string, T> {
 function manifestNav(
 	items: readonly NavItem[],
 	pages: Record<string, PageRecord>,
-): ManifestNavNode[] {
-	const nodes: ManifestNavNode[] = [];
-	for (const item of items) {
-		if (isNavGroup(item)) {
-			const children = manifestNav(item.items, pages);
-			// A group is not a page and has no slug of its own, so it is flattened rather
-			// than represented. The manifest's nav exists to answer "what order are the
-			// pages in"; the labels a group carries are in nav.json, which the site reads.
-			nodes.push(...children);
-			continue;
-		}
-		if ('doc' in item && item.doc in pages) {
+): { nav: ManifestNavNode[]; navGroups?: Record<string, LocalisedLabel> } {
+	const nav: ManifestNavNode[] = [];
+	const labels = new Map<string, LocalisedLabel>();
+	const walk = (level: readonly NavItem[], path: readonly NavGroupItem[]): void => {
+		for (const item of level) {
+			if (isNavGroup(item)) {
+				walk(item.items, [...path, item]);
+				continue;
+			}
+			if (!('doc' in item) || !(item.doc in pages)) continue;
 			// The reason a page is hidden stays in nav.json; the flag is what the renderer
 			// needs to keep it out of the sidebar and out of prev/next, which is what
 			// `nav.ts` promises a hidden page gets. The page stays in this array so that
 			// `nav` and `llmsOrder` continue to answer the same question.
-			nodes.push(item.hidden === undefined ? { slug: item.doc } : { slug: item.doc, hidden: true });
+			const node: ManifestNavNode = { slug: item.doc };
+			if (item.hidden !== undefined) node.hidden = true;
+			// A group earns a label only through a page that made it into the bundle, so a
+			// group holding nothing but drafts leaves no heading over nothing. A hidden page
+			// still carries its groups: it is in the nav, and the renderer is what skips it.
+			if (path.length > 0) {
+				node.groups = path.map((group) => group.group);
+				for (const group of path) labels.set(group.group, group.label);
+			}
+			nav.push(node);
 		}
-	}
-	return nodes;
+	};
+	walk(items, []);
+	if (labels.size === 0) return { nav };
+	const navGroups: Record<string, LocalisedLabel> = {};
+	for (const id of [...labels.keys()].sort()) navGroups[id] = labels.get(id) as LocalisedLabel;
+	return { nav, navGroups };
 }
 
 function allDisables(pages: Map<string, Map<Locale, CompiledPageOutput>>) {

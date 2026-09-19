@@ -40,7 +40,7 @@ import type { PageHeading } from '../contracts/page.js';
 import type { DocsTranslationNotice } from '../contracts/site.js';
 import { docsHref } from '../site/address.js';
 import { contentMark, interfaceMark, type LangMark } from '../site/direction.js';
-import { IDS } from '../site/ids.js';
+import { IDS, navGroupId } from '../site/ids.js';
 import type { DocsNavNode, DocsPageData } from '../site/route.js';
 import { languageName, uiPlural, uiString } from '../ui/strings.js';
 import {
@@ -449,27 +449,49 @@ function NavList({
 	nodes,
 	locale,
 	Link,
+	labelledBy,
 }: {
 	nodes: DocsNavNode[];
 	locale: Locale;
 	Link: DocsLinkComponent;
+	labelledBy?: string;
 }): ReactElement {
 	return (
-		<ol className="hx-tree-list">
-			{nodes.map((node) => (
-				<li key={node.slug} className="hx-tree-item">
-					<Link
-						to={node.href}
-						className={node.kind === 'section' ? 'hx-tree-section' : 'hx-tree-link'}
-						{...(node.current ? { 'aria-current': 'page' as const } : {})}
-					>
-						<span {...contentMark(locale, node.labelLocale)}>{node.label}</span>
-					</Link>
-					{node.kind === 'section' && node.items.length > 0 ? (
-						<NavList nodes={node.items} locale={locale} Link={Link} />
-					) : null}
-				</li>
-			))}
+		<ol
+			className="hx-tree-list"
+			{...(labelledBy === undefined ? {} : { 'aria-labelledby': labelledBy })}
+		>
+			{nodes.map((node) =>
+				node.kind === 'group' ? (
+					// A label over its rows rather than a link, because a group is not a page. The
+					// list names itself by the label, so a screen reader entering it hears which
+					// group it is in, which is what a sighted reader gets from the heading above.
+					<li key={`group:${node.id}:${node.occurrence}`} className="hx-tree-item hx-tree-group">
+						<span id={navGroupId(node.id, node.occurrence)} className="hx-tree-group-label">
+							<span {...contentMark(locale, node.labelLocale)}>{node.label}</span>
+						</span>
+						<NavList
+							nodes={node.items}
+							locale={locale}
+							Link={Link}
+							labelledBy={navGroupId(node.id, node.occurrence)}
+						/>
+					</li>
+				) : (
+					<li key={node.slug} className="hx-tree-item">
+						<Link
+							to={node.href}
+							className={node.kind === 'section' ? 'hx-tree-section' : 'hx-tree-link'}
+							{...(node.current ? { 'aria-current': 'page' as const } : {})}
+						>
+							<span {...contentMark(locale, node.labelLocale)}>{node.label}</span>
+						</Link>
+						{node.kind === 'section' && node.items.length > 0 ? (
+							<NavList nodes={node.items} locale={locale} Link={Link} />
+						) : null}
+					</li>
+				),
+			)}
 		</ol>
 	);
 }

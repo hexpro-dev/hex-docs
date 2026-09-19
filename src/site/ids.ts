@@ -75,3 +75,17 @@ export function searchOptionId(index: number): string {
 export function headingId(id: string): string {
 	return id;
 }
+
+/**
+ * A sidebar group's label, which its list names with `aria-labelledby`.
+ *
+ * Group ids are unique across `nav.json`, which the compiler checks, and a group drawn in
+ * two sections is drawn twice, so the second drawing takes an ordinal: two lists labelled by
+ * one element would each announce the other's heading, and a duplicate id is the silent
+ * ARIA break the constants above exist to catch.
+ */
+export function navGroupId(group: string, occurrence: number): string {
+	// An underscore, because a group id cannot contain one, so `a` drawn twice never meets a
+	// group called `a-2`.
+	return occurrence === 0 ? `hx-group-${group}` : `hx-group-${group}_${occurrence + 1}`;
+}

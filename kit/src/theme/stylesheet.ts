@@ -852,6 +852,29 @@ const CHROME = `.hx-root .hx-tree-list {
 	font-weight: 600;
 }
 
+/*
+ * A group is a label over rows, not a page, so it is not a link and takes no target size.
+ * Its rows sit at the indent of the rows around it rather than one step in: the label is
+ * what says they belong together, and an indent per group as well would spend the phone's
+ * text column on a structure the label already shows. The colour is \`dim\`, not \`faint\`,
+ * because \`faint\` states no floor and this is text a reader has to read.
+ */
+.hx-root .hx-tree-group-label {
+	display: block;
+	margin-block: 0.75rem 0;
+	padding-block: 4px;
+	padding-inline: 0.5rem;
+	color: ${t('dim')};
+	font-size: 0.8125rem;
+	font-weight: 600;
+}
+
+.hx-root .hx-tree-group > .hx-tree-list {
+	padding-inline-start: 0;
+	border-inline-start: 0;
+	margin-inline-start: 0;
+}
+
 .hx-root .hx-tree-link:hover,
 .hx-root .hx-toc-link:hover {
 	color: ${t('ink')};
@@ -1304,6 +1327,11 @@ const PHONE = `/*
 		align-items: center;
 		min-block-size: ${TARGET};
 		padding-block: 0.5rem;
+		padding-inline: 0.75rem;
+	}
+
+	/* The label lines up with the rows under it, which the phone pads further in. */
+	.hx-root .hx-tree-group-label {
 		padding-inline: 0.75rem;
 	}
 

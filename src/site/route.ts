@@ -81,6 +81,19 @@ export type DocsNavNode =
 			href: string;
 			current: boolean;
 			items: DocsNavNode[];
+	  }
+	| {
+			/**
+			 * A `nav.json` group: a label over rows, with no page and no address of its own.
+			 * `id` is the group's id, unique in the nav, and stable because authors choose it.
+			 */
+			kind: 'group';
+			id: string;
+			/** How many times this group was drawn before, in a section it spans. Zero for most. */
+			occurrence: number;
+			label: string;
+			labelLocale: Locale;
+			items: DocsNavNode[];
 	  };
 
 export interface DocsCrumb {
@@ -288,13 +301,22 @@ function labelOf(
 }
 
 /**
- * The sidebar, derived from the manifest's flat nav order and the slug hierarchy.
+ * The sidebar, derived from the manifest's flat nav order, the slug hierarchy and the
+ * `nav.json` groups each page sits in.
  *
- * The bundle carries no `nav.json`, so a group that is not a page has no label to render
- * and the compiler flattens it away. That leaves exactly one kind of grouping, and it is
- * the better one: a section root is a real page with a real translated title, so a Japanese
- * reader gets a Japanese heading over their Japanese pages rather than a label somebody
- * had to remember to translate in a seventh place.
+ * The slugs decide which section a row belongs to, because a section root is a real page
+ * with a real translated title and the trail is built from the same hierarchy. The groups
+ * then label runs of rows inside that section. Two rules make those two structures agree:
+ *
+ * - A group that opens with a section root is labelled by that page's own row, so it gets
+ *   no heading, above the row or inside the section. The fixture corpus wraps `guide/index`
+ *   and its pages in a group called Guide; without this the sidebar reads Guide, Guide.
+ * - A group whose pages fall in two sections is drawn once in each. A slug hierarchy cannot
+ *   hold one heading over rows that live under two different parents, and splitting it is
+ *   the honest rendering of the shape the author wrote.
+ *
+ * A group's pages are contiguous in nav order, because `nav.json` nests them, so a run of
+ * rows naming the same group always lands under one heading.
  */
 export function buildNav(input: {
 	manifest: BundleManifest;
@@ -321,26 +343,82 @@ export function buildNav(input: {
 			: { kind: 'doc', slug, label, labelLocale, href, current };
 	};
 
-	const roots: DocsNavNode[] = [];
-	const sections = new Map<string, DocsNavNode & { kind: 'section' }>();
+	const drawings = new Map<string, number>();
+	const groupFor = (id: string): DocsNavNode & { kind: 'group' } => {
+		const labels = input.manifest.navGroups?.[id];
+		// `nav.json` requires every language, so the source fallback is for a manifest that
+		// `validateManifestShape` would already have refused, and the id is the last resort
+		// of the last resort: a row under a heading with no words is the worse failure.
+		const own = labels?.[input.locale];
+		const label = own ?? labels?.[source] ?? id;
+		const occurrence = drawings.get(id) ?? 0;
+		drawings.set(id, occurrence + 1);
+		return {
+			kind: 'group',
+			id,
+			occurrence,
+			label,
+			labelLocale: own === undefined ? source : input.locale,
+			items: [],
+		};
+	};
 
+	// The rows under one parent, descending into the group chain. Only the last row can be
+	// the open group, because a group's pages are contiguous.
+	const place = (items: DocsNavNode[], groups: readonly string[], node: DocsNavNode): void => {
+		const [head, ...rest] = groups;
+		if (head === undefined) {
+			items.push(node);
+			return;
+		}
+		const last = items.at(-1);
+		if (last !== undefined && last.kind === 'group' && last.id === head) {
+			place(last.items, rest, node);
+			return;
+		}
+		const group = groupFor(head);
+		items.push(group);
+		place(group.items, rest, node);
+	};
+
+	const roots: DocsNavNode[] = [];
+	const sections = new Map<
+		string,
+		{ node: DocsNavNode & { kind: 'section' }; groups: readonly string[] }
+	>();
+
+	// The groups left to draw inside a parent, once the ones the parent itself sits in are
+	// taken off the front.
+	const within = (groups: readonly string[], outer: readonly string[]): readonly string[] => {
+		let shared = 0;
+		while (shared < outer.length && groups[shared] === outer[shared]) shared += 1;
+		return shared === outer.length ? groups.slice(shared) : groups;
+	};
+
+	const opened = new Set<string>();
 	for (const entry of visible) {
 		const parsed = requireSlug(entry.slug, 'buildNav');
 		const node = nodeFor(entry.slug, parsed);
+		const groups = entry.groups ?? [];
+		// The groups this row is the first visible row of. They are always the innermost,
+		// because an outer group that was already open has had a row before this one.
+		const opening = groups.filter((id) => !opened.has(id));
+		for (const id of opening) opened.add(id);
+		const drawn =
+			node.kind === 'section' ? groups.slice(0, groups.length - opening.length) : groups;
 		const key = parsed.section.join('/');
-		if (node.kind === 'section') {
-			// A section root nests under its own parent, so `guide/index` sits at the root
-			// and a deeper `guide/setup/index` sits inside `guide`.
-			const parentKey = parsed.section.slice(0, -1).join('/');
-			const parent = parsed.section.length === 0 ? undefined : sections.get(parentKey);
-			sections.set(key, node);
-			if (parent === undefined) roots.push(node);
-			else parent.items.push(node);
-			continue;
-		}
-		const parent = sections.get(key);
-		if (parent === undefined) roots.push(node);
-		else parent.items.push(node);
+		// A section root nests under its own parent, so `guide/index` sits at the root and a
+		// deeper `guide/setup/index` sits inside `guide`. Any other page sits in its section.
+		const parentKey =
+			node.kind === 'section'
+				? parsed.section.length === 0
+					? undefined
+					: parsed.section.slice(0, -1).join('/')
+				: key;
+		const parent = parentKey === undefined ? undefined : sections.get(parentKey);
+		if (parent === undefined) place(roots, drawn, node);
+		else place(parent.node.items, within(drawn, parent.groups), node);
+		if (node.kind === 'section') sections.set(key, { node, groups });
 	}
 
 	return roots;

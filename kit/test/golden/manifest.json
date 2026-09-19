@@ -1112,28 +1112,90 @@
 			"slug": "index"
 		},
 		{
-			"slug": "guide/index"
+			"slug": "guide/index",
+			"groups": [
+				"guide"
+			]
 		},
 		{
-			"slug": "guide/first-tag"
+			"slug": "guide/first-tag",
+			"groups": [
+				"guide"
+			]
 		},
 		{
-			"slug": "guide/troubleshooting"
+			"slug": "guide/troubleshooting",
+			"groups": [
+				"guide"
+			]
 		},
 		{
-			"slug": "reference/index"
+			"slug": "reference/index",
+			"groups": [
+				"reference"
+			]
 		},
 		{
-			"slug": "reference/chip-support"
+			"slug": "reference/chip-support",
+			"groups": [
+				"reference"
+			]
 		},
 		{
 			"slug": "reference/api",
-			"hidden": true
+			"hidden": true,
+			"groups": [
+				"reference",
+				"reference-internals"
+			]
 		},
 		{
-			"slug": "developer/architecture"
+			"slug": "developer/architecture",
+			"groups": [
+				"reference",
+				"reference-internals",
+				"reference-internals-design"
+			]
 		}
 	],
+	"navGroups": {
+		"guide": {
+			"en": "Guide",
+			"zh": "\u6307\u5357",
+			"ar": "\u0627\u0644\u062f\u0644\u064a\u0644",
+			"es": "Gu\u00eda",
+			"ja": "\u30ac\u30a4\u30c9",
+			"fr": "Guide",
+			"pt-BR": "Guia"
+		},
+		"reference": {
+			"en": "Reference",
+			"zh": "\u53c2\u8003",
+			"ar": "\u0627\u0644\u0645\u0631\u062c\u0639",
+			"es": "Referencia",
+			"ja": "\u30ea\u30d5\u30a1\u30ec\u30f3\u30b9",
+			"fr": "R\u00e9f\u00e9rence",
+			"pt-BR": "Refer\u00eancia"
+		},
+		"reference-internals": {
+			"en": "Internals",
+			"zh": "\u5185\u90e8\u5b9e\u73b0",
+			"ar": "\u0627\u0644\u0628\u0646\u064a\u0629 \u0627\u0644\u062f\u0627\u062e\u0644\u064a\u0629",
+			"es": "Interioridades",
+			"ja": "\u5185\u90e8\u69cb\u9020",
+			"fr": "Fonctionnement interne",
+			"pt-BR": "Funcionamento interno"
+		},
+		"reference-internals-design": {
+			"en": "Design notes",
+			"zh": "\u8bbe\u8ba1\u8bf4\u660e",
+			"ar": "\u0645\u0644\u0627\u062d\u0638\u0627\u062a \u0627\u0644\u062a\u0635\u0645\u064a\u0645",
+			"es": "Notas de dise\u00f1o",
+			"ja": "\u8a2d\u8a08\u30e1\u30e2",
+			"fr": "Notes de conception",
+			"pt-BR": "Notas de design"
+		}
+	},
 	"redirects": {
 		"first-tag": "guide/first-tag"
 	},

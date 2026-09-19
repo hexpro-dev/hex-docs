@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { HX, IDS, headingId, searchOptionId } from '../../src/site/ids.js';
+import { HX, IDS, headingId, navGroupId, searchOptionId } from '../../src/site/ids.js';
 
 describe('the shell ids', () => {
 	test('are unique, because two elements with one id is a relationship that silently ends', () => {
@@ -49,5 +49,19 @@ describe('heading anchors', () => {
 		// which came out of the content.
 		expect(headingId('station-data')).toBe('station-data');
 		expect(headingId('section-4')).toBe('section-4');
+	});
+});
+
+describe('sidebar group labels', () => {
+	test('a second drawing of one group cannot meet another group whose id ends in a number', () => {
+		// A group spanning two sections is drawn once in each, and both labels need an id.
+		// Group ids are `[a-z0-9-]`, so a hyphenated ordinal would turn the second drawing of
+		// `read` into the id of a group called `read-2`.
+		expect(navGroupId('read', 0)).toBe('hx-group-read');
+		expect(navGroupId('read', 1)).toBe('hx-group-read_2');
+		expect(navGroupId('read', 1)).not.toBe(navGroupId('read-2', 0));
+		for (const id of [navGroupId('read', 0), navGroupId('read', 1)]) {
+			expect(Object.values(IDS)).not.toContain(id);
+		}
 	});
 });

@@ -53,7 +53,11 @@ export interface NavGroupItem {
 	 * who sees it and to none of the people who could fix it.
 	 */
 	label: LocalisedLabel;
-	/** Rendered collapsed on first visit. */
+	/**
+	 * Accepted and not yet honoured: the manifest carries a group's id and label and not this
+	 * flag, and the sidebar draws every group open. It stays in the format so a `nav.json`
+	 * written for the day it is honoured does not have to change.
+	 */
 	collapsed?: boolean;
 	/** At least one. An empty group is a heading with nothing under it. */
 	items: NavItem[];

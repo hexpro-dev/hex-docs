@@ -19,6 +19,7 @@ import {
 	pagerFor,
 	type DocsRouteResult,
 } from '../../src/site/route.js';
+import { validateManifestShape } from '../../src/contracts/manifest.js';
 import { goldenManifest, goldenPage, goldenPages } from '../support/golden.js';
 
 const SITE = JSON.parse(
@@ -216,29 +217,197 @@ describe('the page set skew', () => {
 describe('the sidebar', () => {
 	const nav = buildNav({ manifest: MANIFEST, site: SITE, locale: 'en', current: 'index', address });
 
-	test('nests a section root and its pages, from the slugs alone', () => {
-		// The bundle carries no nav.json, so a group that is not a page has no label to
-		// render and the compiler flattens it. What is left is a section root, which is a
-		// real page with a real translated title.
+	const LABEL = (en: string) => ({ en, zh: en, ar: en, es: en, ja: en, fr: en, 'pt-BR': en });
+	type Node = ReturnType<typeof buildNav>[number];
+	type Row = Exclude<Node, { kind: 'group' }> & { groups: string[] };
+	/** Every page row, depth first, with the group labels drawn above it. */
+	const rows = (nodes: Node[], groups: string[] = []): Row[] =>
+		nodes.flatMap((node) =>
+			node.kind === 'group'
+				? rows(node.items, [...groups, node.label])
+				: [{ ...node, groups }, ...(node.kind === 'section' ? rows(node.items, groups) : [])],
+		);
+	const shape = (nodes: Node[]): unknown =>
+		nodes.map((node) =>
+			node.kind === 'group'
+				? { group: node.id, items: shape(node.items) }
+				: node.kind === 'section'
+					? { section: node.slug, items: shape(node.items) }
+					: node.slug,
+		);
+
+	test('nests a section root and its pages, from the slugs', () => {
+		const home = nav[0];
 		const guide =
-			nav[0]?.kind === 'section' ? nav[0].items.find((n) => n.slug === 'guide/index') : undefined;
+			home?.kind === 'section'
+				? home.items.find((n) => n.kind === 'section' && n.slug === 'guide/index')
+				: undefined;
 		expect(guide?.kind).toBe('section');
 		if (guide?.kind !== 'section') return;
-		expect(guide.items.map((item) => item.slug)).toEqual([
+		expect(guide.items.map((item) => (item.kind === 'group' ? item.id : item.slug))).toEqual([
 			'guide/first-tag',
 			'guide/troubleshooting',
 		]);
 	});
 
-	test('leaves the hidden page out entirely', () => {
-		const slugs: string[] = [];
-		const walk = (nodes: ReturnType<typeof buildNav>): void => {
+	test('draws no heading for a group that opens with a section root, which labels it', () => {
+		// The corpus wraps guide/index and its pages in a group called Guide, and
+		// reference/index and its pages in one called Reference. A heading for either would
+		// sit directly over a row carrying the same words.
+		expect(shape(nav)).toEqual([
+			{
+				section: 'index',
+				items: [
+					{ section: 'guide/index', items: ['guide/first-tag', 'guide/troubleshooting'] },
+					{ section: 'reference/index', items: ['reference/chip-support'] },
+				],
+			},
+			// The one page of the Reference group that lives in another section. A slug
+			// hierarchy cannot put it under reference/index, so its groups are drawn where it
+			// is, and every heading on the way down is there.
+			{
+				group: 'reference',
+				items: [
+					{
+						group: 'reference-internals',
+						items: [{ group: 'reference-internals-design', items: ['developer/architecture'] }],
+					},
+				],
+			},
+		]);
+	});
+
+	test('labels runs of rows inside a section, which is the shape a manual has', () => {
+		// hex-nfc's guide: one section root, then its pages in labelled groups. This is the
+		// shape that shipped as twenty-two unlabelled rows while groups were flattened away.
+		const grouped: BundleManifest = {
+			...MANIFEST,
+			nav: MANIFEST.nav.map((node) =>
+				node.slug === 'guide/first-tag'
+					? { slug: node.slug, groups: ['start'] }
+					: node.slug === 'guide/troubleshooting'
+						? { slug: node.slug, groups: ['help'] }
+						: { slug: node.slug, ...(node.hidden ? { hidden: true as const } : {}) },
+			),
+			navGroups: {
+				help: {
+					en: 'Help',
+					zh: '帮助',
+					ar: 'مساعدة',
+					es: 'Ayuda',
+					ja: 'ヘルプ',
+					fr: 'Aide',
+					'pt-BR': 'Ajuda',
+				},
+				start: {
+					en: 'Start',
+					zh: '开始',
+					ar: 'البدء',
+					es: 'Inicio',
+					ja: 'はじめに',
+					fr: 'Début',
+					'pt-BR': 'Início',
+				},
+			},
+		};
+		expect(validateManifestShape(grouped)).toEqual([]);
+		const japanese = buildNav({
+			manifest: grouped,
+			site: SITE,
+			locale: 'ja',
+			current: 'index',
+			address: { basePath: SITE.basePath, locale: 'ja' },
+		});
+		const home = japanese[0];
+		const guide =
+			home?.kind === 'section'
+				? home.items.find((n) => n.kind === 'section' && n.slug === 'guide/index')
+				: undefined;
+		expect(guide?.kind === 'section' ? shape(guide.items) : undefined).toEqual([
+			{ group: 'start', items: ['guide/first-tag'] },
+			{ group: 'help', items: ['guide/troubleshooting'] },
+		]);
+		// Every language is required of a group label, so the reader's is always there and
+		// the label needs no mark.
+		const labels = rows(japanese)
+			.filter((row) => row.slug.startsWith('guide/') && row.slug !== 'guide/index')
+			.map((row) => row.groups);
+		expect(labels).toEqual([['はじめに'], ['ヘルプ']]);
+		const group = guide?.kind === 'section' ? guide.items[0] : undefined;
+		expect(group?.kind === 'group' ? group.labelLocale : undefined).toBe('ja');
+	});
+
+	test('keeps one heading over a run of rows in the same group', () => {
+		const run: BundleManifest = {
+			...MANIFEST,
+			nav: MANIFEST.nav.map((node) =>
+				node.slug === 'guide/first-tag' || node.slug === 'guide/troubleshooting'
+					? { slug: node.slug, groups: ['start', 'inner'] }
+					: { slug: node.slug, ...(node.hidden ? { hidden: true as const } : {}) },
+			),
+			navGroups: { inner: LABEL('Inner'), start: LABEL('Start') },
+		};
+		expect(validateManifestShape(run)).toEqual([]);
+		const drawn = buildNav({ manifest: run, site: SITE, locale: 'en', current: 'index', address });
+		const home = drawn[0];
+		const guide =
+			home?.kind === 'section'
+				? home.items.find((n) => n.kind === 'section' && n.slug === 'guide/index')
+				: undefined;
+		expect(guide?.kind === 'section' ? shape(guide.items) : undefined).toEqual([
+			{
+				group: 'start',
+				items: [{ group: 'inner', items: ['guide/first-tag', 'guide/troubleshooting'] }],
+			},
+		]);
+	});
+
+	test('keeps one heading over a contiguous run, and gives a second drawing its own id', () => {
+		const split: BundleManifest = {
+			...MANIFEST,
+			nav: MANIFEST.nav
+				.filter((node) => node.hidden !== true)
+				.map((node) =>
+					node.slug === 'index' ? { slug: node.slug } : { slug: node.slug, groups: ['all'] },
+				),
+			navGroups: {
+				all: {
+					en: 'All',
+					zh: '全部',
+					ar: 'الكل',
+					es: 'Todo',
+					ja: 'すべて',
+					fr: 'Tout',
+					'pt-BR': 'Tudo',
+				},
+			},
+		};
+		const drawn = buildNav({
+			manifest: split,
+			site: SITE,
+			locale: 'en',
+			current: 'index',
+			address,
+		});
+		const groups: { id: string; occurrence: number }[] = [];
+		const walk = (nodes: Node[]): void => {
 			for (const node of nodes) {
-				slugs.push(node.slug);
-				if (node.kind === 'section') walk(node.items);
+				if (node.kind === 'group') groups.push({ id: node.id, occurrence: node.occurrence });
+				if (node.kind !== 'doc') walk(node.items);
 			}
 		};
-		walk(nav);
+		walk(drawn);
+		// Opened by guide/index, so no heading there and none inside the guide. Drawn over
+		// reference/index, which does not open it, and again at the root for
+		// developer/architecture, whose section has no root page to hold it.
+		expect(groups).toEqual([
+			{ id: 'all', occurrence: 0 },
+			{ id: 'all', occurrence: 1 },
+		]);
+	});
+
+	test('leaves the hidden page out entirely', () => {
+		const slugs = rows(nav).map((row) => row.slug);
 		expect(slugs).not.toContain('reference/api');
 		expect(MANIFEST.nav.some((node) => node.slug === 'reference/api' && node.hidden === true)).toBe(
 			true,
@@ -246,15 +415,11 @@ describe('the sidebar', () => {
 	});
 
 	test('marks the current page and nothing else', () => {
-		const current: string[] = [];
-		const walk = (nodes: ReturnType<typeof buildNav>): void => {
-			for (const node of nodes) {
-				if (node.current) current.push(node.slug);
-				if (node.kind === 'section') walk(node.items);
-			}
-		};
-		walk(nav);
-		expect(current).toEqual(['index']);
+		expect(
+			rows(nav)
+				.filter((row) => row.current)
+				.map((row) => row.slug),
+		).toEqual(['index']);
 	});
 
 	test('labels a page in the reader language, falling back to the source', () => {
@@ -265,14 +430,7 @@ describe('the sidebar', () => {
 			current: 'index',
 			address: { basePath: SITE.basePath, locale: 'ja' },
 		});
-		const flat: { slug: string; label: string }[] = [];
-		const walk = (nodes: ReturnType<typeof buildNav>): void => {
-			for (const node of nodes) {
-				flat.push({ slug: node.slug, label: node.label });
-				if (node.kind === 'section') walk(node.items);
-			}
-		};
-		walk(japanese);
+		const flat = rows(japanese);
 		// The developer page has no Japanese translation, so its label comes from the source
 		// locale's record, and within that record the nav label still wins over the title.
 		const english = MANIFEST.pages['developer/architecture']?.locales.en;
@@ -282,6 +440,8 @@ describe('the sidebar', () => {
 		expect(developer?.label).toBe(english?.navTitle);
 		const guide = flat.find((entry) => entry.slug === 'guide/index');
 		expect(guide?.label).toBe(MANIFEST.pages['guide/index']?.locales.ja?.navTitle);
+		// The groups above the developer page are labelled in Japanese, from nav.json.
+		expect(developer?.groups).toEqual(['リファレンス', '内部構造', '設計メモ']);
 	});
 });
 

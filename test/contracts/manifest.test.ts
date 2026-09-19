@@ -260,6 +260,68 @@ describe('the invariants a schema cannot express', () => {
 		expect(problems.filter((p) => p.includes('nav'))).toEqual([]);
 	});
 
+	describe('nav groups', () => {
+		const LABEL = {
+			en: 'Read tags',
+			zh: 'r',
+			ar: 'r',
+			es: 'r',
+			ja: 'r',
+			fr: 'r',
+			'pt-BR': 'r',
+		} as const;
+		const problemsOf = (overrides: Partial<BundleManifest>): string[] =>
+			validateManifestShape(manifest(overrides)).filter((p) => /group/i.test(p));
+
+		test('a node in a labelled group is accepted', () => {
+			expect(
+				problemsOf({ nav: [{ slug: 'index', groups: ['read'] }], navGroups: { read: LABEL } }),
+			).toEqual([]);
+		});
+
+		test('a node in a group with no label is caught, or the sidebar draws a heading with no words', () => {
+			expect(problemsOf({ nav: [{ slug: 'index', groups: ['read'] }] })).toEqual([
+				'nav entry "index" is in group "read", which navGroups has no label for.',
+			]);
+		});
+
+		test('a label no node is in is caught, because it was derived from nothing', () => {
+			expect(problemsOf({ nav: [{ slug: 'index' }], navGroups: { read: LABEL } })).toEqual([
+				'navGroups labels "read", which no nav entry is in.',
+			]);
+		});
+
+		test('an empty groups array and an empty navGroups are each a second spelling of none', () => {
+			expect(problemsOf({ nav: [{ slug: 'index', groups: [] }], navGroups: {} })).toEqual([
+				'nav entry "index" has an empty groups array. Omit the key when a page is in no group.',
+				'navGroups is empty. Omit the key when no page is in a group.',
+			]);
+		});
+
+		test('a label missing a language is caught, because nav.json requires all seven', () => {
+			const { ja: _ja, ...partial } = LABEL;
+			expect(
+				problemsOf({
+					nav: [{ slug: 'index', groups: ['read'] }],
+					navGroups: { read: partial as typeof LABEL },
+				}),
+			).toEqual(['navGroups["read"] has no label in "ja". nav.json requires all seven.']);
+		});
+
+		test('an id that is not a group id, a repeated id and an unsorted table are each caught', () => {
+			expect(
+				problemsOf({
+					nav: [{ slug: 'index', groups: ['write', 'Read', 'write'] }],
+					navGroups: { write: LABEL, Read: LABEL },
+				}),
+			).toEqual([
+				'nav entry "index" names the same group twice in its groups.',
+				'nav entry "index" names group "Read", which is not a group id.',
+				'navGroups keys are not in code point order.',
+			]);
+		});
+	});
+
 	test('an llmsOrder entry naming a page that does not exist is caught', () => {
 		const problems = validateManifestShape(manifest({ llmsOrder: ['index', 'ghost'] }));
 		expect(problems.some((p) => p.includes('llmsOrder names "ghost"'))).toBe(true);

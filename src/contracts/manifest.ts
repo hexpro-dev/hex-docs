@@ -27,8 +27,9 @@
  */
 
 import { AST_VERSION, type AstVersion } from './ast.js';
-import { sortLocales } from './locales.js';
-import type { Audience, TranslationState } from './frontmatter.js';
+import { LOCALES, sortLocales } from './locales.js';
+import { NAV_GROUP_ID_PATTERN } from './nav.js';
+import type { Audience, LocalisedLabel, TranslationState } from './frontmatter.js';
 import type { HeadingDepth } from './ast.js';
 import type { Locale } from './locales.js';
 
@@ -228,11 +229,16 @@ export interface PageRecord {
  * against the pages it was derived from.
  *
  * Flat, and it used to carry a `children` array that nothing ever wrote. It could not
- * have been right: a `nav.json` group is not a page, so the compiler flattens it, and a
- * group holding two pages from different sections is a shape no slug hierarchy can
- * express. The renderer derives its sidebar nesting from the slugs themselves, where a
- * section root is a real page with a real translated title, and a field with no writer
- * and no reader is worse than no field because the next person builds on it.
+ * have been right: a group holding two pages from different sections is a shape no slug
+ * hierarchy can express. The renderer derives its sidebar nesting from the slugs, where a
+ * section root is a real page with a real translated title, and each node says which
+ * `nav.json` groups enclose it, so the renderer can put a group's label over its rows
+ * inside whatever section they fall in.
+ *
+ * Groups used to be flattened away here, under a comment saying the site read their labels
+ * from `nav.json`. The bundle carries no `nav.json`, so nothing did: hex-nfc's guide was
+ * written in four labelled groups and published as twenty-two unlabelled rows under one
+ * section root.
  */
 export interface ManifestNavNode {
 	slug: string;
@@ -249,6 +255,14 @@ export interface ManifestNavNode {
 	 * to agree. A hidden page is published, so it belongs in `llms-full.txt`.
 	 */
 	hidden?: true;
+	/**
+	 * The `nav.json` group ids enclosing this page, outermost first. Omitted when there are
+	 * none, never an empty array, so one tree has one spelling.
+	 *
+	 * Ids rather than labels, because a label is seven strings and a nav of sixty pages would
+	 * repeat each group's seven on every row it holds. The labels are in `navGroups`, once.
+	 */
+	groups?: string[];
 }
 
 export interface SearchIndexRecord {
@@ -377,6 +391,15 @@ export interface BundleManifest {
 	/** Keyed by slug, keys sorted by code point. */
 	pages: Record<string, PageRecord>;
 	nav: ManifestNavNode[];
+	/**
+	 * Group id to its label in every language, for exactly the ids some `nav` node names.
+	 * Keys sorted by code point. Omitted when no node is in a group.
+	 *
+	 * A group enclosing only pages that did not make it into the bundle has no row to label,
+	 * so it has no entry either: a label with nothing under it is a derived field with nothing
+	 * it was derived from.
+	 */
+	navGroups?: Record<string, LocalisedLabel>;
 	/**
 	 * Old slug to current slug. Every value is a key of `pages`; no key is also a key
 	 * of `pages`; no cycles.
@@ -552,6 +575,51 @@ export function validateManifestShape(manifest: BundleManifest): string[] {
 		if (!(slug in manifest.pages))
 			problems.push(`nav names "${slug}", which is not a page in this bundle.`);
 	}
+	// A group a node names must have a label, and a label must have a node, or the sidebar
+	// renders a heading over nothing or a row under a heading with no words.
+	const named = new Set<string>();
+	for (const node of manifest.nav) {
+		if (node.groups === undefined) continue;
+		if (node.groups.length === 0) {
+			problems.push(
+				`nav entry "${node.slug}" has an empty groups array. Omit the key when a page is in no group.`,
+			);
+		}
+		if (new Set(node.groups).size !== node.groups.length) {
+			problems.push(`nav entry "${node.slug}" names the same group twice in its groups.`);
+		}
+		for (const id of node.groups) {
+			named.add(id);
+			if (!NAV_GROUP_ID_PATTERN.test(id)) {
+				problems.push(`nav entry "${node.slug}" names group "${id}", which is not a group id.`);
+			}
+			if (manifest.navGroups?.[id] === undefined) {
+				problems.push(
+					`nav entry "${node.slug}" is in group "${id}", which navGroups has no label for.`,
+				);
+			}
+		}
+	}
+	const labelled = Object.keys(manifest.navGroups ?? {});
+	if (manifest.navGroups !== undefined && labelled.length === 0) {
+		problems.push('navGroups is empty. Omit the key when no page is in a group.');
+	}
+	for (const id of labelled) {
+		if (!named.has(id)) problems.push(`navGroups labels "${id}", which no nav entry is in.`);
+		const label: Partial<Record<Locale, string>> = manifest.navGroups?.[id] ?? {};
+		for (const locale of LOCALES) {
+			const text = label[locale];
+			if (typeof text !== 'string' || text.length === 0) {
+				problems.push(
+					`navGroups["${id}"] has no label in "${locale}". nav.json requires all seven.`,
+				);
+			}
+		}
+	}
+	if (labelled.join('\u0000') !== [...labelled].sort().join('\u0000')) {
+		problems.push('navGroups keys are not in code point order.');
+	}
+
 	for (const slug of manifest.llmsOrder) {
 		if (!(slug in manifest.pages)) {
 			problems.push(`llmsOrder names "${slug}", which is not a page in this bundle.`);

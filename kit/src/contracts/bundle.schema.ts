@@ -13,6 +13,7 @@
 import { z } from 'zod';
 
 import { AST_VERSION } from '../../../src/contracts/ast.js';
+import { NAV_GROUP_ID_PATTERN } from '../../../src/contracts/nav.js';
 import { AUDIENCES, PAGE_KINDS } from '../../../src/contracts/frontmatter.js';
 import {
 	ASSET_EXTENSIONS,
@@ -44,7 +45,7 @@ import {
 } from '../../../src/contracts/search.js';
 import type { SearchDoc, SearchIndex, SearchPostings } from '../../../src/contracts/search.js';
 import { blockSchema } from './ast.schema.js';
-import { translationRecordSchema } from './config.schema.js';
+import { localisedLabelSchema, translationRecordSchema } from './config.schema.js';
 import {
 	commitShaSchema,
 	countSchema,
@@ -166,6 +167,8 @@ export const pageRecordSchema = z.strictObject({
 export const manifestNavNodeSchema: z.ZodType<ManifestNavNode> = z.strictObject({
 	slug: slugSchema,
 	hidden: z.literal(true).optional(),
+	// Non-empty: a page in no group omits the key, so one tree has one spelling.
+	groups: z.array(z.string().regex(NAV_GROUP_ID_PATTERN)).min(1).optional(),
 });
 
 export const searchIndexRecordSchema = z.strictObject({
@@ -225,6 +228,7 @@ export const bundleManifestSchema = z.strictObject({
 	sourceLocale: localeSchema,
 	pages: z.record(slugSchema, pageRecordSchema),
 	nav: z.array(manifestNavNodeSchema),
+	navGroups: z.record(z.string().regex(NAV_GROUP_ID_PATTERN), localisedLabelSchema).optional(),
 	redirects: z.record(slugSchema, slugSchema),
 	assets: z.array(assetRecordSchema),
 	search: z.partialRecord(localeSchema, searchIndexRecordSchema),
