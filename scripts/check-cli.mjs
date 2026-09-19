@@ -362,8 +362,14 @@ export function checkFirstRun(root) {
 			// `hexdocs mcp` speaks JSON-RPC on, and the reason the install failed is then missing
 			// from stderr, which is the stream the deploy reports.
 			if (spawned.stdout !== '') {
+				// The excerpt starts at pnpm's error code where there is one. pnpm prints its
+				// progress lines first and the error last, and how many progress lines come first
+				// varies from run to run, so the first 200 characters sometimes held the reason and
+				// sometimes stopped short of it.
+				const at = spawned.stdout.indexOf('ERR_PNPM_');
+				const excerpt = at < 0 ? spawned.stdout.slice(-200) : spawned.stdout.slice(at, at + 200);
 				return check(name, 1, unit, [
-					`The failed install wrote ${spawned.stdout.length} characters to stdout, where \`hexdocs mcp\` speaks JSON-RPC, instead of to stderr: ${JSON.stringify(spawned.stdout.slice(0, 200))}`,
+					`The failed install wrote ${spawned.stdout.length} characters to stdout, where \`hexdocs mcp\` speaks JSON-RPC, instead of to stderr: ${JSON.stringify(excerpt)}`,
 				]);
 			}
 			return unusable(

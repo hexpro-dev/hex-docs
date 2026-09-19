@@ -297,6 +297,11 @@ const LAYOUT = `/*
 	position: relative;
 	z-index: 1;
 	max-inline-size: calc(${t('tree-size')} + ${t('measure')} + ${t('toc-size')} + 2 * ${t('gutter')} + 2 * ${t('shell-inset')});
+	/*
+	 * The pager and the end of each rail are the last things in the shell, and a host's footer
+	 * follows directly. Without this both consumers put the footer's edge against them.
+	 */
+	padding-block-end: 4rem;
 	margin-inline: auto;
 	padding-inline: ${t('shell-inset')};
 }
@@ -311,6 +316,8 @@ const LAYOUT = `/*
 	inset-block-start: ${t('sticky-offset')};
 	max-block-size: calc(100vh - ${t('sticky-offset')});
 	overflow-y: auto;
+	/* So the last row of a rail scrolled to its end is not flush with the bottom of the window. */
+	padding-block-end: 1.5rem;
 	font-size: 0.9375rem;
 }
 
@@ -856,17 +863,30 @@ const CHROME = `.hx-root .hx-tree-list {
  * A group is a label over rows, not a page, so it is not a link and takes no target size.
  * Its rows sit at the indent of the rows around it rather than one step in: the label is
  * what says they belong together, and an indent per group as well would spend the phone's
- * text column on a structure the label already shows. The colour is \`dim\`, not \`faint\`,
- * because \`faint\` states no floor and this is text a reader has to read.
+ * text column on a structure the label already shows.
+ *
+ * The label is in \`ink\` at a medium weight, against rows in \`dim\` at the regular one, so
+ * it is set apart by brightness rather than by being heavier: at 600 it read as a bolder
+ * row, and the section rows above it are already the 600 in this list.
  */
 .hx-root .hx-tree-group-label {
 	display: block;
-	margin-block: 0.75rem 0;
+	margin-block: 0.25rem 0;
 	padding-block: 4px;
 	padding-inline: 0.5rem;
-	color: ${t('dim')};
+	color: ${t('ink')};
 	font-size: 0.8125rem;
-	font-weight: 600;
+	font-weight: 500;
+}
+
+/*
+ * A hairline over every group that follows a row, so a group reads as a block rather than
+ * as a gap. The first row of a list has nothing above it to separate from, so it has none.
+ */
+.hx-root .hx-tree-item + .hx-tree-group {
+	margin-block-start: 0.5rem;
+	border-block-start: 1px solid ${t('edge')};
+	padding-block-start: 0.25rem;
 }
 
 .hx-root .hx-tree-group > .hx-tree-list {
@@ -1207,6 +1227,8 @@ const PHONE = `/*
 	 */
 	.hx-root .hx-layout {
 		display: flow-root;
+		/* The article's own end margin already clears the footer by 2rem here. */
+		padding-block-end: 1rem;
 	}
 
 	/*
@@ -1219,6 +1241,7 @@ const PHONE = `/*
 		position: static;
 		max-block-size: none;
 		overflow: visible;
+		padding-block-end: 0;
 		display: flex;
 		flex-wrap: wrap;
 		align-items: stretch;
@@ -1389,6 +1412,7 @@ const PHONE = `/*
 		position: static;
 		max-block-size: none;
 		overflow: visible;
+		padding-block-end: 0;
 		flex: 1 1 auto;
 		min-inline-size: 0;
 	}
