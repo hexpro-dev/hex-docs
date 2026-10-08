@@ -1390,6 +1390,11 @@ async function measure(binary, probes, root) {
 			'--disable-gpu',
 			'--disable-dev-shm-usage',
 			'--no-sandbox',
+			// macOS Chrome clones its app bundle into the per-user temp folder at launch
+			// and removes the clone only on a clean exit. This browser is ended with
+			// SIGKILL, so without this every run left a clone behind. Elsewhere the
+			// feature does not exist and the flag does nothing.
+			'--disable-features=MacAppCodeSignClone',
 			`--user-data-dir=${profile}`,
 			'about:blank',
 		],
