@@ -151,7 +151,8 @@ function modern(
 	params: Record<string, unknown> = {},
 	headers: Record<string, string | null> = {},
 ): Request {
-	const name = typeof params['name'] === 'string' ? { 'Mcp-Name': params['name'] as string } : {};
+	const name: Record<string, string> =
+		typeof params['name'] === 'string' ? { 'Mcp-Name': params['name'] } : {};
 	return post(
 		{ jsonrpc: '2.0', id: 1, method, params: { ...params, _meta: meta } },
 		{ 'MCP-Protocol-Version': MODERN, 'Mcp-Method': method, ...name, ...headers },

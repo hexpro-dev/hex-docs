@@ -249,7 +249,11 @@ describe('the probe markup is the markup the renderer emits', () => {
 		// link; the French architecture page is an English fallback, which is what renders a
 		// banner, and it carries the fences; the chip matrix carries the status marks.
 		const rendered = [
-			renderPage(await pageData({ manifest, site, locale: 'en', slug: 'guide/first-tag', load })),
+			// With a licence, which is what draws the licence line, as `docsServer` adds it.
+			renderPage({
+				...(await pageData({ manifest, site, locale: 'en', slug: 'guide/first-tag', load })),
+				licence: { name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/' },
+			}),
 			renderPage(
 				await pageData({ manifest, site, locale: 'fr', slug: 'developer/architecture', load }),
 			),

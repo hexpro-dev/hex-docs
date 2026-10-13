@@ -620,6 +620,7 @@ const DIALOG =
 const BASE_PAGE = hosted(
 	shell({
 		tree: DIALOG,
+		foot: '<p class="hx-licence">Documentation licensed under <span><a href="https://creativecommons.org/licenses/by/4.0/" rel="license">CC BY 4.0</a></span></p>',
 		head: '<nav id="hx-breadcrumb" class="hx-breadcrumb" aria-label="Breadcrumb"><ol><li><a href="/fixture-app/docs">Overview</a></li></ol></nav><aside class="hx-banner" data-banner="stale"><p>This translation is older than the English page.</p><a href="/fixture-app/docs/guide/first-tag">Read this page in English</a></aside>',
 		prose:
 			'<h2 id="before" class="hx-heading">Before you start</h2><p>The <a href="/fixture-app/docs/reference/chip-support">chip support matrix</a> lists every chip.</p><ul class="hx-list hx-tight"><li><p>text records</p><ul class="hx-list hx-tight"><li><p>with the language code the tag declares</p></li></ul></li></ul><ol class="hx-list hx-tight"><li><p>Create the package.</p></li></ol><blockquote><p>Hold the tag still.</p></blockquote>' +
@@ -627,7 +628,7 @@ const BASE_PAGE = hosted(
 			'<div class="hx-fence" data-lang="swift"><pre class="hx-pre" dir="ltr" tabindex="0" role="group" aria-label="Swift code block"><code><span class="hx-line"><span class="hx-s-keyword">let</span> session</span></code></pre></div>',
 	}).replace(
 		'<h1 id="hx-title" class="hx-title">Scan your first tag</h1>',
-		'<h1 id="hx-title" class="hx-title">Scan your first tag</h1><p class="hx-meta"><span>4 min read</span><a class="hx-edit" href="https://github.com/hexpro-dev/fixture-app">Edit this page</a></p>',
+		'<h1 id="hx-title" class="hx-title">Scan your first tag</h1><div class="hx-page-bar"><p class="hx-meta"><span>4 min read</span><span class="hx-updated">Last updated <span><time datetime="2026-03-15">15 March 2026</time></span></span><a class="hx-edit" href="https://github.com/hexpro-dev/fixture-app">Edit this page</a></p><details class="hx-page-menu" open=""><summary class="hx-page-menu-summary"><span>Page options</span></summary><ul class="hx-page-menu-list"><li><button type="button" class="hx-page-menu-item"><span>Copy as Markdown</span></button></li><li><a class="hx-page-menu-item" href="/fixture-app/docs/guide/first-tag.md" type="text/markdown"><span>View as Markdown</span></a></li><li><button type="button" class="hx-page-menu-item" disabled=""><span>Copied</span></button></li></ul></details></div>',
 	),
 );
 
