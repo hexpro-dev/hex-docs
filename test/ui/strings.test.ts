@@ -6,6 +6,8 @@ import { LOCALES, SOURCE_LOCALE } from '../../src/contracts/locales.js';
 import { PLURAL_CATEGORIES, pluralCategory } from '../../src/ui/plural.js';
 import {
 	CALLOUT_LABELS,
+	DATE_FORMATS,
+	formatDocsDate,
 	LANGUAGE_NAMES,
 	PLURAL_KEYS,
 	PLURAL_STRINGS,
@@ -33,6 +35,10 @@ function everyString(): { where: string; text: string }[] {
 		}
 		for (const named of LOCALES) {
 			found.push({ where: `${locale}.language.${named}`, text: LANGUAGE_NAMES[locale][named] });
+		}
+		found.push({ where: `${locale}.date.pattern`, text: DATE_FORMATS[locale].pattern });
+		for (const [index, month] of DATE_FORMATS[locale].months.entries()) {
+			found.push({ where: `${locale}.date.month${index + 1}`, text: month });
 		}
 	}
 	for (const key of PLURAL_KEYS) {
@@ -68,7 +74,8 @@ describe('the key set', () => {
 		expect(blank).toEqual([]);
 		// A count, because a sweep over an empty list satisfies every assertion above it.
 		expect(everyString().length).toBe(
-			LOCALES.length * (UI_KEYS.length + CALLOUT_KINDS.length + LOCALES.length) +
+			// The date pattern and its twelve months are the 13.
+			LOCALES.length * (UI_KEYS.length + CALLOUT_KINDS.length + LOCALES.length + 13) +
 				PLURAL_KEYS.length * LOCALES.reduce((n, l) => n + categoriesUsedBy(l).length, 0),
 		);
 	});
@@ -242,5 +249,38 @@ describe('the accessors', () => {
 		expect(uiString('ja', 'noticeFallback', { language: languageName('ja', 'ja') })).toBe(
 			'このページはまだ日本語に翻訳されていません。',
 		);
+	});
+});
+
+describe('dates', () => {
+	test('every language has a pattern with a day, a year and a month, and twelve month names', () => {
+		for (const locale of LOCALES) {
+			const { pattern, months } = DATE_FORMATS[locale];
+			expect({ locale, day: pattern.includes('{day}'), year: pattern.includes('{year}') }).toEqual({
+				locale,
+				day: true,
+				year: true,
+			});
+			expect(/\{month\}|\{monthNumber\}/.test(pattern)).toBe(true);
+			expect(pattern.replace(/\{(day|month|monthNumber|year)\}/g, '')).not.toMatch(/[{}]/);
+			expect(months.length).toBe(12);
+			expect(months.every((month) => month.trim() !== '')).toBe(true);
+		}
+	});
+
+	test('a stored timestamp is written from its UTC date, with no leading zeros, by the table', () => {
+		expect(formatDocsDate('en', '2026-09-06T23:59:59Z')).toBe('6 September 2026');
+		expect(formatDocsDate('en', '2026-01-05')).toBe('5 January 2026');
+		expect(formatDocsDate('en', '2026-12-31T00:00:00Z')).toBe('31 December 2026');
+	});
+
+	test('a pattern may write the month as a number instead of a name', () => {
+		const saved = DATE_FORMATS.ja;
+		try {
+			DATE_FORMATS.ja = { ...saved, pattern: '{year}年{monthNumber}月{day}日' };
+			expect(formatDocsDate('ja', '2026-03-05T00:00:00Z')).toBe('2026年3月5日');
+		} finally {
+			DATE_FORMATS.ja = saved;
+		}
 	});
 });

@@ -87,7 +87,8 @@ describe('the copy button', () => {
 		const seen = listen();
 		render(<DocsPage {...await data('en', 'reference/api')} />);
 
-		const copy = screen.getAllByRole('button', { name: /copy/i })[0] as HTMLButtonElement;
+		// By its whole name, because the page menu's Copy as Markdown comes first in the page.
+		const copy = screen.getAllByRole('button', { name: 'Copy' })[0] as HTMLButtonElement;
 		expect(copy.disabled).toBe(false);
 		await act(async () => {
 			fireEvent.click(copy);
@@ -102,6 +103,134 @@ describe('the copy button', () => {
 		expect(seen.filter((event) => event.name === 'hexdocs:copy')).toEqual([
 			{ name: 'hexdocs:copy', detail: { kind: 'code' } },
 		]);
+	});
+});
+
+describe('the page menu', () => {
+	const ORIGIN_URL = 'https://docs.example/fixture-app/docs/guide/first-tag.md';
+
+	/** The shell with the server's absolute address and licence, as `docsServer` adds them. */
+	const full = async (locale: Locale = 'en'): Promise<DocsPageData> => ({
+		...(await data(locale, 'guide/first-tag')),
+		rawUrl: ORIGIN_URL,
+		licence: { name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/' },
+	});
+
+	test('copies the page as Markdown through writeText, announces it and reports it', async () => {
+		const written: string[] = [];
+		const fetched: string[] = [];
+		vi.stubGlobal('fetch', async (input: string) => {
+			fetched.push(input);
+			return new Response('# Scan your first tag\n');
+		});
+		vi.stubGlobal('ClipboardItem', undefined);
+		vi.stubGlobal('navigator', {
+			clipboard: {
+				writeText: async (text: string) => {
+					written.push(text);
+				},
+			},
+		});
+		const seen = listen();
+		render(<DocsPage {...await full()} />);
+		const copy = screen.getByRole('button', { name: 'Copy as Markdown' }) as HTMLButtonElement;
+		expect(copy.disabled).toBe(false);
+		await act(async () => {
+			fireEvent.click(copy);
+		});
+		await waitFor(() => expect(written).toEqual(['# Scan your first tag\n']));
+		expect(fetched).toEqual(['/fixture-app/docs/guide/first-tag.md']);
+		await waitFor(() =>
+			expect(document.getElementById(IDS.live)?.textContent).toBe('Page copied as Markdown.'),
+		);
+		await waitFor(() => expect(screen.getAllByRole('button', { name: 'Copied' }).length).toBe(1));
+		expect(seen.filter((event) => event.name === 'hexdocs:copy')).toEqual([
+			{ name: 'hexdocs:copy', detail: { kind: 'markdown' } },
+		]);
+	});
+
+	test('hands Safari a ClipboardItem holding the fetch, so the write stays tied to the click', async () => {
+		const items: unknown[] = [];
+		class Item {
+			constructor(readonly entries: Record<string, Promise<Blob>>) {}
+		}
+		vi.stubGlobal('fetch', async () => new Response('body'));
+		vi.stubGlobal('ClipboardItem', Item);
+		vi.stubGlobal('navigator', {
+			clipboard: {
+				write: async (list: Item[]) => {
+					items.push(await (list[0] as Item).entries['text/plain']?.then((blob) => blob.text()));
+				},
+			},
+		});
+		render(<DocsPage {...await full()} />);
+		await act(async () => {
+			fireEvent.click(screen.getByRole('button', { name: 'Copy as Markdown' }));
+		});
+		await waitFor(() => expect(items).toEqual(['body']));
+	});
+
+	test('says so in the live region when the page cannot be fetched or written', async () => {
+		vi.stubGlobal('fetch', async () => new Response('gone', { status: 404 }));
+		vi.stubGlobal('ClipboardItem', undefined);
+		vi.stubGlobal('navigator', { clipboard: { writeText: async () => undefined } });
+		render(<DocsPage {...await full()} />);
+		await act(async () => {
+			fireEvent.click(screen.getByRole('button', { name: 'Copy as Markdown' }));
+		});
+		await waitFor(() =>
+			expect(document.getElementById(IDS.live)?.textContent).toBe(
+				'The page could not be copied. Use View as Markdown instead.',
+			),
+		);
+		expect(screen.queryByRole('button', { name: 'Copied' })).toBeNull();
+	});
+
+	test('links the markdown twin, and hands the absolute address to two assistants in a new window', async () => {
+		render(<DocsPage {...await full()} />);
+		const view = screen.getByRole('link', { name: 'View as Markdown' });
+		expect(view.getAttribute('href')).toBe('/fixture-app/docs/guide/first-tag.md');
+		const prompt = encodeURIComponent(`Read ${ORIGIN_URL} so I can ask questions about it.`);
+		const chatgpt = screen.getByRole('link', { name: /Open in ChatGPT/ });
+		expect(chatgpt.getAttribute('href')).toBe(`https://chatgpt.com/?q=${prompt}`);
+		expect([chatgpt.getAttribute('target'), chatgpt.getAttribute('rel')]).toEqual([
+			'_blank',
+			'noopener noreferrer',
+		]);
+		expect(chatgpt.textContent).toBe('Open in ChatGPTOpens in a new window');
+		expect(screen.getByRole('link', { name: /Open in Claude/ }).getAttribute('href')).toBe(
+			`https://claude.ai/new?q=${prompt}`,
+		);
+	});
+
+	test('draws no assistant link without an absolute address, and no licence line without a licence', async () => {
+		render(<DocsPage {...await data('en', 'guide/first-tag')} />);
+		expect(screen.queryByRole('link', { name: /Open in/ })).toBeNull();
+		expect(document.querySelector('.hx-licence')).toBeNull();
+	});
+
+	test('states the licence and the last update in words', async () => {
+		render(<DocsPage {...await full()} />);
+		const licence = document.querySelector('.hx-licence');
+		expect(licence?.textContent).toBe('Documentation licensed under CC BY 4.0');
+		expect(licence?.querySelector('a')?.getAttribute('rel')).toBe('license');
+		const updated = document.querySelector('.hx-updated');
+		expect(updated?.textContent).toBe('Last updated 15 March 2026');
+		expect(updated?.querySelector('time')?.getAttribute('datetime')).toBe('2026-03-15');
+	});
+
+	test('Escape closes the menu and puts focus back on its summary, and focus leaving it closes it', async () => {
+		render(<DocsPage {...await full()} />);
+		const menu = document.querySelector('.hx-page-menu') as HTMLDetailsElement;
+		menu.open = true;
+		const view = screen.getByRole('link', { name: 'View as Markdown' });
+		view.focus();
+		fireEvent.keyDown(view, { key: 'Escape' });
+		expect(menu.open).toBe(false);
+		expect(document.activeElement).toBe(menu.querySelector('summary'));
+		menu.open = true;
+		fireEvent.focusIn(document.querySelector('.hx-edit') as HTMLElement);
+		expect(menu.open).toBe(false);
 	});
 });
 
