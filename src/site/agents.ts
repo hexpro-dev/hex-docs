@@ -1132,7 +1132,9 @@ async function legacy(
 	params: Json | undefined,
 	context: Dispatch,
 ): Promise<Answer> {
-	const header = context.headers.get('MCP-Protocol-Version');
+	// Not on `initialize`, whose body is where the version is negotiated. A client that probed
+	// with a 2026-07-28 request and is falling back may still be sending that version's header.
+	const header = method === 'initialize' ? null : context.headers.get('MCP-Protocol-Version');
 	if (header !== null && !(LEGACY_PROTOCOL_VERSIONS as readonly string[]).includes(header)) {
 		return failure(
 			400,

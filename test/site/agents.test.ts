@@ -470,6 +470,17 @@ describe('the earlier revisions, which open with initialize', () => {
 		expect([unknown.status, unknown.json?.['error']?.code]).toEqual([200, -32601]);
 	});
 
+	test('initialize negotiates in its body, whatever version header a falling-back client still sends', async () => {
+		const reply = await call(
+			server(),
+			post(
+				{ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } },
+				{ 'MCP-Protocol-Version': MODERN },
+			),
+		);
+		expect([reply.status, reply.json?.['result']?.protocolVersion]).toEqual([200, '2025-06-18']);
+	});
+
 	test('a version header this server does not speak is a 400', async () => {
 		const reply = await call(
 			server(),
