@@ -273,6 +273,27 @@ describe('the destinations in the markdown format', () => {
 	});
 });
 
+describe('the directives in the markdown format', () => {
+	test('are plain markdown, and the text an agent reads first says the source keeps them', async () => {
+		// The same pairing as the tokens above. The page has a procedure, a figure and three
+		// callouts in source, and the output has a numbered list, a bold caption and three
+		// quotations. An agent that edited the source to match would lose the procedure and
+		// the callouts without a finding, so the description says the source keeps the
+		// directives, and if the output ever carries them again the first half fails.
+		const slug = 'guide/first-tag';
+		const fromSource = await readSource({ slug, locale: 'en', limit: 1_000_000 });
+		const fromBundle = await read({ slug, locale: 'en', limit: 1_000_000 });
+		for (const text of [fromSource.text, fromBundle.text]) {
+			expect(text).not.toMatch(/^:{2,}/m);
+			expect(text).toContain('1. **Open the Scan sheet**');
+			expect(text).toContain('> **Warning: A partial read looks like a success**');
+		}
+
+		expect(page.detail).toContain('::::steps, :::warning[Title], {#id}');
+		expect(page.detail).toContain('do not edit a page to match this output');
+	});
+});
+
 describe('the AST format', () => {
 	const AST = { slug: 'guide/troubleshooting', locale: 'ja', format: 'ast' } as const;
 

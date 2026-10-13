@@ -635,8 +635,10 @@ calls rather than assuming it.
 ### Golden files
 
 `kit/test/golden/` holds every compiled page in every locale, the manifest, the whole
-findings list, the English term dictionary and the raw markdown of the three pages that
-expand an include. `UPDATE_GOLDEN=1` rewrites them; read the diff.
+findings list, the English term dictionary and the raw markdown of seven pages: the three
+that expand an include, the two that hold the rest of the corpus's directives, and one of
+those pages again in Japanese and in French, for the callout labels. `UPDATE_GOLDEN=1`
+rewrites them; read the diff.
 
 **Every golden file is written with non-ASCII escaped as `\uXXXX`.** The house lint
 reads every file in this repository and a compiled page carries the en dash, the em dash
@@ -649,6 +651,68 @@ The English dictionary is goldened and the other six are not. A dictionary of Ch
 bigrams written as escapes is not something a reviewer can read, so those are pinned
 numerically by the manifest's per-locale term count and index digest, and readably by
 the smoke queries, which are ten real phrases per language that must each return a hit.
+
+### The raw markdown carries no directive syntax
+
+`<slug>.md`, and `llms-full.txt` which joins them, are read by agents and by anything that
+speaks CommonMark or GitHub's dialect of it, so nothing only this compiler understands
+reaches them. Before this, hex-nfc's corpus served 378 lines of `:::` and eleven literal
+`{#id}` suffixes. `kit/src/compile/lower.ts` writes each directive out from the parser's own
+records (`DirectiveRecord` in `types.ts`, pushed by every path in `blocks.ts` that consumes a
+directive line, the refusals included), the way the link rewrite works from the parser's
+ranges and for the same reason: a second reading of the lines would disagree with the first
+about fences, quotations and list items.
+
+- `steps` is an ordered list, each step's title in bold and its body indented to the width
+  of its own number, so step 10's body sits one column further in than step 9's.
+- A callout, `:::warning` or `> [!WARNING]`, is a quotation that opens with its label in
+  the page's language (`calloutLabel`), punctuated as that language punctuates a label: full
+  width in Chinese and Japanese, after a no-break space in French. Untitled, the label runs
+  into the first paragraph (`> **Warning:** ...`); titled, label and title are a line of
+  their own (`> **Warning: Keep the password**`). The page shows a title in place of the
+  label, and the label is kept here because text has no colour or icon to say a passage is
+  a warning.
+- A caption is a bold line where the page shows it: before a table, after a figure's image.
+- `{#id}` comes off the heading. Keeping the anchor would take an `<a id>`, and raw HTML is
+  not published here any more than in source (`no-raw-html`), so a link into a `.md` with an
+  explicit-id fragment lands on the page rather than the heading. The HTML page keeps the id.
+
+The page AST and the bundle format are untouched, so this moved raw bytes and their digests
+and no version constant: `MANIFEST_VERSION` and `AST_VERSION` version shapes, and a raw
+object's shape is "markdown". The consequence is the one `docs-publish-version` already
+describes: recompiling a commit published by an older toolchain now produces different raw
+objects, and the write-once refusal says so. Publish a new commit instead.
+
+What would otherwise be rediscovered:
+
+- **A blank line has no indent to measure.** Inside a list item the parser hands a
+  container a blank line at column one and folds a run of them into one, so a callout in a
+  list item put its `>` at the margin, which closes the list, or nowhere, which closes the
+  quotation. Blank lines take their prefix at the container's own content column, and the
+  folded lines are filled in.
+- **Separators are soft.** Each lowered block gets a blank line on either side that is kept
+  only where nothing else separates it, because the parser lets a directive interrupt a
+  paragraph and CommonMark does not let a bold line or an image do the same.
+- **The label is followed by a space in every language**, Chinese and Japanese included: a
+  closing `**` after a full-width colon and before a letter is not a closing delimiter to
+  CommonMark, so without it those labels are not bold.
+- **Refusals lower too.** A container the parser refused, by name or by shape, loses its
+  markers and keeps its contents, as the payload does, and an include the parse could not
+  expand leaves nothing, where it used to leave the literal `::include` line. Both are
+  errors already; this only means no `:::` reaches a bundle on the way to failing. A node
+  type with no lowering fails the typecheck at the `never` in `planLines`, and throws.
+- **The scaffold comparison is never lowered.** `rawSnippetBody` without a lowering is what
+  `scaffolded` compares, and a label in the snippet's own language would make a French
+  file copied byte for byte from the English one read as translated.
+- **`assertLowered` rereads every page with the parser** and throws on any record left,
+  because a leftover is a defect in the toolchain rather than in the page. The parser, not a
+  pattern, so a page documenting the directive syntax in a fence still builds. The golden
+  suite sweeps every raw object again with a line scan that shares none of that code.
+- **Comment lines are blanked, not removed**, so the records' line numbers still address the
+  text and the paragraphs either side of a comment stay two paragraphs.
+- **A close inside a fence still closes its container.** `findClose` does not look for
+  fences, in the payload or here; the lowering follows the parser rather than fixing that on
+  one side only, which would make the two published forms of a page disagree.
 
 ### What the adversarial review changed
 

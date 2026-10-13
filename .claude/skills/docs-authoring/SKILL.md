@@ -172,3 +172,11 @@ the site replaces with a real address when it serves the file: a page link reads
 of those into a source file. In source, a link is relative to the file it is written in
 and an image is a relative path to `docs/site/assets/`, and `link-resolves` refuses the
 token as an error.
+
+The directives are written out as plain markdown too, because this is the text agents read
+at `<slug>.md` and in `llms-full.txt`. A procedure is a numbered list with each step's title
+in bold, a callout is a quotation that opens with its label (`> **Warning:** ...`), a
+caption is a bold line, and `{#id}` is gone from the heading. That is output, not a way to
+write source: keep writing `::::steps`, `:::warning[Title]` and `{#id}`, because to the
+compiler a numbered list is not a procedure and a quotation is not a callout, so neither
+gets the structured data or the styling the directive gets.
