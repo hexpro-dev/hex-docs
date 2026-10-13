@@ -41,6 +41,7 @@ export * from './ast.js';
 export * from './diagnostics.js';
 export * from './exact.js';
 export * from './frontmatter.js';
+export * from './host.js';
 export * from './lint.js';
 export * from './locales.js';
 export * from './manifest.js';

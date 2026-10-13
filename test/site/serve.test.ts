@@ -126,23 +126,31 @@ describe('page()', () => {
 		expect(loaded.seo).toEqual({ indexable: false, languages: ['en'] });
 	});
 
-	test('is indexable only at the canonical spelling, one trailing slash allowed', async () => {
-		// React Router answers every one of these from the same row, so the loader is the
-		// only thing that can tell a duplicate from the address.
+	test('answers every other spelling of an address with a 301 to the canonical one, query kept', async () => {
+		// React Router answers every one of these from the same row, so the loader is the only
+		// thing that can tell a duplicate from the address. They used to be served `noindex`.
 		const server = docsServer(sources);
-		const spellings: [string, boolean][] = [
-			['/fixture-app/docs/guide', true],
-			['/fixture-app/docs/guide/', true],
-			['/fixture-app/docs/guide//', false],
-			['/Fixture-App/docs/guide', false],
-			['/fixture-app/docs/gu%69de', false],
-			['/ja/fixture-app/docs/guide/', true],
+		const spellings: [string, string][] = [
+			['/fixture-app/docs/guide/', '/fixture-app/docs/guide'],
+			['/fixture-app/docs/guide//', '/fixture-app/docs/guide'],
+			['/Fixture-App/docs/guide?x=1', '/fixture-app/docs/guide?x=1'],
+			['/fixture-app/docs/gu%69de', '/fixture-app/docs/guide'],
+			['/ja/fixture-app/docs/guide/', '/ja/fixture-app/docs/guide'],
+			['/JA/Fixture-App/docs', '/ja/fixture-app/docs'],
+			['/fixture-app/docs/', '/fixture-app/docs'],
 		];
-		for (const [path, indexable] of spellings) {
-			const loaded = await server.page(url(path));
-			expect({ path, indexable: loaded.seo.indexable }).toEqual({ path, indexable });
-			expect(loaded.data.page.slug).toBe('guide/index');
+		for (const [path, location] of spellings) {
+			const response = await thrown(server.page(url(path)));
+			expect({ path, status: response.status, location: response.headers.get('Location') }).toEqual(
+				{
+					path,
+					status: 301,
+					location,
+				},
+			);
 		}
+		const exact = await server.page(url('/fixture-app/docs/guide'));
+		expect([exact.seo.indexable, exact.data.page.slug]).toEqual([true, 'guide/index']);
 	});
 
 	test('throws a 404 for an address the table does not know', async () => {
@@ -396,6 +404,10 @@ describe('resource()', () => {
 			'x-content-type-options': 'nosniff',
 			'x-robots-tag': 'noindex',
 			'content-language': 'en',
+			'content-signal': 'search=yes, ai-input=yes, ai-train=yes',
+			'cache-control': 'public, max-age=3600',
+			etag: expect.stringMatching(/^"[0-9a-f]{32}"$/),
+			'last-modified': new Date(bundle.manifest.commitTimestamp).toUTCString(),
 		});
 		expect(await response.text()).toBe(bundle.objects.get('llms/en.txt'));
 	});
