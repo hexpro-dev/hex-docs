@@ -332,13 +332,22 @@ export function buildBundle(appRoot: string, options: BuildOptions): BuildResult
 			// translated page while the page still read `current`, which is the failure the
 			// per-locale snippet tree exists to prevent. The raw markdown used to do exactly
 			// what the AST half refuses, so one address published a Japanese page and an
-			// English fragment inside it. An absent snippet leaves the `::include` line
-			// literal, which matches what the resolver does and what `snippet-resolves`
-			// already reports.
+			// English fragment inside it. An absent snippet leaves nothing where the
+			// `::include` line was, which matches what the resolver does, and
+			// `snippet-resolves` reports it as an error.
+			//
+			// Lowered from this parse, in this locale: a callout's label is written in the
+			// snippet's language, and the records' line numbers are the snippet file's.
 			const bodies = rawSnippets.get(locale) ?? new Map<string, string>();
 			bodies.set(
 				id,
-				rawSnippetBody(parsed.frontMatter.body, parsed.frontMatter.bodyLine, parsed.destinations),
+				rawSnippetBody(parsed.frontMatter.body, parsed.frontMatter.bodyLine, parsed.destinations, {
+					locale,
+					file: document.file,
+					directives: parsed.directives,
+					origins,
+					snippetBodies: new Map(),
+				}),
 			);
 			rawSnippets.set(locale, bodies);
 		}

@@ -172,15 +172,85 @@ describe('the compiled corpus', () => {
 	});
 
 	test('the markdown served at <slug>.md is what it was', () => {
-		// Three pages, not thirty-nine. The raw markdown is nearly the source file, so a
-		// full set would be the corpus committed twice; every other page is pinned by
-		// `rawDigest` in the manifest. These three are the ones where it is not nearly the
-		// source: each expands an include, and one of them is the support matrix.
-		for (const slug of ['index', 'guide/first-tag', 'reference/chip-support']) {
-			const output = result.pages.get(slug)?.get('en');
-			expect(output, `${slug} should compile in en`).toBeDefined();
-			expectGolden(`raw/en/${slug}.md`, output?.raw ?? '');
+		// Seven, not thirty-nine. The raw markdown is nearly the source file, so a full set
+		// would be the corpus committed twice; every other page is pinned by `rawDigest` in
+		// the manifest. These are the ones where it is not nearly the source. The first three
+		// each expand an include, and one of them is the support matrix. Between them and the
+		// two after, every directive the corpus writes is written out as plain markdown:
+		// steps, a figure, a captioned table, callouts titled and untitled in four kinds, two
+		// GitHub alerts, a callout inside a snippet, and a heading's `{#id}`. The last two are
+		// one page in Japanese and in French, because a callout's label is written in the
+		// page's language and each of those two punctuates it differently.
+		const goldens = [
+			['en', 'index'],
+			['en', 'guide/first-tag'],
+			['en', 'reference/chip-support'],
+			['en', 'guide/troubleshooting'],
+			['en', 'developer/architecture'],
+			['ja', 'guide/first-tag'],
+			['fr', 'guide/first-tag'],
+		] as const;
+		for (const [locale, slug] of goldens) {
+			const output = result.pages.get(slug)?.get(locale);
+			expect(output, `${slug} should compile in ${locale}`).toBeDefined();
+			expectGolden(`raw/${locale}/${slug}.md`, output?.raw ?? '');
 		}
+		if (!UPDATE) {
+			expect(goldenFiles('raw')).toEqual(
+				goldens.map(([locale, slug]) => `raw/${locale}/${slug}.md`).sort(),
+			);
+		}
+	});
+
+	test('no raw object carries directive syntax, and every directive the corpus writes was met', () => {
+		// Every raw object, not only the seven goldened above. The build already rereads each
+		// one with the parser and refuses a leftover directive; this is a second reading that
+		// shares none of that code, a scan of the lines with the fences skipped, so weakening
+		// the reread does not also weaken the check on it.
+		const leftovers: string[] = [];
+		const met = new Set<string>();
+		for (const [slug, byLocale] of result.pages) {
+			for (const [locale, output] of byLocale) {
+				for (const record of output.parsed.directives) {
+					met.add(record.kind === 'container' ? record.name : record.kind);
+				}
+				let fence: string | undefined;
+				for (const line of output.raw.split('\n')) {
+					const body = line.replace(/^[\s>]*/, '');
+					const marker = /^(`{3,}|~{3,})/.exec(body)?.[1];
+					if (fence !== undefined) {
+						if (marker !== undefined && body.trim() === marker && marker.startsWith(fence)) {
+							fence = undefined;
+						}
+						continue;
+					}
+					if (marker !== undefined) {
+						fence = marker;
+						continue;
+					}
+					if (/^:{2,}/.test(body) || /^\[!\w+\]/.test(body) || /^#{1,6} .*\{#/.test(body)) {
+						leftovers.push(`${locale}/${slug}.md: ${line}`);
+					}
+				}
+			}
+		}
+		expect(leftovers).toEqual([]);
+		// Every kind of record the corpus pages produce, so a parse that stopped recording one
+		// reads as a failure here rather than as a corpus with nothing left to lower. The
+		// caution callout is not in the list because the corpus writes it only in a snippet,
+		// whose records belong to the snippet's own parse.
+		expect([...met].sort()).toEqual([
+			'alert',
+			'figure',
+			'headingId',
+			'include',
+			'note',
+			'step',
+			'steps',
+			'table',
+			'tip',
+			'warning',
+		]);
 	});
 
 	test('every destination in every raw object is one a served page can follow', () => {

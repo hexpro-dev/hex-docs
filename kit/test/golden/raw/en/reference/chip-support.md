@@ -23,7 +23,8 @@ occupy, which is always less than the total memory on the die.
 Status is recorded per chip revision, so check the revision printed in
 the row rather than the family name on the packaging.
 
-:::table[Core NFC support by chip, measured on iOS 18.2]
+**Core NFC support by chip, measured on iOS 18.2**
+
 | Chip | Part number | Read | Write | User memory (bytes) |
 | :--- | --- | :---: | --- | ---: |
 | NTAG213 | `NT2H1311` | \u2705 | \u2705 | 144 |
@@ -35,7 +36,6 @@ the row rather than the family name on the packaging.
 | ICODE SLIX2 | `SL2S2602` | \u2705 | \u26a0\ufe0f | 316 |
 | [MIFARE DESFire EV3](https://example.com/chips/mf3d8x3) | `MF3D8X3` | \u26a0\ufe0f | \u274c | \u2014 |
 | MIFARE Classic 1K | `MF1S503x` | \u274c | \u2014 | \u2014 |
-:::
 
 ## What the caveats mean
 

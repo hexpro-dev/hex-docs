@@ -67,6 +67,8 @@ import {
 import {
 	positionAt,
 	raw,
+	type ContainerRecord,
+	type DirectiveRecord,
 	type FoldedText,
 	type NodeOrigins,
 	type ParseServices,
@@ -74,6 +76,7 @@ import {
 	type ProseSegment,
 	type RawFinding,
 	type ResolvedDestination,
+	type SourcePoint,
 } from '../types.js';
 import { foldLines, type SourceLine } from './fold.js';
 import { parseInline } from './inline.js';
@@ -94,8 +97,23 @@ export interface BlockContext {
 	 * them and publishes a `<slug>.md` whose links point back into the source tree.
 	 */
 	destinations: ResolvedDestination[];
+	/**
+	 * Every directive this parse consumed, for the raw markdown. Required for the same
+	 * reason: a context that dropped them would publish `:::` markers in `<slug>.md`.
+	 */
+	directives: DirectiveRecord[];
 	/** Guards against a snippet that includes itself, directly or through another. */
 	includeDepth: number;
+}
+
+/** Where a line's text starts, which is what a directive record points at. */
+function pointOf(line: SourceLine): SourcePoint {
+	return { line: line.line, column: line.column };
+}
+
+/** The same, past the line's own indent: the first colon of a directive's close. */
+function pointPastIndent(line: SourceLine): SourcePoint {
+	return { line: line.line, column: line.column + indentOf(line.text) };
 }
 
 const FENCE = /^(`{3,}|~{3,})(.*)$/;
@@ -307,13 +325,23 @@ export function parseBlocks(lines: readonly SourceLine[], context: BlockContext)
 			const inner = lines
 				.slice(index + 1, close ?? lines.length)
 				.map((source) => shift(source, Math.min(indent, indentOf(source.text))));
-			blocks.push(
-				...directiveBlocks(name, label, inner, start, context, {
-					inline,
-					record,
-					problem,
-				}),
-			);
+			const directive: ContainerRecord = {
+				kind: 'container',
+				name,
+				label,
+				open: pointOf(start),
+				close: close === undefined ? undefined : pointPastIndent(lines[close] as SourceLine),
+				inner: inner.map(pointOf),
+				node: undefined,
+			};
+			context.directives.push(directive);
+			const produced = directiveBlocks(name, label, inner, start, context, {
+				inline,
+				record,
+				problem,
+			});
+			directive.node = produced.node;
+			blocks.push(...produced.blocks);
 			index = close === undefined ? lines.length : close + 1;
 			continue;
 		}
@@ -327,6 +355,7 @@ export function parseBlocks(lines: readonly SourceLine[], context: BlockContext)
 				'A directive close with no container open above it.',
 				'Delete it, or open the container it was meant to close.',
 			);
+			context.directives.push({ kind: 'dropped', at: pointOf(start) });
 			index += 1;
 			continue;
 		}
@@ -336,6 +365,12 @@ export function parseBlocks(lines: readonly SourceLine[], context: BlockContext)
 		if (leaf !== null) {
 			const name = leaf[1] as string;
 			const argument = leaf[2] as string;
+			// Recorded before the outcome is known and settled below, so no arm can forget it.
+			const directive: DirectiveRecord =
+				name === SNIPPET_INCLUDE_NAME
+					? { kind: 'include', at: pointOf(start), id: argument, expanded: false }
+					: { kind: 'dropped', at: pointOf(start) };
+			context.directives.push(directive);
 			if (name !== SNIPPET_INCLUDE_NAME) {
 				problem(
 					'unsupported-syntax',
@@ -367,6 +402,7 @@ export function parseBlocks(lines: readonly SourceLine[], context: BlockContext)
 				if (resolved.ok) {
 					context.includes.push(argument);
 					blocks.push(...resolved.blocks);
+					if (directive.kind === 'include') directive.expanded = true;
 				} else {
 					problem('snippet-resolves', start, resolved.message, resolved.remediation);
 				}
@@ -621,6 +657,7 @@ function headingBlock(
 	if (marked !== null) {
 		explicit = marked[1] as string;
 		text = text.slice(0, marked.index).trimEnd();
+		context.directives.push({ kind: 'headingId', line: start.line });
 	}
 
 	const offset = start.text.length - rest.length;
@@ -694,6 +731,7 @@ function quoteBlock(
 		const kind = calloutKindOf(alert[1] as string);
 		if (kind !== undefined) {
 			const callout: Callout = { type: 'callout', kind, children: [] };
+			context.directives.push({ kind: 'alert', at: pointPastIndent(first), node: callout });
 			callout.children = parseBlocks(inner.slice(1), context);
 			return helpers.record(callout, start);
 		}
@@ -710,8 +748,10 @@ function directiveBlocks(
 	start: SourceLine,
 	context: BlockContext,
 	helpers: { inline: InlineFn; record: RecordFn; problem: ProblemFn },
-): Block[] {
+): { blocks: Block[]; node: ContainerRecord['node'] } {
 	const { inline, record, problem } = helpers;
+	// What a refused container leaves: its contents as ordinary blocks, and no node.
+	const kept = (blocks: Block[]) => ({ blocks, node: undefined });
 
 	const labelFolded = (kind: ProseKind): Inline[] => {
 		if (label === undefined || label === '') return [];
@@ -726,7 +766,7 @@ function directiveBlocks(
 			`":::${name}" is not a directive this AST major understands.`,
 			'The container directives are the five callout kinds plus steps, step, figure and table. The contents are kept as ordinary blocks.',
 		);
-		return parseBlocks(inner, context);
+		return kept(parseBlocks(inner, context));
 	}
 
 	const kind = calloutKindOf(name);
@@ -735,7 +775,7 @@ function directiveBlocks(
 		const title = labelFolded('caption');
 		if (title.length > 0) callout.title = title;
 		callout.children = parseBlocks(inner, context);
-		return [record(callout, start)];
+		return { blocks: [record(callout, start)], node: callout };
 	}
 
 	if (name === 'steps') {
@@ -749,7 +789,7 @@ function directiveBlocks(
 				'Wrap each step in ":::step[Title]". A steps container is what HowTo structured data is derived from, so an empty one is a claim with nothing behind it.',
 			);
 		}
-		return [record(steps, start)];
+		return { blocks: [record(steps, start)], node: steps };
 	}
 
 	if (name === 'step') {
@@ -759,7 +799,7 @@ function directiveBlocks(
 			'A step container only means anything inside a steps container.',
 			'Wrap the steps in "::::steps", with one more colon than the steps themselves.',
 		);
-		return parseBlocks(inner, context);
+		return kept(parseBlocks(inner, context));
 	}
 
 	if (name === 'figure') {
@@ -772,7 +812,7 @@ function directiveBlocks(
 				'A figure container holds exactly one image.',
 				'Put the image inside it, or use an ordinary paragraph.',
 			);
-			return children;
+			return kept(children);
 		}
 		// Two ways to hold more than an image, and only the first used to be reported. A
 		// paragraph holding nothing but an image is already a `figure` by the time
@@ -800,7 +840,7 @@ function directiveBlocks(
 		const figure: Figure = { type: 'figure', image };
 		const caption = labelFolded('caption');
 		if (caption.length > 0) figure.caption = caption;
-		return [record(figure, start)];
+		return { blocks: [record(figure, start)], node: figure };
 	}
 
 	// `table`: the caption is the directive's label rather than the container's last
@@ -815,11 +855,11 @@ function directiveBlocks(
 			'A table container holds exactly one table.',
 			'Put the table inside it. The container exists to carry the caption.',
 		);
-		return children;
+		return kept(children);
 	}
 	const caption = labelFolded('caption');
 	if (caption.length > 0) table.caption = caption;
-	return children;
+	return { blocks: children, node: table };
 }
 
 function firstImage(blocks: readonly Block[]): ImageNode | undefined {
@@ -854,6 +894,7 @@ function parseSteps(
 				'A steps container holds step containers and nothing else.',
 				'Move this into a ":::step[Title]" or out of the steps container.',
 			);
+			context.directives.push({ kind: 'dropped', at: pointOf(start) });
 			index += 1;
 			continue;
 		}
@@ -872,6 +913,15 @@ function parseSteps(
 			.map((source) => shift(source, Math.min(indent, indentOf(source.text))));
 
 		const step: Step = { type: 'step', id: '', title: [], children: [] };
+		context.directives.push({
+			kind: 'container',
+			name: 'step',
+			label: container[3],
+			open: pointOf(start),
+			close: close === undefined ? undefined : pointPastIndent(inner[close] as SourceLine),
+			inner: body.map(pointOf),
+			node: step,
+		});
 		const column = start.column + start.text.indexOf('[') + 1;
 		step.title =
 			label === ''

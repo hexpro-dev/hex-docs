@@ -404,7 +404,9 @@ describe('a snippet a locale does not have', () => {
 		// English into a translated page while the page still reads current. The raw
 		// markdown half did exactly what the resolver refuses, so `<slug>.md` and
 		// `llms-full.txt` served a Japanese page with an English table inside it while the
-		// page payload for the same address correctly dropped the include.
+		// page payload for the same address correctly dropped the include. The directive
+		// line goes too, as it does from the payload: it used to stay as literal text, which
+		// is syntax no reader of the raw markdown can do anything with.
 		const repo = corpus();
 		rmSync(site(repo, 'snippets/ja/legend.md'));
 		commit(repo, 'delete the Japanese legend');
@@ -414,7 +416,9 @@ describe('a snippet a locale does not have', () => {
 		const english = readFileSync(site(repo, 'snippets/en/legend.md'), 'utf8');
 		const marker = (english.match(/^\|.*$/m) as string[])[0] as string;
 		expect(raw).not.toContain(marker);
-		expect(raw).toContain('::include[legend]');
+		expect(raw).not.toContain('::include');
+		// The rest of the page is still there, so the line went rather than the page.
+		expect(raw).toContain('| :--- | --- | :---: | --- | ---: |');
 		expect(
 			result.lint.envelope.findings.some((finding) => finding.rule === 'snippet-resolves'),
 		).toBe(true);

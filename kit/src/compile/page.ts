@@ -18,11 +18,6 @@ import {
 } from '../../../src/contracts/frontmatter.js';
 import type { Locale } from '../../../src/contracts/locales.js';
 import {
-	LEAF_DIRECTIVE_PATTERN,
-	SNIPPET_ID_PATTERN,
-	SNIPPET_INCLUDE_NAME,
-} from '../../../src/contracts/source.js';
-import {
 	RAW_ASSET_LINK,
 	RAW_PAGE_LINK,
 	type HeadingRecord,
@@ -32,6 +27,7 @@ import type { DocsProjectConfig } from '../../../src/contracts/project.js';
 import { countWords } from '../../../src/search/tokenise.js';
 import { frontMatterSchema } from '../contracts/config.schema.js';
 
+import { assertLowered, lowerDirectives, type RawLowering } from './lower.js';
 import { parseDocument } from './markdown/index.js';
 import type { SourceDocument } from './project.js';
 import {
@@ -63,8 +59,9 @@ export interface CompilePageOptions {
 	translation: TranslationRecord;
 	/**
 	 * Snippet body text by id, for the markdown served at `<slug>.md`, already in its raw
-	 * form: see `rawSnippetBody`. Spliced in verbatim, because a snippet's destinations
-	 * carry the snippet's own line numbers and this page's parse has none of them.
+	 * form: see `rawSnippetBody`. Spliced in as it is, because a snippet's destinations and
+	 * directives carry the snippet's own line numbers and this page's parse has none of
+	 * them. Every snippet this page's parse expands must be here, in this page's locale.
 	 */
 	snippetBodies?: ReadonlyMap<string, string>;
 	origins?: NodeOrigins;
@@ -78,7 +75,7 @@ export interface CompiledPageOutput {
 	/** Every anchor this page answers to: ids and aliases. */
 	anchors: Set<string>;
 	findings: RawFinding[];
-	/** The markdown served at `<slug>.md`, with includes expanded. */
+	/** The markdown served at `<slug>.md`, with includes expanded and directives written out. */
 	raw: string;
 }
 
@@ -137,7 +134,13 @@ export function compilePage(options: CompilePageOptions): CompiledPageOutput {
 		headings,
 		anchors,
 		findings,
-		raw: rawMarkdown(front.title, parsed, options.snippetBodies ?? new Map()),
+		raw: rawMarkdown(front.title, parsed, config, {
+			locale,
+			file: document.file,
+			directives: parsed.directives,
+			origins: parsed.origins,
+			snippetBodies: options.snippetBodies ?? new Map(),
+		}),
 	};
 }
 
@@ -357,61 +360,71 @@ export function rewriteDestinations(
 
 /**
  * One snippet's body as the raw markdown splices it in: destinations rewritten, the
- * authoring comments removed, and the whole trimmed.
+ * authoring comments removed, the directives written out, and the whole trimmed.
  *
  * The comments matter here and not only in `rawMarkdown`. That function strips them from
- * a page's own body and then splices this text in verbatim for each `::include`, so a
+ * a page's own body and then splices this text in as it is for each `::include`, so a
  * suppression comment written in a snippet reached the published `<slug>.md` and the
  * `llms-full.txt` of every page including it, while never appearing in a page payload.
+ * The directives are the same case: a callout in a snippet is lowered here, from the
+ * snippet's own parse, because the including page's parse has no record of it.
  *
  * A comment becomes a blank line rather than disappearing, so a paragraph is not silently
- * joined to the one below it. Given no destinations it is also how the build reads a
- * snippet to compare two locales for `scaffolded`, so the comment stripping and the
- * trimming are written once for both.
+ * joined to the one below it. Given no destinations and no lowering it is also how the
+ * build reads a snippet to compare two locales for `scaffolded`, so the comment stripping
+ * and the trimming are written once for both. That comparison is never lowered: a
+ * callout's default label is written in the snippet's language, so lowering would make a
+ * Spanish file that is a byte-for-byte copy of the English one read as translated.
  */
 export function rawSnippetBody(
 	body: string,
 	firstLine: number,
 	destinations: readonly ResolvedDestination[],
+	lowering?: RawLowering,
 ): string {
-	return rewriteDestinations(body, firstLine, destinations)
+	const blanked = rewriteDestinations(body, firstLine, destinations)
 		.split('\n')
 		.map((line) => (WHOLE_LINE_COMMENT.test(line) ? '' : line))
-		.join('\n')
-		.trim();
+		.join('\n');
+	return (lowering === undefined ? blanked : lowerDirectives(blanked, firstLine, lowering)).trim();
 }
 
 /**
  * The markdown served at `<slug>.md`, and concatenated into `llms-full.txt`.
  *
- * Not the source file. Four differences, each because the address is read by an agent
+ * Not the source file. Five differences, each because the address is read by an agent
  * rather than by an editor: the title is an `h1` at the top, because the front matter
  * that carried it is not published; `::include` is expanded, because a fragment
  * reference is meaningless to a reader who cannot fetch it; the authoring comments are
  * already gone, stripped by the parse, because a suppression comment on a published
- * page is a leak of the process onto the product; and every destination that resolved
+ * page is a leak of the process onto the product; every destination that resolved
  * to a page or an asset is in its raw form, because the author's relative path is only
- * right from the source tree. `llms-full.txt` joins every page under one address, so a
- * relative link from a page two directories down resolves to nothing there, and an
- * image's path into `docs/site/assets/` is not an address anywhere.
+ * right from the source tree; and every directive is written out as the plain markdown it
+ * stands for, because `:::steps` and `{#id}` mean nothing to a reader that is not this
+ * compiler. `llms-full.txt` joins every page under one address, so a relative link from
+ * a page two directories down resolves to nothing there, and an image's path into
+ * `docs/site/assets/` is not an address anywhere. `lower.ts` says what each directive
+ * becomes.
  *
- * The rewrite is applied from the parse's own ranges before the line walk, so it follows
- * the parser's idea of what is a link. Code spans and fences are never touched because
- * the parser never recorded a destination inside one, not because this walk skips them.
+ * The link rewrite and the lowering are both applied from the parse's own records, so
+ * they follow the parser's idea of what is a link and what is a directive. Code spans and
+ * fences are never touched because the parser never recorded anything inside one, not
+ * because this walk skips them.
  *
  * Built from the source lines rather than from the tree, which is what makes the fence
- * tracking necessary rather than decorative. Both rewrites used to fire anywhere on the
- * page, so a fence documenting the authoring syntax had its `::include[safety-note]`
- * sample replaced by the snippet's whole body and its sample comment deleted, while the
- * rendered page correctly showed both as code. Two published representations of one
- * address disagreed and nothing reported it.
+ * tracking for comments necessary rather than decorative. Both rewrites used to fire
+ * anywhere on the page, so a fence documenting the authoring syntax had its
+ * `::include[safety-note]` sample replaced by the snippet's whole body and its sample
+ * comment deleted, while the rendered page showed both as code. Two published
+ * representations of one address disagreed and nothing reported it.
  */
 function rawMarkdown(
 	title: string,
 	parsed: ParsedDocument,
-	snippetBodies: ReadonlyMap<string, string>,
+	config: DocsProjectConfig,
+	lowering: RawLowering,
 ): string {
-	const lines: string[] = [`# ${title}`, ''];
+	const lines: string[] = [];
 	// The marker that opened the current fence, or undefined outside one.
 	let fence: string | undefined;
 	const body = rewriteDestinations(
@@ -443,23 +456,17 @@ function rawMarkdown(
 		// The comments are stripped here as well as in the parse, because this text is
 		// built from the source rather than from the tree. Without it a suppression comment
 		// reaches `<slug>.md` and `llms-full.txt` while never appearing in a page payload,
-		// which is the half of the leak nobody would think to look for.
-		if (WHOLE_LINE_COMMENT.test(line)) continue;
-
-		// Read with the contract's own leaf-directive grammar rather than a second
-		// hand-copied spelling of it, so a change to the directive syntax cannot leave this
-		// scan matching the old one.
-		const directive = LEAF_DIRECTIVE_PATTERN.exec(trimmed);
-		const id = directive?.[1] === SNIPPET_INCLUDE_NAME ? (directive[2] as string) : undefined;
-		if (id === undefined || !SNIPPET_ID_PATTERN.test(id)) {
-			lines.push(line);
-			continue;
-		}
-		const body = snippetBodies.get(id);
-		lines.push(body === undefined ? line : body.trimEnd());
+		// which is the half of the leak nobody would think to look for. Blanked rather than
+		// removed, which is what the parse does: the lowering addresses lines by number, and
+		// a removed line would also join the paragraphs either side of it into one.
+		lines.push(WHOLE_LINE_COMMENT.test(line) ? '' : line);
 	}
-	return `${lines
+
+	const lowered = lowerDirectives(lines.join('\n'), parsed.frontMatter.bodyLine, lowering);
+	const text = `${[`# ${title}`, '', lowered]
 		.join('\n')
 		.replace(/\n{3,}/g, '\n\n')
 		.trimEnd()}\n`;
+	assertLowered(text, parsed.file, config);
+	return text;
 }

@@ -21,6 +21,7 @@ import {
 	type ParseServices,
 	type ParsedDocument,
 	type ProseSegment,
+	type DirectiveRecord,
 	type RawFinding,
 	type ResolvedDestination,
 } from '../types.js';
@@ -52,6 +53,7 @@ export function parseDocument(source: string, options: ParseOptions): ParsedDocu
 	const disables: DisableComment[] = [];
 	const includes: string[] = [];
 	const destinations: ResolvedDestination[] = [];
+	const directives: DirectiveRecord[] = [];
 	const origins: NodeOrigins = options.origins ?? new WeakMap();
 
 	const lines = stripComments(
@@ -70,6 +72,7 @@ export function parseDocument(source: string, options: ParseOptions): ParsedDocu
 		prose,
 		includes,
 		destinations,
+		directives,
 		includeDepth: options.includeDepth ?? 0,
 	});
 
@@ -101,6 +104,7 @@ export function parseDocument(source: string, options: ParseOptions): ParsedDocu
 		prose,
 		includes,
 		destinations,
+		directives,
 		disables,
 		problems,
 	};
