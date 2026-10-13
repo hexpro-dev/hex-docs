@@ -22,7 +22,7 @@ import {
 import type { CompiledPage } from '../../src/contracts/page.js';
 import type { DocsSiteConfig } from '../../src/contracts/site.js';
 import { docsRoute, indexableLanguages } from '../../src/site/route.js';
-import { docsServer, type DocsSources } from '../../src/site/serve.js';
+import { docsMachineUrls, docsServer, type DocsSources } from '../../src/site/serve.js';
 import {
 	fixtureBundle,
 	fixtureSite,
@@ -178,6 +178,9 @@ describe('page()', () => {
 			['/en', '/'],
 			['/pt-br/fixture-app/docs/guide?x=1', '/pt-BR/fixture-app/docs/guide?x=1'],
 			['/JA', '/ja'],
+			// An address the table does not know keeps its rest as it came, and the router's own
+			// 404 answers the next hop.
+			['/JA/fixture-app/docs/typo', '/ja/fixture-app/docs/typo'],
 		];
 		for (const [path, location] of cases) {
 			const response = await thrown(server.page(url(path)));
@@ -562,6 +565,16 @@ describe('resource()', () => {
 			301,
 			'/fixture-app/docs/llms.txt',
 		]);
+		const unknown = await server.resource(url('/en/fixture-app/docs/typo.md?x=1'));
+		expect([unknown.status, unknown.headers.get('Location')]).toEqual([
+			301,
+			'/fixture-app/docs/typo.md?x=1',
+		]);
+		const casing = await server.resource(url('/Fixture-App/Docs/LLMS.txt'));
+		expect([casing.status, casing.headers.get('Location')]).toEqual([
+			301,
+			'/fixture-app/docs/llms.txt',
+		]);
 	});
 
 	test('answers a trailing slash with a 301 to the slashless address, query kept, in one hop', async () => {
@@ -864,5 +877,198 @@ describe('the languages a page names agree with the pages that are indexable', (
 		// every worse one.
 		expect(pairs).toBe(4 + 3 + 2 + 1);
 		expect([...answers].sort()).toEqual([false, true]);
+	});
+});
+
+describe('what the host passes', () => {
+	const ORIGIN = 'https://docs.example';
+	const LICENCE = { name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/' };
+	const FACTS = {
+		name: 'Fixture App',
+		description: 'Reads and rewrites NFC tags on an iPhone.',
+		publisher: { name: 'Example', url: 'https://example.com' },
+		platforms: [{ name: 'iPhone', minimumOs: 'iOS 17' }],
+		pricing: { model: 'Free' },
+		status: 'released' as const,
+		productUrl: 'https://example.com/fixture',
+	};
+	const withOptions = () => docsServer({ ...sources, origin: ORIGIN, licence: LICENCE });
+	const request = (path: string, headers: Record<string, string> = {}) =>
+		new Request(`${ORIGIN}${path}`, { headers });
+
+	test('describes the app in llms.txt when a route module passes its facts, by describe or by the catalogue', async () => {
+		const server = withOptions();
+		const described = await server.resource(request('/fixture-app/docs/llms.txt'), {
+			describe: (project) => (project === 'fixture-app' ? FACTS : undefined),
+		});
+		const text = await described.text();
+		expect(text.split('\n').slice(0, 3)).toEqual(['# Fixture App', '', `> ${FACTS.description}`]);
+		expect(text).toContain('- Maker: Example, https://example.com');
+		expect(text).toContain('](https://docs.example/fixture-app/docs/guide/first-tag.md): ');
+		const catalogued = await server.resource(request('/fixture-app/docs/llms.txt'), {
+			apps: () => [{ ...FACTS, id: 'fixture', project: 'fixture-app' }],
+		});
+		expect(await catalogued.text()).toBe(text);
+		// A describer that knows nothing about the project leaves the compiled file in place.
+		const unknown = await server.resource(request('/fixture-app/docs/llms.txt'), {
+			describe: () => undefined,
+		});
+		expect((await unknown.text()).startsWith('# Fixture App\n\n> ')).toBe(true);
+	});
+
+	test('serves the compiled llms.txt with absolute links once there is an origin', async () => {
+		const response = await withOptions().resource(url('/ja/fixture-app/docs/llms.txt'));
+		const text = await response.text();
+		expect(text).toBe(
+			(bundle.objects.get('llms/ja.txt') as string).replace(
+				/\]\(([a-z/-]+\.md)\)/g,
+				(_match, path: string) => `](https://docs.example/ja/fixture-app/docs/${path})`,
+			),
+		);
+		expect(response.headers.get('Content-Language')).toBe('ja');
+	});
+
+	test('gives each markdown page a canonical and a licence Link instead of noindex, and a front matter header', async () => {
+		const response = await withOptions().resource(
+			request('/ja/fixture-app/docs/guide/first-tag.md'),
+			{
+				describe: () => FACTS,
+			},
+		);
+		expect(response.headers.get('Link')).toBe(
+			`<https://docs.example/ja/fixture-app/docs/guide/first-tag>; rel="canonical", <${LICENCE.url}>; rel="license"`,
+		);
+		expect(response.headers.get('X-Robots-Tag')).toBeNull();
+		expect(response.headers.get('Last-Modified')).toBe('Tue, 10 Feb 2026 11:30:00 GMT');
+		const body = await response.text();
+		expect(body.startsWith('---\ntitle: ')).toBe(true);
+		expect(body).toContain('product: "Fixture App"');
+		const unlicensed = await docsServer({ ...sources, origin: ORIGIN }).resource(
+			url('/fixture-app/docs/index.md'),
+		);
+		expect(unlicensed.headers.get('Link')).toBe(
+			'<https://docs.example/fixture-app/docs>; rel="canonical"',
+		);
+	});
+
+	test('gives llms-full.txt a preamble and keeps noindex on it, with the product named by the bundle when the host says nothing', async () => {
+		const response = await withOptions().resource(url('/fixture-app/docs/llms-full.txt'));
+		expect(response.headers.get('X-Robots-Tag')).toBe('noindex');
+		const text = await response.text();
+		expect(text.startsWith('# Fixture App documentation, full text\n')).toBe(true);
+		expect(text).toContain('\n---\ntitle: "Scan your first tag"\n');
+	});
+
+	test('a raw object the build lacks is still a 500 naming it, with an origin and a description', async () => {
+		const missing = { ...sources.text };
+		delete missing[globKey(site, 'raw/en/guide/first-tag.md')];
+		const server = docsServer({ ...sources, text: missing, origin: ORIGIN });
+		for (const path of [
+			'/fixture-app/docs/guide/first-tag.md',
+			'/fixture-app/docs/llms-full.txt',
+		]) {
+			const response = await server.resource(url(path), { describe: () => FACTS });
+			expect([
+				response.status,
+				(await response.text()).includes('raw/en/guide/first-tag.md'),
+			]).toEqual([500, true]);
+		}
+	});
+
+	test('answers a request whose validator still matches with a 304, and a URL alone always with the body', async () => {
+		const server = withOptions();
+		const first = await server.resource(request('/fixture-app/docs/index.md'));
+		const etag = first.headers.get('ETag') as string;
+		const lastModified = first.headers.get('Last-Modified') as string;
+		const byTag = await server.resource(
+			request('/fixture-app/docs/index.md', { 'If-None-Match': etag }),
+		);
+		expect([byTag.status, byTag.body]).toEqual([304, null]);
+		const byDate = await server.resource(
+			request('/fixture-app/docs/llms.txt', {
+				'If-Modified-Since': 'Sat, 01 Jan 2050 00:00:00 GMT',
+			}),
+		);
+		expect(byDate.status).toBe(304);
+		const stale = await server.resource(
+			request('/fixture-app/docs/index.md', {
+				'If-None-Match': '"other"',
+				'If-Modified-Since': lastModified,
+			}),
+		);
+		expect(stale.status).toBe(200);
+		expect((await server.resource(url('/fixture-app/docs/index.md'))).status).toBe(200);
+	});
+
+	test('a page carries its update time and its markdown twin, absolute and with the licence once they are known', async () => {
+		const plain = await docsServer(sources).page(
+			url('/ja/fixture-app/docs/developer/architecture'),
+		);
+		expect([plain.data.updatedAt, plain.data.rawHref]).toEqual([
+			'2026-01-05T09:00:00Z',
+			'/ja/fixture-app/docs/developer/architecture.md',
+		]);
+		expect('rawUrl' in plain.data || 'licence' in plain.data).toBe(false);
+		const full = await withOptions().page(url('/fixture-app/docs/guide/first-tag'));
+		expect(full.data).toMatchObject({
+			updatedAt: '2026-03-15T08:15:00Z',
+			rawHref: '/fixture-app/docs/guide/first-tag.md',
+			rawUrl: 'https://docs.example/fixture-app/docs/guide/first-tag.md',
+			licence: LICENCE,
+		});
+	});
+
+	test('an origin that is not one is a 500 naming it from every method, never a throw at construction', async () => {
+		for (const origin of ['https://docs.example/', 'docs.example', 'https://docs.example/path']) {
+			const server = docsServer({ ...sources, origin });
+			const page = await thrown(server.page(url('/fixture-app/docs')));
+			const resource = await server.resource(url('/fixture-app/docs/llms.txt'));
+			let sitemap: unknown;
+			try {
+				server.sitemap();
+			} catch (error) {
+				sitemap = error;
+			}
+			for (const response of [page, resource, sitemap as Response]) {
+				expect(response.status).toBe(500);
+				expect(await response.text()).toContain(
+					`The docs origin option "${origin}" is not an origin.`,
+				);
+			}
+		}
+		expect(() => docsServer({ ...sources, origin: 'http://localhost:5173' })).not.toThrow();
+	});
+
+	test('sitemap rows carry each language their own date and the newest of them', () => {
+		const rows = new Map(
+			docsServer(sources)
+				.sitemap()
+				.map((row) => [row.path, row]),
+		);
+		const firstTag = rows.get('/fixture-app/docs/guide/first-tag');
+		expect(firstTag?.lastmod).toBe('2026-03-15');
+		expect(firstTag?.lastmods).toEqual({
+			en: '2026-03-15',
+			zh: '2026-02-10',
+			ar: '2026-02-10',
+			es: '2026-02-10',
+			ja: '2026-02-10',
+			fr: '2026-02-10',
+			'pt-BR': '2026-02-10',
+		});
+		const chip = rows.get('/fixture-app/docs/reference/chip-support');
+		expect(Object.keys(chip?.lastmods ?? {})).toEqual(chip?.languages);
+		expect(chip?.lastmod).toBe('2026-02-10');
+	});
+
+	test('names the machine addresses of a mount for a host linking them from its own pages', () => {
+		expect(docsMachineUrls(ORIGIN, site)).toEqual({
+			llms: 'https://docs.example/fixture-app/docs/llms.txt',
+			llmsFull: 'https://docs.example/fixture-app/docs/llms-full.txt',
+		});
+		expect(docsMachineUrls(undefined, site, 'ja')).toEqual({
+			llms: '/ja/fixture-app/docs/llms.txt',
+			llmsFull: '/ja/fixture-app/docs/llms-full.txt',
+		});
 	});
 });

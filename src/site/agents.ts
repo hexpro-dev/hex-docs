@@ -219,10 +219,10 @@ export function tokenBuckets(
  * table's keys.
  */
 export function clientKey(headers: Headers): string {
-	const cloudflare = headers.get('CF-Connecting-IP')?.trim();
-	if (cloudflare) return cloudflare.slice(0, 64);
-	const forwarded = headers.get('X-Forwarded-For')?.split(',')[0]?.trim();
-	if (forwarded) return forwarded.slice(0, 64);
+	const cloudflare = (headers.get('CF-Connecting-IP') ?? '').trim();
+	if (cloudflare !== '') return cloudflare.slice(0, 64);
+	const forwarded = ((headers.get('X-Forwarded-For') ?? '').split(',')[0] as string).trim();
+	if (forwarded !== '') return forwarded.slice(0, 64);
 	return 'shared';
 }
 
@@ -261,7 +261,7 @@ async function readBody(
 
 /** The media type of a header value, without its parameters. */
 function mediaType(value: string | null): string {
-	return (value ?? '').split(';')[0]?.trim().toLowerCase() as string;
+	return ((value ?? '').split(';')[0] as string).trim().toLowerCase();
 }
 
 /** Whether an `Accept` header admits a JSON response. Absent admits everything. */
@@ -315,24 +315,39 @@ class Unavailable extends ToolError {}
  */
 function catalogue(configs: readonly DocsSiteConfig[], host: DocsHostFacts | undefined): Entry[] {
 	const byProject = new Map(configs.map((site) => [site.project, site]));
+	const describe = host?.describe;
 	const entries: Entry[] = [];
 	const claimed = new Set<string>();
 	for (const app of host?.apps?.() ?? []) {
-		const { id, project, ...facts } = app as DocsCatalogueApp;
-		const site = project === undefined ? undefined : byProject.get(project);
-		if (site !== undefined) claimed.add(site.project);
-		entries.push({
-			id,
-			facts: (site === undefined ? undefined : host?.describe?.(site.project)) ?? facts,
-			...(site === undefined ? {} : { site }),
-		});
+		const site = app.project === undefined ? undefined : byProject.get(app.project);
+		if (site === undefined) {
+			entries.push({ id: app.id, facts: factsOnly(app) });
+			continue;
+		}
+		claimed.add(site.project);
+		entries.push({ id: app.id, facts: factsOnly(describe?.(site.project) ?? app), site });
 	}
 	for (const site of configs) {
 		if (claimed.has(site.project)) continue;
-		const facts = host?.describe?.(site.project);
+		const described = describe?.(site.project);
+		const facts = described === undefined ? undefined : factsOnly(described);
 		entries.push({ id: site.project, site, ...(facts === undefined ? {} : { facts }) });
 	}
 	return entries;
+}
+
+/**
+ * The facts alone, without the catalogue's `id` and `project`. A host that answers `describe`
+ * with its catalogue entry is passing exactly that, and an `id` spread over a summary would
+ * rename the app.
+ */
+function factsOnly(value: DocsAppFacts | DocsCatalogueApp): DocsAppFacts {
+	const {
+		id: _id,
+		project: _project,
+		...facts
+	} = value as Partial<DocsCatalogueApp> & DocsAppFacts;
+	return facts;
 }
 
 /** One app by the name an agent used: the catalogue id or the docs project, in any case. */
@@ -491,7 +506,10 @@ const PAGE_ENTRY_SCHEMA = {
 function servedOf(library: AgentLibrary, entry: Entry): Served {
 	const site = entry.site;
 	if (site === undefined) {
-		throw new ToolError(`${entry.facts?.name ?? entry.id} has no documentation on this site yet.`);
+		// An entry with no site came from the host's catalogue, which always carries its facts.
+		throw new ToolError(
+			`${(entry.facts as DocsAppFacts).name} has no documentation on this site yet.`,
+		);
 	}
 	const bundle = library.bundleFor(site);
 	if (!bundle.ok) throw new Unavailable(bundle.message);
@@ -592,14 +610,13 @@ interface SearchInput {
 function searchInput(args: Json): SearchInput {
 	const query = stringArgument(args, 'query', 200, true);
 	const app = stringArgument(args, 'app', 100, false);
+	const lang = languageArgument(args);
+	const audience = audienceArgument(args);
 	return {
 		query,
 		...(app === undefined ? {} : { app }),
-		lang: languageArgument(args),
-		...(() => {
-			const audience = audienceArgument(args);
-			return audience === undefined ? {} : { audience };
-		})(),
+		lang,
+		...(audience === undefined ? {} : { audience }),
 		limit: integerArgument(args, 'limit', 1, MAX_SEARCH_LIMIT) ?? DEFAULT_SEARCH_LIMIT,
 	};
 }
@@ -645,7 +662,8 @@ async function runSearch(
 			});
 		}
 	}
-	hits.sort((a, b) => b.score - a.score || (a.url < b.url ? -1 : 1));
+	// Score, then address by code unit, so equal scores come out in one order on every runtime.
+	hits.sort((a, b) => b.score - a.score || Number(a.url > b.url) - Number(a.url < b.url));
 	return hits.slice(0, input.limit);
 }
 
