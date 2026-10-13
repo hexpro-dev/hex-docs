@@ -247,6 +247,141 @@
 	color: var(--hx-ink, #f2ede6);
 }
 
+/*
+ * The bar under the title: the reading time, the date and the edit link, then the page menu.
+ * The menu's own auto margin keeps it at the inline end when a phone wraps the bar, and it
+ * resolves in the bar's direction because the menu carries no `dir`: its labels do. A
+ * `dir` on the menu itself would put it at the other end of an Arabic page serving an
+ * English fallback, which is the copy button's defect one element along.
+ */
+.hx-root .hx-page-bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem 1rem;
+	margin-block: 0 2rem;
+}
+
+.hx-root .hx-page-bar .hx-meta {
+	flex-wrap: wrap;
+	margin-block: 0;
+}
+
+.hx-root .hx-page-menu {
+	position: relative;
+	margin-inline-start: auto;
+	font-size: 0.875rem;
+}
+
+/*
+ * A preflight makes a summary `display: list-item` with a marker, so both are stated, and the
+ * chevron is the tree's: a box clipped to a shape, symmetric, so it needs no mirror.
+ */
+.hx-root .hx-page-menu-summary {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	list-style: none;
+	min-block-size: 24px;
+	margin: 0;
+	padding: 0.15rem 0.6rem;
+	background: transparent;
+	border: 1px solid var(--hx-control, #78716c);
+	border-radius: 6px;
+	color: var(--hx-dim, #a89f93);
+	cursor: pointer;
+}
+
+.hx-root .hx-page-menu-summary::-webkit-details-marker {
+	display: none;
+}
+
+.hx-root .hx-page-menu-summary::after {
+	content: '';
+	flex: none;
+	inline-size: 0.6rem;
+	block-size: 0.4rem;
+	background: var(--hx-dim, #a89f93);
+	clip-path: polygon(0 0, 16% 0, 50% 62%, 84% 0, 100% 0, 50% 100%);
+}
+
+.hx-root .hx-page-menu[open] > .hx-page-menu-summary::after {
+	transform: rotate(180deg);
+}
+
+.hx-root .hx-page-menu-summary:hover {
+	color: var(--hx-ink, #f2ede6);
+}
+
+/*
+ * The list opens below the summary and over the article, anchored at the inline end, which is
+ * the end the menu sits at, so it grows back across the column rather than off the page.
+ */
+.hx-root .hx-page-menu-list {
+	position: absolute;
+	inset-block-start: calc(100% + 0.25rem);
+	inset-inline-end: 0;
+	z-index: 3;
+	min-inline-size: 13rem;
+	margin: 0;
+	padding: 0.25rem;
+	list-style: none;
+	background: var(--hx-surface, #171512);
+	border: 1px solid var(--hx-control, #78716c);
+	border-radius: 8px;
+}
+
+.hx-root .hx-page-menu-list li {
+	margin: 0;
+	padding: 0;
+}
+
+.hx-root .hx-page-menu-item {
+	display: block;
+	inline-size: 100%;
+	min-block-size: 24px;
+	margin: 0;
+	padding: 0.4rem 0.6rem;
+	background: transparent;
+	border: 0;
+	border-radius: 4px;
+	color: var(--hx-ink, #f2ede6);
+	font: inherit;
+	text-align: start;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.hx-root .hx-page-menu-item:hover {
+	background: var(--hx-raised, #1f1c18);
+}
+
+.hx-root .hx-page-menu-item:disabled {
+	background: transparent;
+	color: var(--hx-faint, #6f675d);
+	cursor: default;
+}
+
+/*
+ * The licence under the page, in the metadata's colour and with the edit link's underline, for
+ * the reason the edit link gives.
+ */
+.hx-root .hx-licence {
+	margin-block: 2rem 0;
+	color: var(--hx-dim, #a89f93);
+	font-size: 0.8125rem;
+}
+
+.hx-root .hx-licence a {
+	color: inherit;
+	text-decoration: underline;
+	text-underline-offset: 0.2em;
+}
+
+.hx-root .hx-licence a:hover {
+	color: var(--hx-ink, #f2ede6);
+}
+
 .hx-root .hx-heading {
 	font-family: var(--hx-font-display, var(--font-display, system-ui, sans-serif));
 	font-weight: 600;

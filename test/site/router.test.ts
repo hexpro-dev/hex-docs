@@ -74,28 +74,50 @@ describe('the URL table', () => {
 	// [url, what the router and the loaders answer]. Written out whole, one row per address,
 	// so a changed answer names its address.
 	const table: [string, Omit<Answer, 'body'>][] = [
-		// The docs home, a leaf and a section root, each with and without a trailing slash.
+		// The docs home, a leaf and a section root, each with and without a trailing slash. The
+		// slash is a 301 to the one spelling the canonical, the sitemap and every link agree on.
 		['/hex-nfc/docs', { route: 'en/hex-nfc/docs', status: 200, indexable: true }],
-		['/hex-nfc/docs/', { route: 'en/hex-nfc/docs', status: 200, indexable: true }],
+		['/hex-nfc/docs/', { route: 'en/hex-nfc/docs', status: 301, location: '/hex-nfc/docs' }],
 		[
 			'/hex-nfc/docs/guide/first-tag',
 			{ route: 'en/hex-nfc/docs/guide/first-tag', status: 200, indexable: true },
 		],
 		[
 			'/hex-nfc/docs/guide/first-tag/',
-			{ route: 'en/hex-nfc/docs/guide/first-tag', status: 200, indexable: true },
+			{
+				route: 'en/hex-nfc/docs/guide/first-tag',
+				status: 301,
+				location: '/hex-nfc/docs/guide/first-tag',
+			},
 		],
 		['/hex-nfc/docs/guide', { route: 'en/hex-nfc/docs/guide', status: 200, indexable: true }],
-		['/hex-nfc/docs/guide/', { route: 'en/hex-nfc/docs/guide', status: 200, indexable: true }],
+		[
+			'/hex-nfc/docs/guide/',
+			{ route: 'en/hex-nfc/docs/guide', status: 301, location: '/hex-nfc/docs/guide' },
+		],
 		// A hidden page is published and indexable; only the sidebar and the sitemap skip it.
 		[
 			'/hex-nfc/docs/reference/api',
 			{ route: 'en/hex-nfc/docs/reference/api', status: 200, indexable: true },
 		],
-		// Served, and not indexable at a spelling that is not the canonical one.
+		// Any other spelling of an address is a 301 to it, in one hop, query kept.
 		[
-			'/HEX-NFC/Docs/Guide/First-Tag',
-			{ route: 'en/hex-nfc/docs/guide/first-tag', status: 200, indexable: false },
+			'/HEX-NFC/Docs/Guide/First-Tag?x=1',
+			{
+				route: 'en/hex-nfc/docs/guide/first-tag',
+				status: 301,
+				location: '/hex-nfc/docs/guide/first-tag?x=1',
+			},
+		],
+		[
+			'/hex-nfc/docs/gu%69de',
+			{ route: 'en/hex-nfc/docs/guide', status: 301, location: '/hex-nfc/docs/guide' },
+		],
+		// Under `:lang` the host's own language redirect runs first and wins, keeping the rest of
+		// the path as it came, so this one is two hops: the second is the row above.
+		[
+			'/EN/HEX-NFC/docs/guide',
+			{ route: 'lang/hex-nfc/docs/guide', status: 301, location: '/HEX-NFC/docs/guide' },
 		],
 
 		// A mistyped page reaches no route, so it gets the site's own 404 and no docs loader

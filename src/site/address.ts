@@ -219,4 +219,14 @@ export interface DocsSitemapRow {
 	readonly priority: string;
 	readonly changefreq: string;
 	readonly languages: Locale[];
+	/**
+	 * `YYYY-MM-DD`, the newest `updatedAt` of the page in the languages it is listed in. The
+	 * sitemap's `<lastmod>` for a host that writes one date per page.
+	 */
+	readonly lastmod: string;
+	/**
+	 * Each listed language's own date, for a host that writes one `<url>` per language, which is
+	 * what both consumers do. A stale translation was last changed when it was translated.
+	 */
+	readonly lastmods: Partial<Record<Locale, string>>;
 }

@@ -24,6 +24,7 @@
  */
 
 import { AST_VERSION, type Block, type Heading } from '../contracts/ast.js';
+import type { DocsLicence } from '../contracts/host.js';
 import { isLocale, LOCALES, type Locale } from '../contracts/locales.js';
 import type { BundleManifest, PageLocaleRecord, PageRecord } from '../contracts/manifest.js';
 import type { CompiledPage } from '../contracts/page.js';
@@ -34,7 +35,7 @@ import type {
 	DocsTranslationNotice,
 } from '../contracts/site.js';
 import { isSectionRoot, requireSlug, slugParent, type ParsedSlug } from '../contracts/slug.js';
-import { docsHref, docsHrefFor, type DocsAddress } from './address.js';
+import { docsHref, docsHrefFor, docsRawHref, type DocsAddress } from './address.js';
 import { seoFor, translationNotice } from './notice.js';
 
 export interface DocsRouteInput {
@@ -137,6 +138,26 @@ export interface DocsPageData {
 	/** The locale whose search index this page should query. */
 	searchLocale: Locale;
 	editUrl?: string;
+	/**
+	 * When the words on the page were last changed: the manifest's `updatedAt` for the locale
+	 * the page is served in, which on a fallback is the source's. The shell prints it and a host
+	 * can put it in its structured data.
+	 */
+	updatedAt: string;
+	/**
+	 * The page's markdown twin at the reader's address, root-relative: `/ja/hex-nfc/docs/guide/index.md`.
+	 * It falls back per page exactly as the HTML page does. The shell's page menu fetches and
+	 * links it, and a host advertises it with `<link rel="alternate" type="text/markdown">`.
+	 */
+	rawHref: string;
+	/**
+	 * The same address, absolute, when the server was given an origin. The page menu's links that
+	 * hand the page to an assistant are drawn only when this exists, because a relative address
+	 * means nothing to a service on another site.
+	 */
+	rawUrl?: string;
+	/** The documentation's licence, when the server was given one. The shell states it. */
+	licence?: DocsLicence;
 }
 
 export type DocsRouteResult =
@@ -549,6 +570,8 @@ export async function docsRoute(input: DocsRouteInput): Promise<DocsRouteResult>
 		// was never built is the silent failure the header comparison exists to make loud,
 		// one level up.
 		searchLocale: input.manifest.search[input.locale] !== undefined ? input.locale : source,
+		updatedAt: (record.locales[served] as PageLocaleRecord).updatedAt,
+		rawHref: docsRawHref({ basePath: input.site.basePath, locale: input.locale, slug: input.slug }),
 		...(input.edit === undefined
 			? {}
 			: {

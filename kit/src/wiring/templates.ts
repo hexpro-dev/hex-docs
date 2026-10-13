@@ -108,6 +108,7 @@ export const DOCS = docsServer({
 		["${bundles}/raw/**/*.md", "${bundles}/llms/*.txt"],
 		{ query: "?raw", import: "default" },
 	),
+	search: import.meta.glob("${bundles}/search/*.idx.json", { import: "default" }),
 });
 `;
 }
@@ -177,7 +178,8 @@ export default function DocsRoute() {
  * `<site>/app/routes/docs.machine.tsx`: `llms.txt`, `llms-full.txt` and every raw page.
  *
  * A resource route, which is to say a loader and no default export, and the absence is the
- * contract. A default export makes every one of these addresses a document route that
+ * contract. The loader hands over the whole request rather than its URL, so a conditional request
+ * is answered with a 304. A default export makes every one of these addresses a document route that
  * renders the site shell around a plain-text body. The rows are declared top level and run
  * no parent loader, which is why the server validates the language segment itself.
  */
@@ -193,7 +195,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { DOCS } from "../lib/docs.server";
 
 export function loader({ request }: LoaderFunctionArgs) {
-	return DOCS.resource(new URL(request.url));
+	return DOCS.resource(request);
 }
 `;
 }

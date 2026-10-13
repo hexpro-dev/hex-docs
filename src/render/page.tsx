@@ -32,7 +32,14 @@
  * `headings` leaves that heading unlinkable.
  */
 
-import { useMemo, useRef, type ReactElement, type ReactNode } from 'react';
+import {
+	useMemo,
+	useRef,
+	useState,
+	type ReactElement,
+	type ReactNode,
+	type RefObject,
+} from 'react';
 
 import type { Locale } from '../contracts/locales.js';
 import { directionOf } from '../contracts/locales.js';
@@ -42,13 +49,21 @@ import { docsHref } from '../site/address.js';
 import { contentMark, interfaceMark, type LangMark } from '../site/direction.js';
 import { IDS, navGroupId } from '../site/ids.js';
 import type { DocsNavNode, DocsPageData } from '../site/route.js';
-import { languageName, uiPlural, uiString } from '../ui/strings.js';
+import {
+	formatDocsDate,
+	languageName,
+	uiPlural,
+	uiString,
+	UI_STRINGS,
+	type UiKey,
+} from '../ui/strings.js';
 import {
 	closeOnLink,
 	escapeCloses,
 	openTree,
 	revealCurrent,
 	useAliasScroll,
+	useHydrated,
 	useCloseOnFocusElsewhere,
 	useCloseOnNavigate,
 	useDocsEvents,
@@ -85,27 +100,28 @@ export interface DocsPageProps extends DocsPageData {
 	themeClass?: string;
 	chrome?: DocsChrome;
 	/**
-	 * How a date is written.
+	 * How a date is written, given the stored timestamp and the reader's language.
 	 *
-	 * The default is the ISO date the bundle already stores, and that is deliberate rather
-	 * than lazy. `Intl.DateTimeFormat` answers from whatever ICU the runtime was built
-	 * with, so a server on one Node and a browser on another can produce different text
-	 * for the same date, which is a hydration mismatch on a string the reader sees. A
-	 * consumer that already has a date formatter its site agrees with passes it here.
+	 * The default is `formatDocsDate`, a hand-written table per language, and not
+	 * `Intl.DateTimeFormat`, which answers from whatever ICU the runtime was built with, so a
+	 * server on one Node and a browser on another can produce different text for the same date:
+	 * a hydration mismatch on a string the reader sees. A consumer that already has a date
+	 * formatter its site agrees with passes it here.
 	 */
-	formatDate?: (iso: string) => string;
+	formatDate?: (iso: string, locale: Locale) => string;
 }
 
-const isoDate = (iso: string): string => iso.slice(0, 10);
+const localDate = (iso: string, locale: Locale): string => formatDocsDate(locale, iso);
 
 export function DocsPage(props: DocsPageProps): ReactElement {
 	const Link = props.Link ?? PlainLink;
-	const formatDate = props.formatDate ?? isoDate;
+	const formatDate = props.formatDate ?? localDate;
 	const root = useRef<HTMLDivElement | null>(null);
 	const article = useRef<HTMLElement | null>(null);
 	const live = useRef<HTMLParagraphElement | null>(null);
 	const treeDisclosure = useRef<HTMLDetailsElement | null>(null);
 	const tocDisclosure = useRef<HTMLDetailsElement | null>(null);
+	const pageMenu = useRef<HTMLDetailsElement | null>(null);
 	const foot = useRef<HTMLDivElement | null>(null);
 	const emit = useDocsEvents(root);
 	const reduced = useReducedMotion();
@@ -142,7 +158,9 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 	useCloseOnNavigate(docsHref({ ...props.address, slug: page.slug }), [
 		treeDisclosure,
 		tocDisclosure,
+		pageMenu,
 	]);
+	useCloseOnFocusElsewhere(pageMenu, pageMenu);
 	useCloseOnFocusElsewhere(tocDisclosure, foot);
 	useNavigationAnnounce(
 		page.slug,
@@ -276,14 +294,41 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 					<h1 id={IDS.title} className="hx-title">
 						{page.title}
 					</h1>
-					<p className="hx-meta" {...chrome}>
-						<span>{uiPlural(props.locale, 'readingTime', page.reading.minutes)}</span>
-						{props.editUrl === undefined ? null : (
-							<a className="hx-edit" href={props.editUrl}>
-								{uiString(props.locale, 'editPage')}
-							</a>
-						)}
-					</p>
+					{/*
+					 * The bar is a box and carries no mark: its words do. The page menu sits at the
+					 * bar's inline end through its own auto margin, and an auto margin resolves in the
+					 * item's own direction, so a `dir` on the menu would move it to the other end of an
+					 * Arabic page serving an English fallback, which is the Copy button's defect.
+					 */}
+					<div className="hx-page-bar">
+						<p className="hx-meta" {...chrome}>
+							<span>{uiPlural(props.locale, 'readingTime', page.reading.minutes)}</span>
+							<span className="hx-updated">
+								{withNode(
+									props.locale,
+									'lastUpdated',
+									'date',
+									<time dateTime={props.updatedAt.slice(0, 10)}>
+										{formatDate(props.updatedAt, props.locale)}
+									</time>,
+								)}
+							</span>
+							{props.editUrl === undefined ? null : (
+								<a className="hx-edit" href={props.editUrl}>
+									{uiString(props.locale, 'editPage')}
+								</a>
+							)}
+						</p>
+						<PageMenu
+							disclosure={pageMenu}
+							locale={props.locale}
+							rawHref={props.rawHref}
+							rawUrl={props.rawUrl}
+							emit={emit}
+							live={live}
+							mark={chrome}
+						/>
+					</div>
 
 					<div className="hx-prose">{renderBlocks(page.body, context)}</div>
 
@@ -326,6 +371,18 @@ export function DocsPage(props: DocsPageProps): ReactElement {
 								</Link>
 							)}
 						</nav>
+					)}
+					{props.licence === undefined ? null : (
+						<p className="hx-licence" {...chrome}>
+							{withNode(
+								props.locale,
+								'licensedUnder',
+								'licence',
+								<a href={props.licence.url} rel="license">
+									{props.licence.name}
+								</a>,
+							)}
+						</p>
 					)}
 				</article>
 
@@ -540,7 +597,7 @@ function TranslationNotice({
 	notice: DocsTranslationNotice;
 	address: DocsPageData['address'];
 	slug: string;
-	formatDate: (iso: string) => string;
+	formatDate: (iso: string, locale: Locale) => string;
 	Link: DocsLinkComponent;
 	/**
 	 * The reader's language, where the article's is not it.
@@ -568,12 +625,140 @@ function TranslationNotice({
 		<aside className="hx-banner" data-banner={notice.state} {...mark}>
 			<p>
 				{notice.state === 'stale'
-					? uiString(locale, 'noticeStale', { date: formatDate(notice.sourceUpdated) })
+					? uiString(locale, 'noticeStale', { date: formatDate(notice.sourceUpdated, locale) })
 					: uiString(locale, 'noticeFallback', {
 							language: languageName(locale, notice.requested),
 						})}
 			</p>
 			<Link to={sourceHref}>{uiString(locale, 'noticeReadEnglish')}</Link>
 		</aside>
+	);
+}
+
+/**
+ * An interface string with one token filled by an element rather than a string: a `<time>` or
+ * a link. The template decides where the element goes, because word order is the translator's,
+ * and "Last updated {date}" may put the date first in another language.
+ */
+function withNode(locale: Locale, key: UiKey, token: string, node: ReactElement): ReactNode[] {
+	const [before, after] = UI_STRINGS[locale][key].split(`{${token}}`) as [string, string];
+	return [before, <span key="node">{node}</span>, after].filter((part) => part !== '');
+}
+
+/**
+ * The page menu: the page's Markdown, copied or opened, and the page handed to an assistant.
+ *
+ * A native disclosure, so the keyboard, the summary's role and its expanded state are the
+ * browser's, and the list is in the document for a reader with no script. Escape closes it and
+ * puts focus back on the summary, and focus moving anywhere outside it closes it, which are the
+ * two rules the outline already keeps.
+ *
+ * Copy fetches the same-origin `.md`, which `connect-src 'self'` allows, and writes it to the
+ * clipboard. Through a `ClipboardItem` holding the fetch's promise where the browser has one,
+ * because Safari refuses a clipboard write that arrives after an await and is no longer tied to
+ * the click that asked for it, and through `writeText` after the fetch where it has not. The
+ * result is announced in the shell's polite live region, so it is heard without moving focus.
+ * The button is disabled until the page is interactive, for the reason the code block's is.
+ *
+ * The two assistant links are drawn only when the server knows the page's absolute address,
+ * because a prompt naming a root-relative path means nothing to a service on another site. They
+ * are plain links, which is a navigation, so the host's Content Security Policy is untouched.
+ */
+function PageMenu({
+	disclosure,
+	locale,
+	rawHref,
+	rawUrl,
+	emit,
+	live,
+	mark,
+}: {
+	disclosure: RefObject<HTMLDetailsElement | null>;
+	locale: Locale;
+	rawHref: string;
+	rawUrl: string | undefined;
+	emit: ReturnType<typeof useDocsEvents>;
+	live: RefObject<HTMLParagraphElement | null>;
+	/** The reader's language, where the article's is not it. On each label, never on a box. */
+	mark: LangMark;
+}): ReactElement {
+	const hydrated = useHydrated();
+	const [copied, setCopied] = useState(false);
+
+	const announce = (message: string): void => {
+		const region = live.current as HTMLParagraphElement;
+		region.textContent = message;
+		setTimeout(() => {
+			region.textContent = '';
+		}, 1000);
+	};
+
+	const copy = (): void => {
+		const text = fetch(rawHref).then((response) => {
+			if (!response.ok) throw new Error(String(response.status));
+			return response.text();
+		});
+		const written =
+			typeof ClipboardItem === 'function'
+				? navigator.clipboard.write([
+						new ClipboardItem({
+							'text/plain': text.then((body) => new Blob([body], { type: 'text/plain' })),
+						}),
+					])
+				: text.then((body) => navigator.clipboard.writeText(body));
+		written.then(
+			() => {
+				setCopied(true);
+				announce(uiString(locale, 'markdownCopied'));
+				emit('hexdocs:copy', { kind: 'markdown' });
+				setTimeout(() => setCopied(false), 2000);
+			},
+			() => announce(uiString(locale, 'markdownCopyFailed')),
+		);
+	};
+
+	const prompt =
+		rawUrl === undefined ? undefined : uiString(locale, 'askAboutPage', { url: rawUrl });
+	const assistants: [UiKey, string][] =
+		prompt === undefined
+			? []
+			: [
+					['openInChatGpt', `https://chatgpt.com/?q=${encodeURIComponent(prompt)}`],
+					['openInClaude', `https://claude.ai/new?q=${encodeURIComponent(prompt)}`],
+				];
+
+	return (
+		<details
+			ref={disclosure}
+			className="hx-page-menu"
+			onKeyDown={escapeCloses(disclosure)}
+			suppressHydrationWarning
+		>
+			<summary className="hx-page-menu-summary">
+				<span {...mark}>{uiString(locale, 'pageMenu')}</span>
+			</summary>
+			<ul className="hx-page-menu-list">
+				<li>
+					<button type="button" className="hx-page-menu-item" disabled={!hydrated} onClick={copy}>
+						<span {...mark}>{uiString(locale, copied ? 'copied' : 'copyMarkdown')}</span>
+					</button>
+				</li>
+				<li>
+					<a className="hx-page-menu-item" href={rawHref} type="text/markdown">
+						<span {...mark}>{uiString(locale, 'viewMarkdown')}</span>
+					</a>
+				</li>
+				{assistants.map(([key, href]) => (
+					<li key={key}>
+						<a className="hx-page-menu-item" href={href} target="_blank" rel="noopener noreferrer">
+							<span {...mark}>{uiString(locale, key)}</span>
+							<span className="hx-sr" {...mark}>
+								{uiString(locale, 'externalLink')}
+							</span>
+						</a>
+					</li>
+				))}
+			</ul>
+		</details>
 	);
 }

@@ -375,6 +375,7 @@ function expectedFiles(): { bundle: string[]; public: string[] } {
 	for (const locale of manifest.locales) {
 		if (manifest.search[locale] !== undefined) {
 			publicFiles.push(searchKey(locale).replace(/\.gz$/, ''));
+			bundle.push(searchKey(locale).replace(/\.gz$/, ''));
 		}
 		if (manifest.llms[locale] !== undefined) bundle.push(llmsKey(locale));
 	}
@@ -423,14 +424,17 @@ describe.each(CONSUMER_SHAPES)('a warm cache, on the %s consumer', (shape) => {
 		expect(tree(bundleDirectory)).toEqual(expectedFiles().bundle);
 	});
 
-	test('the two trees are disjoint, and neither holds the other one kind of file', () => {
-		// The split is decided by shipped renderer code rather than by taste, so it is
-		// asserted in both directions: a search index under the app source is a file the
-		// browser cannot fetch, and a page payload under `public/` is a payload served to
-		// anybody who guesses the URL instead of being a code-split chunk.
+	test('the two trees share only the search index, and neither holds the other one kind of file', () => {
+		// The split is decided by shipped code rather than by taste, so it is asserted in both
+		// directions: an asset under the app source is a file the browser cannot fetch, and a
+		// page payload under `public/` is a payload served to anybody who guesses the URL
+		// instead of being a code-split chunk. The search index is the one file in both, because
+		// the browser searches with it and so does the agent interface on the server.
 		const bundleDirectory = join(site.directory, 'app', 'docs', '_bundles', PROJECT, LABEL);
 		const publicDirectory = join(site.directory, 'public', '_docs', PROJECT, LABEL);
-		expect(tree(bundleDirectory).filter((path) => path.startsWith('search/'))).toEqual([]);
+		expect(tree(bundleDirectory).filter((path) => path.startsWith('search/'))).toEqual(
+			tree(publicDirectory).filter((path) => path.startsWith('search/')),
+		);
 		expect(tree(bundleDirectory).filter((path) => path.startsWith('assets/'))).toEqual([]);
 		expect(tree(publicDirectory).filter((path) => path.startsWith('pages/'))).toEqual([]);
 		expect(tree(publicDirectory).filter((path) => path.startsWith('raw/'))).toEqual([]);
@@ -463,9 +467,11 @@ describe.each(CONSUMER_SHAPES)('a warm cache, on the %s consumer', (shape) => {
 		for (const locale of manifest.locales) {
 			const search = manifest.search[locale];
 			if (search !== undefined) {
-				const bytes = readFileSync(join(publicDirectory, 'search', `${locale}.idx.json`));
-				expect([locale, sha256Hex(bytes)]).toEqual([locale, search.digest]);
-				checked += 1;
+				for (const directory of [publicDirectory, bundleDirectory]) {
+					const bytes = readFileSync(join(directory, 'search', `${locale}.idx.json`));
+					expect([locale, sha256Hex(bytes)]).toEqual([locale, search.digest]);
+					checked += 1;
+				}
 			}
 		}
 		for (const locale of manifest.locales) {

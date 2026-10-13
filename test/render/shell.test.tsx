@@ -18,6 +18,7 @@ import {
 	CALLOUT_LABELS,
 	PLURAL_KEYS,
 	PLURAL_STRINGS,
+	formatDocsDate,
 	UI_STRINGS,
 	type UiKey,
 } from '../../src/ui/strings.js';
@@ -659,7 +660,9 @@ describe('the notices', () => {
 		const { html, data } = await shell('ja', 'guide/first-tag');
 		expect(data.notice.state).toBe('stale');
 		expect(html).toContain('data-banner="stale"');
-		expect(html).toContain(data.page.translation.sourceUpdated.slice(0, 10));
+		// In the reader's language, from the table, and never from `Intl`, whose answer depends
+		// on the ICU each runtime was built with.
+		expect(html).toContain(formatDocsDate('ja', data.page.translation.sourceUpdated as string));
 	});
 
 	test('a fallback names the reader language in the reader language', async () => {

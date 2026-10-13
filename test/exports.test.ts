@@ -41,6 +41,13 @@ import * as renderer from '../src/render/index.js';
 import type {
 	// src/site/address.ts
 	DocsAddress,
+	// src/contracts/host.ts and src/site/serve.ts: what a consuming site passes the server
+	DocsAgentConfig,
+	DocsAppFacts,
+	DocsCatalogueApp,
+	DocsHostFacts,
+	DocsLicence,
+	DocsServerOptions,
 	// src/site/direction.ts
 	Direction,
 	DocsCrumb,
@@ -64,6 +71,7 @@ import type { DocsChrome, DocsLinkComponent, DocsPageProps, EmitFn } from '../sr
  */
 const RUNTIME = {
 	barrel: [
+		'APP_STATUSES',
 		'ARABIC_FOLDS',
 		'ASSET_EXTENSIONS',
 		'AST_NODE_TYPES',
@@ -87,6 +95,7 @@ const RUNTIME = {
 		'COMMIT_SHA_PATTERN',
 		'CONTAINER_DIRECTIVE_NAMES',
 		'CONTAINER_DIRECTIVE_PATTERN',
+		'DATE_FORMATS',
 		'DEFAULT_AUDIENCE',
 		'DEFAULT_B',
 		'DEFAULT_BUDGETS',
@@ -205,6 +214,7 @@ const RUNTIME = {
 		'directionOf',
 		'docsHref',
 		'docsHrefFor',
+		'docsMachineUrls',
 		'docsRawHref',
 		'docsRouteRows',
 		'docsSeoFromMatches',
@@ -212,6 +222,7 @@ const RUNTIME = {
 		'failedRow',
 		'foldArabic',
 		'foldTerm',
+		'formatDocsDate',
 		'formatSlug',
 		'headingId',
 		'houseStyleRules',
@@ -239,6 +250,7 @@ const RUNTIME = {
 		'normaliseLocale',
 		'normaliseText',
 		'notRunRow',
+		'originProblem',
 		'pageKey',
 		'paletteValue',
 		'parseFenceInfo',
@@ -380,6 +392,25 @@ describe('the public surface', () => {
 		const chrome: DocsChrome = {};
 		const props: Pick<DocsPageProps, 'themeClass'> = {};
 		const data: Pick<DocsPageData, 'locale'> = { locale };
+		const licence: DocsLicence = { name: 'CC BY 4.0', url: 'https://example.com/licence' };
+		const facts: DocsAppFacts = {
+			name: 'App',
+			description: 'An app.',
+			publisher: { name: 'Publisher', url: 'https://example.com' },
+			platforms: [],
+			pricing: { model: 'Free' },
+			status: 'released',
+			productUrl: 'https://example.com/app',
+		};
+		const app: DocsCatalogueApp = { ...facts, id: 'app' };
+		const host: DocsHostFacts = { describe: () => facts, apps: () => [app] };
+		const agents: Pick<DocsAgentConfig, 'mcp'> = { mcp: '/mcp' };
+		const options: Pick<DocsServerOptions, 'origin' | 'licence'> = { licence };
+		expect([host.apps?.().length, agents.mcp, options.licence?.name]).toEqual([
+			1,
+			'/mcp',
+			'CC BY 4.0',
+		]);
 		expect([
 			marks.length,
 			direction,

@@ -205,15 +205,18 @@ export function globKey(site: DocsSiteConfig, path: string, prefix = '../docs'):
 	return `${prefix}/${BUNDLE_TREE}/${site.project}/${label}/${path}`;
 }
 
-/** The four sources, for one site over one bundle. */
-export function fixtureSources(bundle: FixtureBundle, site: DocsSiteConfig): DocsSources {
+/** The five sources, for one site over one bundle. */
+export function fixtureSources(bundle: FixtureBundle, site: DocsSiteConfig): Required<DocsSources> {
 	const pages: DocsSources['pages'] = {};
 	const text: DocsSources['text'] = {};
+	const search: NonNullable<DocsSources['search']> = {};
 	for (const [path, body] of bundle.objects) {
 		if (path.startsWith('pages/')) {
 			pages[globKey(site, path)] = async () => JSON.parse(body) as unknown;
 		} else if (path.startsWith('raw/') || path.startsWith('llms/')) {
 			text[globKey(site, path)] = async () => body;
+		} else if (path.startsWith('search/')) {
+			search[globKey(site, path)] = async () => JSON.parse(body) as unknown;
 		}
 	}
 	return {
@@ -221,5 +224,6 @@ export function fixtureSources(bundle: FixtureBundle, site: DocsSiteConfig): Doc
 		manifests: { [globKey(site, 'manifest.json')]: bundle.manifest },
 		pages,
 		text,
+		search,
 	};
 }

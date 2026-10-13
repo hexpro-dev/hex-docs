@@ -81,6 +81,15 @@ export const UI_KEYS = [
 	'notFoundBody',
 	'unsupportedTitle',
 	'unsupportedBody',
+	'lastUpdated',
+	'pageMenu',
+	'viewMarkdown',
+	'openInChatGpt',
+	'openInClaude',
+	'askAboutPage',
+	'markdownCopied',
+	'markdownCopyFailed',
+	'licensedUnder',
 ] as const;
 
 export type UiKey = (typeof UI_KEYS)[number];
@@ -127,6 +136,15 @@ export const UI_STRINGS: Record<Locale, Record<UiKey, string>> = {
 		notFoundBody: 'This page does not exist in this version of the documentation.',
 		unsupportedTitle: 'This page cannot be displayed',
 		unsupportedBody: 'It was published in a newer format than this site understands.',
+		lastUpdated: 'Last updated {date}',
+		pageMenu: 'Page options',
+		viewMarkdown: 'View as Markdown',
+		openInChatGpt: 'Open in ChatGPT',
+		openInClaude: 'Open in Claude',
+		askAboutPage: 'Read {url} so I can ask questions about it.',
+		markdownCopied: 'Page copied as Markdown.',
+		markdownCopyFailed: 'The page could not be copied. Use View as Markdown instead.',
+		licensedUnder: 'Documentation licensed under {licence}',
 	},
 	zh: {
 		skipToContent: '跳至文档内容',
@@ -169,6 +187,15 @@ export const UI_STRINGS: Record<Locale, Record<UiKey, string>> = {
 		notFoundBody: '此版本的文档中没有该页面。',
 		unsupportedTitle: '无法显示此页面',
 		unsupportedBody: '此页面发布时使用的格式较新，本站尚无法识别。',
+		lastUpdated: 'Last updated {date}',
+		pageMenu: 'Page options',
+		viewMarkdown: 'View as Markdown',
+		openInChatGpt: 'Open in ChatGPT',
+		openInClaude: 'Open in Claude',
+		askAboutPage: 'Read {url} so I can ask questions about it.',
+		markdownCopied: 'Page copied as Markdown.',
+		markdownCopyFailed: 'The page could not be copied. Use View as Markdown instead.',
+		licensedUnder: 'Documentation licensed under {licence}',
 	},
 	ar: {
 		skipToContent: 'تخطي إلى التوثيق',
@@ -211,6 +238,15 @@ export const UI_STRINGS: Record<Locale, Record<UiKey, string>> = {
 		notFoundBody: 'هذه الصفحة غير موجودة في هذا الإصدار من التوثيق.',
 		unsupportedTitle: 'تعذّر عرض هذه الصفحة',
 		unsupportedBody: 'نُشرت بتنسيق أحدث مما يفهمه هذا الموقع.',
+		lastUpdated: 'Last updated {date}',
+		pageMenu: 'Page options',
+		viewMarkdown: 'View as Markdown',
+		openInChatGpt: 'Open in ChatGPT',
+		openInClaude: 'Open in Claude',
+		askAboutPage: 'Read {url} so I can ask questions about it.',
+		markdownCopied: 'Page copied as Markdown.',
+		markdownCopyFailed: 'The page could not be copied. Use View as Markdown instead.',
+		licensedUnder: 'Documentation licensed under {licence}',
 	},
 	es: {
 		skipToContent: 'Saltar a la documentación',
@@ -253,6 +289,15 @@ export const UI_STRINGS: Record<Locale, Record<UiKey, string>> = {
 		notFoundBody: 'Esta página no existe en esta versión de la documentación.',
 		unsupportedTitle: 'No se puede mostrar esta página',
 		unsupportedBody: 'Se publicó en un formato más reciente del que este sitio puede leer.',
+		lastUpdated: 'Last updated {date}',
+		pageMenu: 'Page options',
+		viewMarkdown: 'View as Markdown',
+		openInChatGpt: 'Open in ChatGPT',
+		openInClaude: 'Open in Claude',
+		askAboutPage: 'Read {url} so I can ask questions about it.',
+		markdownCopied: 'Page copied as Markdown.',
+		markdownCopyFailed: 'The page could not be copied. Use View as Markdown instead.',
+		licensedUnder: 'Documentation licensed under {licence}',
 	},
 	ja: {
 		skipToContent: 'ドキュメントへスキップ',
@@ -295,6 +340,15 @@ export const UI_STRINGS: Record<Locale, Record<UiKey, string>> = {
 		notFoundBody: 'このページは、このバージョンのドキュメントには存在しません。',
 		unsupportedTitle: 'このページは表示できません',
 		unsupportedBody: 'このサイトが対応していない新しい形式で公開されています。',
+		lastUpdated: 'Last updated {date}',
+		pageMenu: 'Page options',
+		viewMarkdown: 'View as Markdown',
+		openInChatGpt: 'Open in ChatGPT',
+		openInClaude: 'Open in Claude',
+		askAboutPage: 'Read {url} so I can ask questions about it.',
+		markdownCopied: 'Page copied as Markdown.',
+		markdownCopyFailed: 'The page could not be copied. Use View as Markdown instead.',
+		licensedUnder: 'Documentation licensed under {licence}',
 	},
 	fr: {
 		skipToContent: 'Aller à la documentation',
@@ -338,6 +392,15 @@ export const UI_STRINGS: Record<Locale, Record<UiKey, string>> = {
 		unsupportedTitle: 'Cette page ne peut pas être affichée',
 		unsupportedBody:
 			'Elle a été publiée dans un format plus récent que celui que ce site sait lire.',
+		lastUpdated: 'Last updated {date}',
+		pageMenu: 'Page options',
+		viewMarkdown: 'View as Markdown',
+		openInChatGpt: 'Open in ChatGPT',
+		openInClaude: 'Open in Claude',
+		askAboutPage: 'Read {url} so I can ask questions about it.',
+		markdownCopied: 'Page copied as Markdown.',
+		markdownCopyFailed: 'The page could not be copied. Use View as Markdown instead.',
+		licensedUnder: 'Documentation licensed under {licence}',
 	},
 	'pt-BR': {
 		skipToContent: 'Ir para a documentação',
@@ -380,6 +443,15 @@ export const UI_STRINGS: Record<Locale, Record<UiKey, string>> = {
 		notFoundBody: 'Esta página não existe nesta versão da documentação.',
 		unsupportedTitle: 'Não é possível exibir esta página',
 		unsupportedBody: 'Ela foi publicada em um formato mais novo do que este site consegue ler.',
+		lastUpdated: 'Last updated {date}',
+		pageMenu: 'Page options',
+		viewMarkdown: 'View as Markdown',
+		openInChatGpt: 'Open in ChatGPT',
+		openInClaude: 'Open in Claude',
+		askAboutPage: 'Read {url} so I can ask questions about it.',
+		markdownCopied: 'Page copied as Markdown.',
+		markdownCopyFailed: 'The page could not be copied. Use View as Markdown instead.',
+		licensedUnder: 'Documentation licensed under {licence}',
 	},
 };
 
@@ -539,6 +611,69 @@ export const LANGUAGE_NAMES: Record<Locale, Record<Locale, string>> = {
 		'pt-BR': 'português (Brasil)',
 	},
 };
+
+/**
+ * How a date is written in each language: a pattern and the twelve month names.
+ *
+ * A table for the reason the language names and the plural rules are tables. `Intl` answers
+ * from whatever ICU the runtime was built with, so a server on one Node and a browser on another
+ * can write the same date two ways, which is a hydration mismatch on text the reader sees, and
+ * the ISO date the shell printed before this existed is unambiguous and reads as a database
+ * field in every language. The pattern carries `{day}`, `{year}` and either `{month}`, the name,
+ * or `{monthNumber}`, for a language that writes the month as a number with its own counter, as
+ * Chinese and Japanese do. Days and months are written without a leading zero.
+ */
+export interface DateFormat {
+	pattern: string;
+	months: readonly string[];
+}
+
+const ENGLISH_MONTHS = [
+	'January',
+	'February',
+	'March',
+	'April',
+	'May',
+	'June',
+	'July',
+	'August',
+	'September',
+	'October',
+	'November',
+	'December',
+] as const;
+
+export const DATE_FORMATS: Record<Locale, DateFormat> = {
+	en: { pattern: '{day} {month} {year}', months: ENGLISH_MONTHS },
+	zh: { pattern: '{day} {month} {year}', months: ENGLISH_MONTHS },
+	ar: { pattern: '{day} {month} {year}', months: ENGLISH_MONTHS },
+	es: { pattern: '{day} {month} {year}', months: ENGLISH_MONTHS },
+	ja: { pattern: '{day} {month} {year}', months: ENGLISH_MONTHS },
+	fr: { pattern: '{day} {month} {year}', months: ENGLISH_MONTHS },
+	'pt-BR': { pattern: '{day} {month} {year}', months: ENGLISH_MONTHS },
+};
+
+/**
+ * A stored timestamp or date, written the way the reader's language writes a date.
+ *
+ * Reads the first ten characters, so `2026-09-16T20:35:03Z` and `2026-09-16` give the same
+ * answer, and the date is the UTC one the bundle stores rather than the reader's local day,
+ * which is what keeps the server's text and the browser's identical.
+ */
+export function formatDocsDate(locale: Locale, timestamp: string): string {
+	const [year, month, day] = timestamp.slice(0, 10).split('-').map(Number) as [
+		number,
+		number,
+		number,
+	];
+	const format = DATE_FORMATS[locale];
+	return interpolate(format.pattern, {
+		day: String(day),
+		month: format.months[month - 1] as string,
+		monthNumber: String(month),
+		year: String(year),
+	});
+}
 
 /**
  * Forms that deliberately carry no `{count}`.
