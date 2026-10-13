@@ -207,14 +207,14 @@ describe('a callout', () => {
 		);
 	});
 
-	test('is labelled in the page’s language, punctuated as that language punctuates it', () => {
+	test('is labelled in the language of the page, punctuated as that language punctuates it', () => {
 		const expected: Record<Locale, string> = {
 			en: '**Tip:**',
-			zh: '**提示：**',
-			ar: '**تلميح:**',
+			zh: '**\u63d0\u793a\uff1a**',
+			ar: '**\u062a\u0644\u0645\u064a\u062d:**',
 			es: '**Sugerencia:**',
-			ja: '**ヒント：**',
-			fr: '**Conseil :**',
+			ja: '**\u30d2\u30f3\u30c8\uff1a**',
+			fr: '**Conseil\u00a0:**',
 			'pt-BR': '**Dica:**',
 		};
 		for (const locale of LOCALES) {
@@ -223,8 +223,8 @@ describe('a callout', () => {
 			);
 		}
 		// A title follows a full-width colon with no space, and a Latin colon with one.
-		expect(calloutLead('ja', 'warning', '注意')).toBe('**警告：注意**');
-		expect(calloutLead('fr', 'warning', 'Attention')).toBe('**Avertissement : Attention**');
+		expect(calloutLead('ja', 'warning', '\u6ce8\u610f')).toBe('**\u8b66\u544a\uff1a\u6ce8\u610f**');
+		expect(calloutLead('fr', 'warning', 'Attention')).toBe('**Avertissement\u00a0: Attention**');
 	});
 });
 
@@ -453,7 +453,9 @@ describe('a snippet', () => {
 			origins: parsed.origins,
 			snippetBodies: new Map<string, string>(),
 		} as const;
-		expect(rawSnippetBody(text, 1, [], lowering)).toBe('> **Avertissement :** Do not force it.');
+		expect(rawSnippetBody(text, 1, [], lowering)).toBe(
+			'> **Avertissement\u00a0:** Do not force it.',
+		);
 		// What `scaffolded` compares. A label in the file's own language would make a French
 		// file copied byte for byte from the English one read as translated.
 		expect(rawSnippetBody(text, 1, [])).toBe(text);

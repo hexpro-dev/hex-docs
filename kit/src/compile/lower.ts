@@ -88,11 +88,11 @@ export interface RawLowering {
  */
 const LABEL_PUNCTUATION: Record<Locale, { colon: string; gap: string }> = {
 	en: { colon: ':', gap: ' ' },
-	zh: { colon: '：', gap: '' },
+	zh: { colon: '\uff1a', gap: '' },
 	ar: { colon: ':', gap: ' ' },
 	es: { colon: ':', gap: ' ' },
-	ja: { colon: '：', gap: '' },
-	fr: { colon: ' :', gap: ' ' },
+	ja: { colon: '\uff1a', gap: '' },
+	fr: { colon: '\u00a0:', gap: ' ' },
 	'pt-BR': { colon: ':', gap: ' ' },
 };
 
@@ -282,9 +282,8 @@ function planLines(lowering: RawLowering): Map<number, LinePlan> {
 						const titled = node.title !== undefined && title !== '';
 						const lead = calloutLead(lowering.locale, node.kind, titled ? title : undefined);
 						const ranInto = !titled && leadInto(node, lead);
-						markers(ranInto ? [SEPARATOR] : [SEPARATOR, line(`> ${lead}`), QUOTE_SEPARATOR], [
-							SEPARATOR,
-						]);
+						const opening = ranInto ? [SEPARATOR] : [SEPARATOR, line(`> ${lead}`), QUOTE_SEPARATOR];
+						markers(opening, [SEPARATOR]);
 						prefix(record, '> ');
 						break;
 					}
