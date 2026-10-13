@@ -77,7 +77,10 @@ async function toRequest(incoming: IncomingMessage): Promise<Request> {
 }
 
 async function answer(incoming: IncomingMessage, outgoing: ServerResponse): Promise<void> {
-	seen.push({ method: incoming.method ?? '', session: incoming.headers['mcp-session-id'] as string | undefined });
+	seen.push({
+		method: incoming.method ?? '',
+		session: incoming.headers['mcp-session-id'] as string | undefined,
+	});
 	const request = await toRequest(incoming);
 	const response = await docs.mcp(request, { apps: () => APPS });
 	outgoing.writeHead(response.status, Object.fromEntries(response.headers));
@@ -123,18 +126,27 @@ describe('the SDK client over Streamable HTTP', () => {
 	});
 
 	test('connects, negotiates a version both speak, and is never given a session', () => {
-		expect(client.getServerVersion()).toMatchObject({ name: 'example.docs/docs', version: '1.0.0' });
+		expect(client.getServerVersion()).toMatchObject({
+			name: 'example.docs/docs',
+			version: '1.0.0',
+		});
 		expect(client.getServerCapabilities()).toEqual({ tools: {} });
 		expect(client.getInstructions()).toContain('CC BY 4.0');
 		expect(LEGACY_PROTOCOL_VERSIONS).toContain(
-			(client as unknown as { _transport: { protocolVersion?: string } })._transport.protocolVersion,
+			(client as unknown as { _transport: { protocolVersion?: string } })._transport
+				.protocolVersion,
 		);
 		expect(seen.every((request) => request.session === undefined)).toBe(true);
 	});
 
 	test('lists the four read-only tools, each with an output schema', async () => {
 		const { tools } = await client.listTools();
-		expect(tools.map((tool) => tool.name)).toEqual(['list_apps', 'get_app', 'search_docs', 'get_page']);
+		expect(tools.map((tool) => tool.name)).toEqual([
+			'list_apps',
+			'get_app',
+			'search_docs',
+			'get_page',
+		]);
 		for (const tool of tools) {
 			expect(tool.outputSchema).toBeDefined();
 			expect(tool.annotations?.readOnlyHint).toBe(true);
@@ -144,10 +156,9 @@ describe('the SDK client over Streamable HTTP', () => {
 	test('every tool answers with structured content the client validates against its schema', async () => {
 		const apps = await client.callTool({ name: 'list_apps', arguments: {} });
 		expect(apps.isError).toBe(false);
-		expect((apps.structuredContent as { apps: { id: string }[] }).apps.map((app) => app.id)).toEqual([
-			'alarm',
-			'fixture',
-		]);
+		expect(
+			(apps.structuredContent as { apps: { id: string }[] }).apps.map((app) => app.id),
+		).toEqual(['alarm', 'fixture']);
 
 		const app = await client.callTool({ name: 'get_app', arguments: { app: 'fixture' } });
 		expect((app.structuredContent as { outline: unknown[] }).outline.length).toBeGreaterThan(0);
@@ -156,8 +167,9 @@ describe('the SDK client over Streamable HTTP', () => {
 			name: 'search_docs',
 			arguments: { query: 'scan tag', limit: 3 },
 		});
-		const results = (search.structuredContent as { results: { url: string; markdownUrl: string }[] })
-			.results;
+		const results = (
+			search.structuredContent as { results: { url: string; markdownUrl: string }[] }
+		).results;
 		expect(results.length).toBe(3);
 		expect(results[0]?.url.startsWith(`${ORIGIN}/fixture-app/docs`)).toBe(true);
 
@@ -171,7 +183,10 @@ describe('the SDK client over Streamable HTTP', () => {
 	});
 
 	test('a refused argument is a tool result the model can read, not a protocol error', async () => {
-		const result = await client.callTool({ name: 'get_page', arguments: { app: 'fixture', slug: 'nope' } });
+		const result = await client.callTool({
+			name: 'get_page',
+			arguments: { app: 'fixture', slug: 'nope' },
+		});
 		expect(result.isError).toBe(true);
 		expect((result.content as { text: string }[])[0]?.text).toContain('There is no page "nope"');
 	});
