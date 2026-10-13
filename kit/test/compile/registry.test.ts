@@ -177,6 +177,10 @@ function findingsFor(body: string, front: Record<string, string> = {}): RawFindi
 		},
 		services: services(),
 		translation: { state: 'source', sourceUpdated: '2026-01-05T09:00:00Z' },
+		// The raw half of what `services` resolves `safety-note` to, which is nothing. A build
+		// always has both, and the raw markdown refuses a page that expanded an include it
+		// has no text for.
+		snippetBodies: new Map([['safety-note', '']]),
 	});
 
 	return [

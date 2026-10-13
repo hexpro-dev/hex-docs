@@ -66,6 +66,7 @@ import { deriveHeadingId, parseBlocks, slugifyHeading } from '../../src/compile/
 import { parseDocument } from '../../src/compile/markdown/index.js';
 import {
 	positionAt,
+	type DirectiveRecord,
 	type FoldedText,
 	type NodeOrigins,
 	type ParseServices,
@@ -186,6 +187,7 @@ interface ParsedBody {
 	prose: ProseSegment[];
 	includes: string[];
 	destinations: ResolvedDestination[];
+	directives: DirectiveRecord[];
 	origins: NodeOrigins;
 }
 
@@ -202,6 +204,7 @@ function parseBody(
 	const prose: ProseSegment[] = [];
 	const includes: string[] = [];
 	const destinations: ResolvedDestination[] = [];
+	const directives: DirectiveRecord[] = [];
 	const origins: NodeOrigins = new WeakMap();
 	const blocks = parseBlocks(toLines(source), {
 		file: FILE,
@@ -212,9 +215,10 @@ function parseBody(
 		prose,
 		includes,
 		destinations,
+		directives,
 		includeDepth: options.includeDepth ?? 0,
 	});
-	return { blocks, problems, prose, includes, destinations, origins };
+	return { blocks, problems, prose, includes, destinations, directives, origins };
 }
 
 interface ParsedInline {

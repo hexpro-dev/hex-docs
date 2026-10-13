@@ -17,11 +17,11 @@ You need a tag the reader can talk to, and a clear path to it:
 - [ ] An NTAG 213, NTAG 215 or MIFARE Ultralight tag
 - [ ] A case thinner than 3 mm, or no case at all
 
-:::caution[Do not force a tag against the phone]
-Fixture App needs about two seconds of contact to finish a write. Pressing
-harder does not shorten that, and a tag creased against a metal case can
-crack the antenna inside the inlay.
-:::
+> **Caution: Do not force a tag against the phone**
+>
+> Fixture App needs about two seconds of contact to finish a write. Pressing
+> harder does not shorten that, and a tag creased against a metal case can
+> crack the antenna inside the inlay.
 
 Keep the tag flat and still until the Scan sheet shows the green confirm
 bar. If the write is interrupted the tag keeps its previous contents, so a
@@ -35,56 +35,52 @@ that have been tested against version 1.0.
 
 ## Read the tag
 
-::::steps
-:::step[Open the Scan sheet]
-Tap the large circle in the middle of the Library screen, or press and
-hold the app icon on the Home Screen and choose Scan. The sheet slides
-up and the status line reads "Ready for a tag".
+1. **Open the Scan sheet**
 
-The reader stays awake for 60 seconds. If nothing comes within range
-the sheet closes itself, and nothing is added to the Library.
-:::
+   Tap the large circle in the middle of the Library screen, or press and
+   hold the app icon on the Home Screen and choose Scan. The sheet slides
+   up and the status line reads "Ready for a tag".
 
-:::step[Hold the tag against the top of the phone]
-Rest the top edge of the phone flat against the tag and keep both
-still. The status line changes to "Tag detected" and the phone plays a
-short tick.
+   The reader stays awake for 60 seconds. If nothing comes within range
+   the sheet closes itself, and nothing is added to the Library.
 
-Position matters more than pressure:
+2. **Hold the tag against the top of the phone**
 
-- The antenna runs across the top edge, about a centimetre below the
-  camera bar.
-- Keep the tag square to the phone rather than at an angle.
-- Move a MagSafe wallet or a metal card out of the way first.
-:::
+   Rest the top edge of the phone flat against the tag and keep both
+   still. The status line changes to "Tag detected" and the phone plays a
+   short tick.
 
-:::step[Check the records and save]
-When the read finishes the sheet lists every NDEF record on the tag, in
-the order they are stored. Fixture App recognises URL, text and Wi-Fi
-records and shows a preview of each one. Anything else is listed as raw
-bytes.
+   Position matters more than pressure:
 
-Tap Save to keep the tag, or Discard to close the sheet without writing
-anything to the Library.
-:::
-::::
+   - The antenna runs across the top edge, about a centimetre below the
+     camera bar.
+   - Keep the tag square to the phone rather than at an angle.
+   - Move a MagSafe wallet or a metal card out of the way first.
 
-:::figure[The Scan sheet, waiting for a tag to come within range]
+3. **Check the records and save**
+
+   When the read finishes the sheet lists every NDEF record on the tag, in
+   the order they are stored. Fixture App recognises URL, text and Wi-Fi
+   records and shows a preview of each one. Anything else is listed as raw
+   bytes.
+
+   Tap Save to keep the tag, or Discard to close the sheet without writing
+   anything to the Library.
+
 ![The Scan sheet waiting for a tag](hexdocs:asset/b9922ff72601d007f508e4b11a31c7cd3215b8115dfd0ab2da6a584f98bbacb7.png)
-:::
 
-:::warning[A partial read looks like a success]
-Tags with a password-protected area answer the first part of a read and
-refuse the rest. Fixture App shows what it got and puts "Records
-incomplete" under the tag name. Look for that line before you trust a
-read of an access control tag.
-:::
+**The Scan sheet, waiting for a tag to come within range**
 
-:::tip
-Turn on Settings > Scanning > Keep sheet open to read several tags in
-one go. The Library groups everything from that session under a single
-heading.
-:::
+> **Warning: A partial read looks like a success**
+>
+> Tags with a password-protected area answer the first part of a read and
+> refuse the rest. Fixture App shows what it got and puts "Records
+> incomplete" under the tag name. Look for that line before you trust a
+> read of an access control tag.
+
+> **Tip:** Turn on Settings > Scanning > Keep sheet open to read several tags in
+> one go. The Library groups everything from that session under a single
+> heading.
 
 ## After the read
 

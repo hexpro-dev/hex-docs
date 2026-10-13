@@ -172,14 +172,33 @@ describe('the compiled corpus', () => {
 	});
 
 	test('the markdown served at <slug>.md is what it was', () => {
-		// Three pages, not thirty-nine. The raw markdown is nearly the source file, so a
-		// full set would be the corpus committed twice; every other page is pinned by
-		// `rawDigest` in the manifest. These three are the ones where it is not nearly the
-		// source: each expands an include, and one of them is the support matrix.
-		for (const slug of ['index', 'guide/first-tag', 'reference/chip-support']) {
-			const output = result.pages.get(slug)?.get('en');
-			expect(output, `${slug} should compile in en`).toBeDefined();
-			expectGolden(`raw/en/${slug}.md`, output?.raw ?? '');
+		// Seven, not thirty-nine. The raw markdown is nearly the source file, so a full set
+		// would be the corpus committed twice; every other page is pinned by `rawDigest` in
+		// the manifest. These are the ones where it is not nearly the source. The first three
+		// each expand an include, and one of them is the support matrix. Between them and the
+		// two after, every directive the corpus writes is written out as plain markdown:
+		// steps, a figure, a captioned table, callouts titled and untitled in four kinds, two
+		// GitHub alerts, a callout inside a snippet, and a heading's `{#id}`. The last two are
+		// one page in Japanese and in French, because a callout's label is written in the
+		// page's language and each of those two punctuates it differently.
+		const goldens = [
+			['en', 'index'],
+			['en', 'guide/first-tag'],
+			['en', 'reference/chip-support'],
+			['en', 'guide/troubleshooting'],
+			['en', 'developer/architecture'],
+			['ja', 'guide/first-tag'],
+			['fr', 'guide/first-tag'],
+		] as const;
+		for (const [locale, slug] of goldens) {
+			const output = result.pages.get(slug)?.get(locale);
+			expect(output, `${slug} should compile in ${locale}`).toBeDefined();
+			expectGolden(`raw/${locale}/${slug}.md`, output?.raw ?? '');
+		}
+		if (!UPDATE) {
+			expect(goldenFiles('raw')).toEqual(
+				goldens.map(([locale, slug]) => `raw/${locale}/${slug}.md`).sort(),
+			);
 		}
 	});
 

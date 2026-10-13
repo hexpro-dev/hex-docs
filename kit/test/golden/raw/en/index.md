@@ -32,17 +32,17 @@ the reader has been tested against and how much writable memory each
 one has. An NTAG213 holds 132 bytes, which is a short URL and very
 little else.
 
-:::note[Background scanning]
-iOS hands a tag to a background app only when the tag carries a URL
-record matching the app's associated domain. Everything else needs the
-Scan sheet open in the foreground.
-:::
+> **Note: Background scanning**
+>
+> iOS hands a tag to a background app only when the tag carries a URL
+> record matching the app's associated domain. Everything else needs the
+> Scan sheet open in the foreground.
 
-:::caution[Do not force a tag against the phone]
-Fixture App needs about two seconds of contact to finish a write. Pressing
-harder does not shorten that, and a tag creased against a metal case can
-crack the antenna inside the inlay.
-:::
+> **Caution: Do not force a tag against the phone**
+>
+> Fixture App needs about two seconds of contact to finish a write. Pressing
+> harder does not shorten that, and a tag creased against a metal case can
+> crack the antenna inside the inlay.
 
 Keep the tag flat and still until the Scan sheet shows the green confirm
 bar. If the write is interrupted the tag keeps its previous contents, so a

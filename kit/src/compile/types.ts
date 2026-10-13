@@ -26,7 +26,16 @@
  * offset 41 of a folded paragraph report line 12, column 3.
  */
 
-import type { Block, CodeLine, Inline } from '../../../src/contracts/ast.js';
+import type {
+	Block,
+	Callout,
+	CodeLine,
+	Figure,
+	Inline,
+	Step,
+	Steps,
+	Table,
+} from '../../../src/contracts/ast.js';
 import type { AssetExtension, ColourProbe } from '../../../src/contracts/manifest.js';
 import type { FindingLocation } from '../../../src/contracts/diagnostics.js';
 import type { RuleId } from '../../../src/contracts/lint.js';
@@ -309,6 +318,86 @@ export interface ResolvedDestination {
 	target: { kind: 'page'; slug: string } | { kind: 'asset'; src: string };
 }
 
+/** A line and a column in the source file, both counted from one. */
+export interface SourcePoint {
+	line: number;
+	column: number;
+}
+
+/**
+ * A piece of directive syntax the parser consumed: where it sat, and what it became.
+ *
+ * Recorded for the raw markdown, for the reason destinations are. `<slug>.md` is built
+ * from the source lines, and before these existed every `::::steps`, `:::warning[...]`
+ * and `{#id}` reached it and `llms-full.txt` verbatim: syntax no markdown reader knows,
+ * in every procedure and every callout. Lowering it with a pattern over the lines would
+ * be a second parser disagreeing with this one about fences, quotes and list items, and
+ * the disagreement would publish as a marker nobody can read, or as a paragraph the page
+ * does not have.
+ *
+ * Every path in `blocks.ts` that consumes a directive line records it, the refusals
+ * included, so a line the page payload dropped is dropped from the raw markdown too.
+ * Only this file's own: a transcluded snippet is parsed separately, and its records stay
+ * with that parse for the reason its destinations do.
+ */
+export type DirectiveRecord =
+	ContainerRecord | AlertRecord | IncludeRecord | DroppedLineRecord | HeadingIdRecord;
+
+/** A `:::name[label]` container, from its opening line to its close. */
+export interface ContainerRecord {
+	kind: 'container';
+	/** As typed. A name this AST major does not understand is recorded too, so its markers still go. */
+	name: string;
+	/** The bracketed label as typed, or `undefined` when there were no brackets. */
+	label: string | undefined;
+	/** The first colon of the opening line. */
+	open: SourcePoint;
+	/** The first colon of the closing line, or `undefined` when the container never closed. */
+	close: SourcePoint | undefined;
+	/**
+	 * Where each line between the two starts once the container's own indent is removed,
+	 * which is the column anything the container adds to those lines goes in at.
+	 */
+	inner: SourcePoint[];
+	/**
+	 * What the container compiled to, or `undefined` when the parser refused it and kept
+	 * its contents as ordinary blocks. For `table` it is the table that took the caption.
+	 */
+	node: Callout | Steps | Step | Figure | Table | undefined;
+}
+
+/** GitHub's `> [!WARNING]`, which compiles to the same callout as `:::warning`. */
+export interface AlertRecord {
+	kind: 'alert';
+	/** The `[` of the marker, on the quotation's first line. */
+	at: SourcePoint;
+	node: Callout;
+}
+
+/** `::include[id]`, expanded or not. */
+export interface IncludeRecord {
+	kind: 'include';
+	at: SourcePoint;
+	id: string;
+	/** Whether the parser spliced the snippet's blocks in. A refused include leaves nothing. */
+	expanded: boolean;
+}
+
+/**
+ * A line the parser reported and left out of the page: a close with nothing open, a leaf
+ * directive that is not `include`, or text sitting in a steps container outside any step.
+ */
+export interface DroppedLineRecord {
+	kind: 'dropped';
+	at: SourcePoint;
+}
+
+/** A heading whose `{#id}` suffix the parser took as its anchor and removed from its text. */
+export interface HeadingIdRecord {
+	kind: 'headingId';
+	line: number;
+}
+
 /** What `parseDocument` returns for one markdown file. */
 export interface ParsedDocument {
 	/** Relative to `docs/site/`. */
@@ -336,6 +425,8 @@ export interface ParsedDocument {
 	 * destinations stay with that parse, because their line numbers are the snippet's.
 	 */
 	destinations: ResolvedDestination[];
+	/** Every directive this file's parse consumed, in the order it met them. This file's own, as above. */
+	directives: DirectiveRecord[];
 	disables: DisableComment[];
 	problems: RawFinding[];
 }

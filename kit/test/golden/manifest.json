@@ -23,8 +23,8 @@
 				"en": {
 					"digest": "5716c93d29e25cf190ea3e3f2be4eabb6ae4facc6ab8b7c5421b6413b1daf177",
 					"bytes": 11965,
-					"rawDigest": "91b9b8f25825bd242e8e38ff1e9a7d9beb99a15fca299c3b5bbf2a680d3b03e0",
-					"rawBytes": 4739,
+					"rawDigest": "3c0007fd9be9dde37f7c7f3841a6c16e30cabf90a8acd153f39eb9f1401afb15",
+					"rawBytes": 4730,
 					"title": "How the app is put together",
 					"navTitle": "Architecture",
 					"description": "The package layout, and which module talks to CoreNFC.",
@@ -59,8 +59,8 @@
 				"en": {
 					"digest": "64bc2406c233fa10e2d7b8aa3e1725c77ccdce9a20624faf3bb304fba3fe6b60",
 					"bytes": 8542,
-					"rawDigest": "b4ade75012c9212a9433279916cfffef71499d4cb3a4e3df706f40d903869e9d",
-					"rawBytes": 4363,
+					"rawDigest": "e9bb057ef3efc71208e80392776af123503c5f1bdde5595d0badc635fadfe331",
+					"rawBytes": 4400,
 					"title": "Scan your first tag",
 					"navTitle": "First scan",
 					"description": "Read an NFC tag with Fixture App for the first time and save what it holds.",
@@ -89,8 +89,8 @@
 				"zh": {
 					"digest": "5a26283e3db873c4f1a4d97e2a8494bab9e0cbb00bfb45291cb50783d8d9a576",
 					"bytes": 8628,
-					"rawDigest": "fdcdb6fb15687b6278f536b368de823ddf762179a6ee8f24b536632aaccba931",
-					"rawBytes": 4357,
+					"rawDigest": "7f4a5e94c14c25da2bc9f124f7462c645447864716abdc8d9660a135ddab5ca8",
+					"rawBytes": 4385,
 					"title": "\u626b\u63cf\u4f60\u7684\u7b2c\u4e00\u4e2a\u6807\u7b7e",
 					"navTitle": "\u7b2c\u4e00\u6b21\u626b\u63cf",
 					"description": "\u7b2c\u4e00\u6b21\u7528Fixture App\u8bfb\u53d6NFC\u6807\u7b7e\uff0c\u5e76\u4fdd\u5b58\u6807\u7b7e\u91cc\u7684\u5185\u5bb9\u3002",
@@ -119,8 +119,8 @@
 				"ar": {
 					"digest": "dc88a1ba39097a00ae1dcfec6e92d889ec89f2b1304fc400a6f71e45dee4b2c0",
 					"bytes": 11026,
-					"rawDigest": "0f3b20bb1f5808c538f5192c1993cb54cdb6a72f139fcec37934318329b2e3d6",
-					"rawBytes": 6530,
+					"rawDigest": "184e0244371aae135c9d705cc998991dc6d93d95f9c38ef3fd3c4e0e574c09fb",
+					"rawBytes": 6575,
 					"title": "\u0627\u0645\u0633\u062d \u0628\u0637\u0627\u0642\u062a\u0643 \u0627\u0644\u0623\u0648\u0644\u0649",
 					"navTitle": "\u0623\u0648\u0644 \u0639\u0645\u0644\u064a\u0629 \u0645\u0633\u062d",
 					"description": "\u0627\u0642\u0631\u0623 \u0628\u0637\u0627\u0642\u0629 NFC \u0628\u0627\u0633\u062a\u062e\u062f\u0627\u0645 Fixture App \u0644\u0623\u0648\u0644 \u0645\u0631\u0629 \u0648\u0627\u062d\u0641\u0638 \u0645\u0627 \u062a\u062d\u0645\u0644\u0647.",
@@ -149,8 +149,8 @@
 				"es": {
 					"digest": "f0d28724f27fa85388b2bf6ef235d63f5651bfa0aa6e7d91f46cf880b0c4f5eb",
 					"bytes": 9487,
-					"rawDigest": "dc21e9c2ae33bd5e7d374b94e338cb162b935d05e5bcaf543e1b8877a634da9e",
-					"rawBytes": 5089,
+					"rawDigest": "de81d6584169d5db2a8820a8a98e41f100b877942eb1c2fb9b78e9f7fbd727f8",
+					"rawBytes": 5143,
 					"title": "Escanea tu primera etiqueta",
 					"navTitle": "Primer escaneo",
 					"description": "Lee una etiqueta NFC con Fixture App por primera vez y guarda lo que contiene.",
@@ -179,8 +179,8 @@
 				"ja": {
 					"digest": "e11812c863af24ba279f39d9f6f716c91bb1aebe83b062d32bc13ee0b6be9c9f",
 					"bytes": 10395,
-					"rawDigest": "0d754ab4ea5bb29d5e16d2a6d834d78c7c6aaadd58ac8ca5e10fed516d9c8556",
-					"rawBytes": 6001,
+					"rawDigest": "e976e50b52f354748ae654e22be4035e084eaac9f72e7c604e8edd9fba192992",
+					"rawBytes": 6069,
 					"title": "\u6700\u521d\u306e\u30bf\u30b0\u3092\u30b9\u30ad\u30e3\u30f3\u3059\u308b",
 					"navTitle": "\u6700\u521d\u306e\u30b9\u30ad\u30e3\u30f3",
 					"description": "Fixture App \u3067\u521d\u3081\u3066 NFC \u30bf\u30b0\u3092\u8aad\u307f\u53d6\u308a\u3001\u305d\u306e\u5185\u5bb9\u3092\u4fdd\u5b58\u3057\u307e\u3059\u3002",
@@ -209,8 +209,8 @@
 				"fr": {
 					"digest": "2647cb30546c498773be64d6a382afb6cf27db7b1161e7d27fe769c6ac958ee8",
 					"bytes": 9607,
-					"rawDigest": "351cd2fd34d93bccda2dd3ec31c089af6c32cf2946da08a514a2b88d502af191",
-					"rawBytes": 5208,
+					"rawDigest": "8164f9854c0b808de14ee8ea252a39f36e4e6e5bbae064e87f678287f85fd681",
+					"rawBytes": 5268,
 					"title": "Scannez votre premier badge",
 					"navTitle": "Premier scan",
 					"description": "Lisez un badge NFC avec Fixture App pour la premi\u00e8re fois et enregistrez ce qu'il contient.",
@@ -239,8 +239,8 @@
 				"pt-BR": {
 					"digest": "baedf1738b56b1c7c4a0011add83f6510dcdb487e57a5345898f84968fa521c8",
 					"bytes": 9369,
-					"rawDigest": "b8cf1d8f048f15becbad588238b38d6c2556aaa0767c2ce4345efbd2c58265a6",
-					"rawBytes": 4966,
+					"rawDigest": "f9b790da23810ec52bad121eebb4825206237b0b8f037c0010d653dc1a989d57",
+					"rawBytes": 5006,
 					"title": "Leia sua primeira etiqueta",
 					"navTitle": "Primeira leitura",
 					"description": "Leia uma etiqueta NFC com o Fixture App pela primeira vez e salve o que ela cont\u00e9m.",
@@ -463,7 +463,7 @@
 				"en": {
 					"digest": "155d76dca8eb621502b971e87a528a4dcbc7cbd5cb336bd8756b3fb3853c0876",
 					"bytes": 8344,
-					"rawDigest": "74ecfef7449419526991d57b7ea9364a6545771d24ad9eb1d50bc7148ab6fd6d",
+					"rawDigest": "359e09f8f9ece97fb31bcd3cf9f010d5327dd9fe3517efc52963f1227deb1274",
 					"rawBytes": 4251,
 					"title": "When a scan does not work",
 					"navTitle": "Troubleshooting",
@@ -505,7 +505,7 @@
 				"ar": {
 					"digest": "2325366bd5dcbdb8a0f52d8ea5968f5cf439f3e2e3729bc5ed07574e7c89c02f",
 					"bytes": 11400,
-					"rawDigest": "9e3c5bcd503b34cb49801e60b19c7a2c16b0503dc15a13d1a47d848f4d0a9ea9",
+					"rawDigest": "47d66bc18103cfcf26ea194a8228dfb11c505a00dc0e49a7c1f6fa7ecb052209",
 					"rawBytes": 6340,
 					"title": "\u0639\u0646\u062f\u0645\u0627 \u0644\u0627 \u064a\u0646\u062c\u062d \u0627\u0644\u0645\u0633\u062d",
 					"navTitle": "\u0627\u0633\u062a\u0643\u0634\u0627\u0641 \u0627\u0644\u0623\u062e\u0637\u0627\u0621",
@@ -547,7 +547,7 @@
 				"ja": {
 					"digest": "e08e1acfbdc6d145088c9eb4f4577d42b77191052a494ea2e73739098523fdd5",
 					"bytes": 10944,
-					"rawDigest": "88a47b41f96b9871c704ad838badcd12452d0cee96a629ace541ea42bdb1fe08",
+					"rawDigest": "9341c169b9fbda5b10b4f74d943fa90fddd8f398640bfaba2533dbabe8785ec6",
 					"rawBytes": 6030,
 					"title": "\u30b9\u30ad\u30e3\u30f3\u3067\u304d\u306a\u3044\u3068\u304d",
 					"navTitle": "\u30c8\u30e9\u30d6\u30eb\u30b7\u30e5\u30fc\u30c6\u30a3\u30f3\u30b0",
@@ -595,8 +595,8 @@
 				"en": {
 					"digest": "efe3811721613fbf90668c771e0c15dcf54a13681a9a63d4f2b7a93af91e9160",
 					"bytes": 5579,
-					"rawDigest": "b7cf1ff6bc44da80e17618fae05705bc61222cd7dc8af910cc006fe60d4f10b6",
-					"rawBytes": 2494,
+					"rawDigest": "235f4e0ac0584ebe2d06e0f050c692961d7826c9bd25048442681b0e13afd9b6",
+					"rawBytes": 2508,
 					"title": "Fixture App documentation",
 					"navTitle": "Overview",
 					"description": "Read and rewrite the NDEF records on an NFC tag from an iPhone, with nothing leaving the device.",
@@ -621,8 +621,8 @@
 				"zh": {
 					"digest": "2abfb659c9734c47c51fee614b1106ac43d5be69ba36bff982a8fbb817a94917",
 					"bytes": 5768,
-					"rawDigest": "97b689c08a5a7ab52d4b04a274a6a4aea2777bea16600633fea52644e937710b",
-					"rawBytes": 2581,
+					"rawDigest": "eae82de489e7e80a4707e1d99a58568b7390f76ceb799d8c76c7afbcfa95ea1f",
+					"rawBytes": 2596,
 					"title": "Fixture App\u6587\u6863",
 					"navTitle": "\u6982\u89c8",
 					"description": "\u5728iPhone\u4e0a\u8bfb\u53d6\u5e76\u91cd\u5199NFC\u6807\u7b7e\u4e0a\u7684NDEF\u8bb0\u5f55\uff0c\u6240\u6709\u6570\u636e\u90fd\u4e0d\u4f1a\u79bb\u5f00\u8bbe\u5907\u3002",
@@ -648,8 +648,8 @@
 				"ar": {
 					"digest": "85ad13a38748019894db9bc42837cc282ecfcab6b9e3d6d744527ddfa2d5a0b1",
 					"bytes": 7191,
-					"rawDigest": "217c373e664ed4db699736a69df208087d40dfdb05dfa1bdeb20cb8025c8a3f2",
-					"rawBytes": 3811,
+					"rawDigest": "ba33b3b6283f147be5696d052c66d6925778e19cdad4e8270501ef1a64c9058c",
+					"rawBytes": 3836,
 					"title": "\u062a\u0648\u062b\u064a\u0642 Fixture App",
 					"navTitle": "\u0646\u0638\u0631\u0629 \u0639\u0627\u0645\u0629",
 					"description": "\u0627\u0642\u0631\u0623 \u0633\u062c\u0644\u0627\u062a NDEF \u0639\u0644\u0649 \u0628\u0637\u0627\u0642\u0629 NFC \u0648\u0623\u0639\u062f \u0643\u062a\u0627\u0628\u062a\u0647\u0627 \u0645\u0646 iPhone\u060c \u062f\u0648\u0646 \u0623\u0646 \u064a\u063a\u0627\u062f\u0631 \u0627\u0644\u062c\u0647\u0627\u0632 \u0623\u064a \u0634\u064a\u0621.",
@@ -675,8 +675,8 @@
 				"es": {
 					"digest": "c3c30feb1efe1911287ace5975c936afadd804ef3c1939fec2b4d7042c6b2ed3",
 					"bytes": 6196,
-					"rawDigest": "a9747e46b0cc89d2264e4d4376ce60ddccbf4969fca995c9db7d54292f898e43",
-					"rawBytes": 2978,
+					"rawDigest": "21b27dfebd07af295b9994bea3cdd2df51a26ecd838402a9352b4a1f954d2597",
+					"rawBytes": 2998,
 					"title": "Documentaci\u00f3n de Fixture App",
 					"navTitle": "Vista general",
 					"description": "Lee y reescribe los registros NDEF de una etiqueta NFC desde un iPhone, sin que nada salga del dispositivo.",
@@ -702,8 +702,8 @@
 				"ja": {
 					"digest": "45bc3561853563b9ae349070eb6b9d8c62aea6bcf803d3a1cff9af15ba8e1516",
 					"bytes": 6846,
-					"rawDigest": "53d8ac1ed0f7d1fa03bc729088c3c89c49f67d3b8aa48b218162aee3c1a7d96c",
-					"rawBytes": 3607,
+					"rawDigest": "feecf0f7c51194c361b031816fc30b6ae6d4766494d0c0e886f29a199e1b1260",
+					"rawBytes": 3630,
 					"title": "Fixture App \u30c9\u30ad\u30e5\u30e1\u30f3\u30c8",
 					"navTitle": "\u6982\u8981",
 					"description": "iPhone \u304b\u3089 NFC \u30bf\u30b0\u306e NDEF \u30ec\u30b3\u30fc\u30c9\u3092\u8aad\u307f\u66f8\u304d\u3057\u307e\u3059\u3002\u30c7\u30fc\u30bf\u304c\u7aef\u672b\u306e\u5916\u306b\u51fa\u308b\u3053\u3068\u306f\u3042\u308a\u307e\u305b\u3093\u3002",
@@ -729,8 +729,8 @@
 				"fr": {
 					"digest": "adc0a8b1bf37a6ba3c620013048ba9b3c33f8ddd3c5e19941954d0f402b75541",
 					"bytes": 6318,
-					"rawDigest": "31bda415aa33ce31a23c16d192a5998c6aef497e3b776572eb93f7979adc796f",
-					"rawBytes": 3056,
+					"rawDigest": "f8b09d6dad98ccc44a64d81adc2b14f2a3c3ff2789802c728611bdcdb7f1ccaf",
+					"rawBytes": 3080,
 					"title": "Documentation de Fixture App",
 					"navTitle": "Vue d'ensemble",
 					"description": "Lisez et r\u00e9\u00e9crivez les enregistrements NDEF d'un badge NFC depuis un iPhone, sans qu'aucune donn\u00e9e ne quitte l'appareil.",
@@ -756,8 +756,8 @@
 				"pt-BR": {
 					"digest": "bfbc9537cb7ea487a59686a96da60fc9610eef6fee84dbe9662e273862781456",
 					"bytes": 6181,
-					"rawDigest": "3ed0443dbd1704174b196c82a3accb0c912648290331999cf306676c987b49b0",
-					"rawBytes": 2932,
+					"rawDigest": "d03220897388ac5106784fc33a3e876f97cef4953792f01b11744c94dfc05b80",
+					"rawBytes": 2958,
 					"title": "Documenta\u00e7\u00e3o do Fixture App",
 					"navTitle": "Vis\u00e3o geral",
 					"description": "Leia e regrave os registros NDEF de uma etiqueta NFC a partir de um iPhone, sem que nada saia do dispositivo.",
@@ -837,8 +837,8 @@
 				"en": {
 					"digest": "30f871f15c0f483a270b49afa7a1e4bfa5e090a393a0afd576650dca321a7d16",
 					"bytes": 8873,
-					"rawDigest": "61c1ad26d9d05d654a210f7feafad5874122a4d5bdc7f6fd6cf829faf9902b54",
-					"rawBytes": 3565,
+					"rawDigest": "dd0615ad3dd53ddd6f796eb9b5dc2ebb7c915a5a2932d5882e21e5389c797fbd",
+					"rawBytes": 3556,
 					"title": "Chip support matrix",
 					"navTitle": "Chip support",
 					"description": "Which NFC chips Fixture App can read and write on iOS, and the caveats that apply to each one.",
@@ -859,8 +859,8 @@
 				"zh": {
 					"digest": "b49da0a9d3c92da349a1f40fc608a99f6ec9888fef312c2d19f4bf553ffc3948",
 					"bytes": 9061,
-					"rawDigest": "4eedb739412ad1e7095d5829a5b837b7f2029d60a09793f14d828453412f4552",
-					"rawBytes": 3599,
+					"rawDigest": "3542b1d7fbd304001e11014dabeb316c16dafe23d1f983cfc218ecec9db1676c",
+					"rawBytes": 3590,
 					"title": "\u82af\u7247\u652f\u6301\u77e9\u9635",
 					"navTitle": "\u82af\u7247\u652f\u6301",
 					"description": "Fixture App\u5728iOS\u4e0a\u80fd\u8bfb\u3001\u80fd\u5199\u54ea\u4e9bNFC\u82af\u7247\uff0c\u4ee5\u53ca\u6bcf\u4e00\u6b3e\u5404\u81ea\u7684\u6ce8\u610f\u4e8b\u9879\u3002",
@@ -881,8 +881,8 @@
 				"ar": {
 					"digest": "2b44c50608e549fe13831b0e421c1ede3097bb3c37d10b6166031b64d0934434",
 					"bytes": 10685,
-					"rawDigest": "5c72182c0d619a267a483b5f4114a943e112e738592c0a2dbf45fcf310163523",
-					"rawBytes": 5064,
+					"rawDigest": "7a05dad5533884be325910e35af5976d125de1bd39448af19d24df7e2fda9309",
+					"rawBytes": 5055,
 					"title": "\u062c\u062f\u0648\u0644 \u062f\u0639\u0645 \u0627\u0644\u0634\u0631\u0627\u0626\u062d",
 					"navTitle": "\u062f\u0639\u0645 \u0627\u0644\u0634\u0631\u0627\u0626\u062d",
 					"description": "\u0623\u064a \u0634\u0631\u0627\u0626\u062d NFC \u064a\u0633\u062a\u0637\u064a\u0639 Fixture App \u0642\u0631\u0627\u0621\u062a\u0647\u0627 \u0648\u0627\u0644\u0643\u062a\u0627\u0628\u0629 \u0639\u0644\u064a\u0647\u0627 \u0639\u0644\u0649 iOS\u060c \u0648\u0627\u0644\u062a\u062d\u0641\u0638\u0627\u062a \u0627\u0644\u0645\u0646\u0637\u0628\u0642\u0629 \u0639\u0644\u0649 \u0643\u0644 \u0648\u0627\u062d\u062f\u0629.",
@@ -903,8 +903,8 @@
 				"es": {
 					"digest": "7ffcf7a4e4f5fd8d12c3faab1e01fbcbd48ddc6aa8a06f5ba392d8d08ade40c0",
 					"bytes": 9039,
-					"rawDigest": "3aa981437aef43316ae60ca7c0f55bf42beb8169546cef17ed643fe08b4f9903",
-					"rawBytes": 3683,
+					"rawDigest": "74fe65eb56b8a130051173250568f65f9fa83a5342b10c74c0c66c61aaa196c0",
+					"rawBytes": 3674,
 					"title": "Chip support matrix",
 					"navTitle": "Chip support",
 					"description": "Which NFC chips Fixture App can read and write on iOS, and the caveats that apply to each one.",
@@ -925,8 +925,8 @@
 				"ja": {
 					"digest": "702339bd3ca629b26d5024c879ec214dc02749087bec1ffe9aec35fadf54bd9a",
 					"bytes": 10351,
-					"rawDigest": "bd9ddf5a36d88d0f9d82148fa5fbc92747dc8f0eee5d413efd62e924d897f8f9",
-					"rawBytes": 4928,
+					"rawDigest": "c35e393567c738464b42e771e5c777c69ff527a169d1197fa010f23fccaef74f",
+					"rawBytes": 4919,
 					"title": "\u30c1\u30c3\u30d7\u5bfe\u5fdc\u8868",
 					"navTitle": "\u30c1\u30c3\u30d7\u5bfe\u5fdc",
 					"description": "Fixture App \u304c iOS \u3067\u8aad\u307f\u66f8\u304d\u3067\u304d\u308b NFC \u30c1\u30c3\u30d7\u3068\u3001\u305d\u308c\u305e\u308c\u306b\u5f53\u3066\u306f\u307e\u308b\u6ce8\u610f\u70b9\u3002",
@@ -1547,8 +1547,8 @@
 		},
 		{
 			"key": "raw/ar/guide/first-tag.md.gz",
-			"digest": "545eb505c6277aecb5511beea8a16dcb3724168cac6f22711cfcc74a2b8b3a78",
-			"bytes": 2577
+			"digest": "97e9f8b1dde4da92e6afbeca3e46d978235c3407668ae72d4ccf4f4415be1294",
+			"bytes": 2584
 		},
 		{
 			"key": "raw/ar/guide/index.md.gz",
@@ -1557,18 +1557,18 @@
 		},
 		{
 			"key": "raw/ar/guide/troubleshooting.md.gz",
-			"digest": "a9d6fbc60ddc4292a446ed5b28a4d90b90bf7d4d45f7a0c948f40e9d15325c9a",
-			"bytes": 2576
+			"digest": "d5bfadcf2b425b3187c4a362ba13377df3f79fc7d445e60272dff95aa8e4b951",
+			"bytes": 2565
 		},
 		{
 			"key": "raw/ar/index.md.gz",
-			"digest": "4005fdf29e7ffbc8da733aae8937f51971d4d44036d6a6de235e6c97322a45c3",
-			"bytes": 1721
+			"digest": "30fdb89971ee7b2669dd6107d52fe166fd361d2ca424c055494f5aaa9561bb5b",
+			"bytes": 1719
 		},
 		{
 			"key": "raw/ar/reference/chip-support.md.gz",
-			"digest": "7bf9ce0f2789fd15be197da1a252e7ad2c12c66daec610ef0ac05385b84de1ee",
-			"bytes": 2137
+			"digest": "16f53355c832b3d3bbe9ce4135787f129fb3aafcd7b303d195d02221e8436d5b",
+			"bytes": 2129
 		},
 		{
 			"key": "raw/ar/reference/index.md.gz",
@@ -1577,13 +1577,13 @@
 		},
 		{
 			"key": "raw/en/developer/architecture.md.gz",
-			"digest": "61a960fdc4e88936aea054408b7e255167f1e0db2e9a1708a98b38d213ef2ffa",
-			"bytes": 2309
+			"digest": "4f684f2b12bd620f00669f0c0176001f0db398340621c6e1a0870a11e3e4e48b",
+			"bytes": 2312
 		},
 		{
 			"key": "raw/en/guide/first-tag.md.gz",
-			"digest": "417330da2128ba44158c51f9a8a399e0c7128578adc88a291cf2fb5561d02d54",
-			"bytes": 2021
+			"digest": "1c53c4c7305918ce1e85616fb6a8981d32106081e6c630d3234622b76b6814d0",
+			"bytes": 2042
 		},
 		{
 			"key": "raw/en/guide/index.md.gz",
@@ -1592,13 +1592,13 @@
 		},
 		{
 			"key": "raw/en/guide/troubleshooting.md.gz",
-			"digest": "d43090b51cfa537c98fc8ddcdbe630f60848b60dc288158585c5984e39f8d800",
-			"bytes": 2111
+			"digest": "0c11f505103095f95c48040a42ea646ab31a0bb09d8412f3e82b859aec22c569",
+			"bytes": 2105
 		},
 		{
 			"key": "raw/en/index.md.gz",
-			"digest": "dc82211f139bc3d7b4129c139464ad95935fa878d02c5de2d86f9d31cdc3d21e",
-			"bytes": 1292
+			"digest": "f9661752be51efa51154288cfa9cb5b34984fbde58b41016edbc584e99217a8b",
+			"bytes": 1302
 		},
 		{
 			"key": "raw/en/reference/api.md.gz",
@@ -1607,8 +1607,8 @@
 		},
 		{
 			"key": "raw/en/reference/chip-support.md.gz",
-			"digest": "94a11722c3ba9a7cac68b4ef45ff3d14590fcb14089e9eb77b9112a61c47ff47",
-			"bytes": 1749
+			"digest": "b3870560172d70042ba49e924f6241940b910bf84831b5a3db4a7e87906b62cc",
+			"bytes": 1744
 		},
 		{
 			"key": "raw/en/reference/index.md.gz",
@@ -1617,8 +1617,8 @@
 		},
 		{
 			"key": "raw/es/guide/first-tag.md.gz",
-			"digest": "cafe0b4ab384b0b34587392f8ecf37f0b3259defdc8e3304ec3f9daa93dd7e66",
-			"bytes": 2242
+			"digest": "2d8c0e9201e9007d7fa8e75441511e68e700d44e585304adf2df1c1c90b5e24f",
+			"bytes": 2284
 		},
 		{
 			"key": "raw/es/guide/index.md.gz",
@@ -1627,13 +1627,13 @@
 		},
 		{
 			"key": "raw/es/index.md.gz",
-			"digest": "77af2f229890acee0f2a416f8c326b7cb7383dead9d8ab09a5586c53dcbe9bdd",
-			"bytes": 1491
+			"digest": "32f3e2fca37e10cbea7bcafb2eb31384e65a8093ed99167d11396e39a8c8f499",
+			"bytes": 1500
 		},
 		{
 			"key": "raw/es/reference/chip-support.md.gz",
-			"digest": "485542d8541861a5f2c5de4eee23c00cf897cbb75deaf2f076b17843eaab136e",
-			"bytes": 1864
+			"digest": "4d0ec55d01b49baf42c20ad2af63d0377bc0fe6d5c9ede4d686e4f937f38693d",
+			"bytes": 1860
 		},
 		{
 			"key": "raw/es/reference/index.md.gz",
@@ -1642,8 +1642,8 @@
 		},
 		{
 			"key": "raw/fr/guide/first-tag.md.gz",
-			"digest": "652cdaf8dcbb9ae1b2d3ba71fb29ab87d9e126c478dd1d3d0637345369070575",
-			"bytes": 2380
+			"digest": "76b5409171bb9126aeec1f57461ece5ee969775e897a25c0c1ae4af93a503eaa",
+			"bytes": 2415
 		},
 		{
 			"key": "raw/fr/guide/index.md.gz",
@@ -1652,8 +1652,8 @@
 		},
 		{
 			"key": "raw/fr/index.md.gz",
-			"digest": "54b38752333810c55b271f3862cb880ba3992c934bd903d41f3a9a25e33c07c1",
-			"bytes": 1553
+			"digest": "858e2d5e02b33232474123cfaa1bd4e739e3f2e1a60573ee40268c604039a4d3",
+			"bytes": 1573
 		},
 		{
 			"key": "raw/fr/reference/index.md.gz",
@@ -1662,8 +1662,8 @@
 		},
 		{
 			"key": "raw/ja/guide/first-tag.md.gz",
-			"digest": "0378ae936bfbdad1f4cf61cf5165b8a40b404bae6adb9f8567f6d1b8bb966451",
-			"bytes": 2665
+			"digest": "d2b10b3e22d91d1a7451916d4efe8cd13736cf3e8680ef01f5890dac3a640dcd",
+			"bytes": 2693
 		},
 		{
 			"key": "raw/ja/guide/index.md.gz",
@@ -1672,18 +1672,18 @@
 		},
 		{
 			"key": "raw/ja/guide/troubleshooting.md.gz",
-			"digest": "5aec59c4c377326e37fbe8883ac15eb77481faf7fb75d5d64dd81f085ae109aa",
-			"bytes": 2758
+			"digest": "c66702e5c895e48039410cf24c737fb1b45759ba9b4ccaff6f2503de86521195",
+			"bytes": 2753
 		},
 		{
 			"key": "raw/ja/index.md.gz",
-			"digest": "94f601e313de78871ce7c29d6b488fdaf6045364acb69013e81b2760e90e3a10",
-			"bytes": 1843
+			"digest": "fa27e510ff85bceb2abd47816cd66ef13427945ee00a3f334a2f119397a3c5c0",
+			"bytes": 1854
 		},
 		{
 			"key": "raw/ja/reference/chip-support.md.gz",
-			"digest": "a23290627e04043ccca7f4fef6b88b5461816a268d8ff92a997167c56eea1d9f",
-			"bytes": 2304
+			"digest": "4fa624c2969231edacdbef8d9e81851cde616d4f30389f9b0a177dd18ec035fa",
+			"bytes": 2295
 		},
 		{
 			"key": "raw/ja/reference/index.md.gz",
@@ -1692,8 +1692,8 @@
 		},
 		{
 			"key": "raw/pt-BR/guide/first-tag.md.gz",
-			"digest": "bf8bdaf5ab740be8f1c0f3d7bea062fa9f30f39ef35197eb79b9696a61a916a9",
-			"bytes": 2234
+			"digest": "cc66264dbcdbd0d8407ac4c67486e0e3764674748c5e933b968f5fba5912d838",
+			"bytes": 2263
 		},
 		{
 			"key": "raw/pt-BR/guide/index.md.gz",
@@ -1702,8 +1702,8 @@
 		},
 		{
 			"key": "raw/pt-BR/index.md.gz",
-			"digest": "75b59a87b18307b8ea2865bffa008fce6d9504da5dc33a0461a5b2ea88cc3c88",
-			"bytes": 1483
+			"digest": "c77fca35a4a5bc2abbe64813cebe019cc01053142361e0db622bfebc83dc21a5",
+			"bytes": 1499
 		},
 		{
 			"key": "raw/pt-BR/reference/index.md.gz",
@@ -1712,8 +1712,8 @@
 		},
 		{
 			"key": "raw/zh/guide/first-tag.md.gz",
-			"digest": "be4274d667ee5d2fdab62dd43070aa90b90e7b39a0f8e1cff306550209de19ff",
-			"bytes": 2527
+			"digest": "f6f7c2613e1ea2fa22541e24f6c5fcdd08be050510b12eee461cd1db9c6cc221",
+			"bytes": 2550
 		},
 		{
 			"key": "raw/zh/guide/index.md.gz",
@@ -1722,13 +1722,13 @@
 		},
 		{
 			"key": "raw/zh/index.md.gz",
-			"digest": "e887eecc6257e65141d9493625775129bdbf0100fd029dcac971d65d60fe14ea",
-			"bytes": 1694
+			"digest": "304c74e32834dc5f20fe1b6d20f87b3f4c82f4143cf242a0248b10fd822813af",
+			"bytes": 1700
 		},
 		{
 			"key": "raw/zh/reference/chip-support.md.gz",
-			"digest": "7b627e3a078747269c11bbed3ed551db9282a0916cc64e0e016ee6ed20c1cac6",
-			"bytes": 2155
+			"digest": "835f73daa6f89e97156013906401a6cb5a5f08e4d99e621edf348ce13d8305bd",
+			"bytes": 2145
 		},
 		{
 			"key": "raw/zh/reference/index.md.gz",
@@ -1775,7 +1775,7 @@
 		"pages": 8,
 		"locales": 7,
 		"objects": 92,
-		"bytes": 264768
+		"bytes": 264968
 	},
 	"coverage": {
 		"en": {
