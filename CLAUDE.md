@@ -904,10 +904,12 @@ names the reader's language in a lookup table that has no key for anything else.
   from `site.pages`, so such a slug has no row and nothing lists it; serving it through some
   other path would publish an address the site does not know it has. `pageSkew` names the
   state at build time.
-- Dates are formatted as the ISO date the bundle already stores, and a consumer passes
-  `formatDate` to change that. `Intl.DateTimeFormat` answers from whatever ICU the runtime
-  was built with, which is a hydration mismatch on a string the reader sees. Plural
-  categories and language names are hand-written tables for the same reason.
+- Dates are written per language from a hand-written table, `DATE_FORMATS` in
+  `src/ui/strings.ts`, and a consumer passes `formatDate` to change that. Step 4 printed the
+  ISO date the bundle stores; step 10 needed a visible "Last updated" that reads as a date in
+  each language. `Intl.DateTimeFormat` answers from whatever ICU the runtime was built with,
+  which is a hydration mismatch on a string the reader sees. Plural categories and language
+  names are hand-written tables for the same reason.
 - A control the script has not reached yet renders **disabled** rather than absent or live.
   A button announced as available that does nothing is worse than no button, and rendering
   it only after hydration moves the layout under the reader.
@@ -1644,9 +1646,10 @@ import of `<mount>/src/index` so the plugin-less route-config loader can load it
 404 and 500 as `Response`s; `resource()` always returns one. Everything subtle is in
 `src/site/serve.ts`, once, for both consumers: the slug comes from a lookup table on the
 lower-cased, decoded, slashless path and is never parsed out of the URL, because React Router
-matches case-insensitively and strips one slash from `.data` requests; a case variant is served
-and marked not indexable, which is the site's existing behaviour for its own pages; and a bundle
-that is missing or malformed is a 500 naming `hexdocs prefetch`, never a throw at import.
+matches case-insensitively and strips one slash from `.data` requests; a case variant was served
+and marked not indexable, and since step 10 every variant spelling is a 301 to the canonical one;
+and a bundle that is missing or malformed is a 500 naming `hexdocs prefetch`, never a throw at
+import.
 
 **`DocsSeo.languages` agrees with `indexable` by construction.** The manifest carries a page's
 effective translation state when it differs from its own, and `languages` is every locale whose
@@ -1879,9 +1882,11 @@ bundle and, separately, with the fixture corpus mounted as an uncommitted second
 ### What step 8 deliberately does not do
 
 Pinned version addresses (`/v/<label>/`) have no route rows; `docsRoute` still accepts `pinned`.
-There is no `Accept: text/markdown` negotiation, which would need `Vary: Accept` from root's
-`headers`. There is no JSON-LD helper; a consumer builds its own. `search.json` was removed, since
-nothing specified or read it. On a phone the sidebar renders before the article with no
+There is no `Accept: text/markdown` negotiation in this package, which would need `Vary: Accept`
+from root's `headers`; a consumer that wants it answers it in its own root, and `DocsPageData.rawHref`
+is the address to send the 303 to. There is no JSON-LD helper; a consumer builds its own, and
+`updatedAt` on the page data is its `dateModified`. The `search.json` row was removed, since nothing
+specified or read it; step 10's JSON search is a handler the host mounts, not a docs row. On a phone the sidebar renders before the article with no
 collapse, which is a design question for when a project has enough pages to make it matter. And
 three kcalc guards conflict with docs and are recorded for
 kcalc's own install rather than fixed here: `seo-audit.mjs` expects exactly its registry's URLs in
@@ -2030,6 +2035,170 @@ neither consumer did, because neither called them. `test/exports.test.ts` holds 
 runtime names in both directions, the types a consuming site annotates with as `import type`
 bindings, and a `WITHDRAWN` list with a reason per name, so a removal leaves a record and a
 name cannot quietly come back under a different meaning.
+
+## Machine text and the agent interface (step 10)
+
+Step 10 made the documentation readable by agents as well as by people: machine text that says
+what the app is and where each passage came from, and a public read-only interface over MCP and
+JSON. Everything here is serve time, so it reaches a live site with one gitlink bump and fixes
+bundles that are already published. What follows is what would otherwise be rediscovered.
+
+### What a consuming site passes, and where each value enters
+
+Every option is optional, and with none of them kcalc serves exactly what it served before, except
+the headers, the redirects and `lastmod`, which changed for everyone.
+
+- **Constants are `docsServer` options**, written as literals in `docs.server.ts`: `origin` (the
+  site's scheme and host, `https://apps.hex.pro`), `licence` (`{ name, url }`) and `agents` (the
+  interface's reverse-DNS name, title, description, website and the paths the host mounts). That
+  module may import only by relative path, because React Router loads `routes.ts` with no Vite
+  plugins, and it needs nothing else. An origin cannot be read off a request: behind the deploy's
+  tunnel `request.url` says `http://`. A value that is not an origin is a 500 naming it from every
+  handler, never a throw at import.
+- **Facts about the apps come per request**, as functions in `DocsHostFacts`, from a route module,
+  which can import the site's registries and its price formatting: `describe(project)` for one
+  documented project, `apps()` for everything the site sells, documented or not. Either alone is
+  enough. The types are in `src/contracts/host.ts`. Prices and platforms are never written into
+  this package, because they would be a second copy of a registry the site keeps.
+- **`resource()` takes the `Request`**, not only its URL, so a conditional request can be answered
+  with a 304. A URL alone still works and always gets the body.
+
+### Two shapes of machine text, and the option that chooses
+
+Without an origin, every body is what it was: the compiled `llms.txt`, root-relative links, and
+`llms-full.txt` as the pages joined by a blank line. With one, every link is absolute, each `.md`
+opens with a front matter header (title, description, product, canonical HTML address, markdown
+address, `updatedAt`, version label, language, licence), and `llms-full.txt` opens with a preamble
+and puts a delimiter carrying each page's title and both addresses before it. A relative link in a
+file pasted into a chat resolves against nothing, which is why the absolute shape is the one worth
+having and why it waits for the one value this package cannot work out.
+
+`llms.txt` is composed whenever the host describes the app, origin or not, because the compiled
+file describes the docs home, and an assistant recommending the app needs the maker, the price, the
+platforms, the status and the product page. It follows llmstxt.org: an H1, a blockquote, a facts
+block with no headings, one H2 per `nav.json` group in nav order (a page in no group sits under its
+section root's title), and `## Optional` last, holding the developer pages and the addresses of the
+full text, the MCP endpoint, the JSON search and the licence. The licence is also a line in the facts
+block, where nothing marks it skippable. Without a description the compiled file is served, with its
+page links made absolute when there is an origin.
+
+The front matter of a page served as a fallback names the source page as canonical, because those
+are the words in it, and not the reader's address, which is `noindex` and has no canonical. The
+`llms-full.txt` preamble dates itself by the labelled commit and not by the request: a body that
+changed on every request would make its `ETag` useless.
+
+Directive syntax in the raw markdown is the compiler's to lower (`rawMarkdown()` in the kit), not
+this module's. A serve-time line transform would duplicate the compiler's fence tracking.
+
+### The headers on machine text, and why `noindex` moved
+
+Every machine response carries `Content-Signal: search=yes, ai-input=yes, ai-train=yes`, a strong
+`ETag` (SHA-256 of the body through Web Crypto, which every runtime has as a global, so the module
+still imports nothing), `Last-Modified` (the page's `updatedAt` for a `.md`, the commit for the two
+`llms` files), `Cache-Control: public, max-age=3600`, `nosniff` and the served `Content-Language`.
+`If-None-Match` wins outright when present, as RFC 9110 says, and compares weakly; without it
+`If-Modified-Since` compares whole seconds. A 304 carries the same headers as the 200.
+
+A `.md` answered with an origin carries `Link: <html>; rel="canonical"` (and `rel="license"`) and no
+`X-Robots-Tag`, because the twin is the same page as the HTML one and a canonical consolidates a
+non-HTML duplicate where `noindex` suppresses it. The two `llms` files keep `noindex`: they repeat
+the pages and have no HTML twin. Without an origin the `.md` keeps `noindex`, because a canonical has
+to be absolute. The design pass's falsification test still stands: if `.md` addresses show in Search
+Console as indexed rather than as alternates, put `noindex, follow` back beside the canonical.
+
+### Every other spelling of an address is a 301
+
+React Router answers `/HEX-NFC/Docs`, `/hex-nfc/docs/`, `/gu%69de` and `//` from one row. They used
+to be served and marked not indexable; now page and machine addresses alike 301 to the canonical
+spelling in one hop, query kept, compared through `new URL` so a mount containing a character that
+needs encoding is not redirected to itself for ever. A `.data` request arrives with the canonical
+path, because React Router strips the suffix first, so a client navigation is never redirected.
+Under `:lang` the host's own language redirect runs first and keeps the rest of the path as it
+came, so `/EN/HEX-NFC/docs` takes two hops on hex-web.
+
+### What the page data and the sitemap carry
+
+`DocsPageData` gains `updatedAt` (the served locale's), `rawHref` (the markdown twin at the reader's
+address, root-relative) and, when the server has them, `rawUrl` (absolute) and `licence`. A host uses
+`rawHref` for `<link rel="alternate" type="text/markdown">` and `updatedAt` for `dateModified`.
+`DocsSitemapRow` gains `lastmod`, the newest date across the languages it lists, and `lastmods`, each
+language's own, because each language is its own `<url>` and a stale translation was last changed
+when it was translated.
+
+### The shell's additions
+
+Under the title, the bar holds the reading time, "Last updated" with a `<time>`, the edit link and a
+page menu: a native `<details>`, so the keyboard and the expanded state are the browser's. It copies
+the page's markdown (a same-origin fetch, which `connect-src 'self'` allows, written through a
+`ClipboardItem` holding the fetch's promise where there is one, because Safari refuses a write that
+arrives after an await, and announced in the shell's polite live region), links the twin, and, only
+when the server knows the absolute address, offers "Open in ChatGPT" and "Open in Claude" as plain
+links with the address in an encoded prompt. They are navigations, so no CSP changes. A licence line
+closes the article when a licence is configured. The bar carries no `dir`: its words do. The menu
+sits at the bar's inline end through its own auto margin, which resolves in the item's direction, so
+a `dir` on the menu would move it to the wrong end of an Arabic page serving English, which is the
+copy button's defect one element along.
+
+### The agent interface, `src/site/agents.ts`
+
+`DOCS.mcp(request, host)`, `DOCS.search(request, host)` and `DOCS.serverCard(request)`, each a
+`Request` in and a `Response` out, mounted by the host as resource routes. The JSON-RPC dispatch is
+ported from `kit/src/mcp/protocol.ts`, not imported: `kit/` is never imported by a website.
+
+**Two eras on one endpoint.** MCP 2026-07-28 removed `initialize`: every request carries its
+version and the client's capabilities in `params._meta`, mirrored into `MCP-Protocol-Version`,
+`Mcp-Method` and `Mcp-Name`, which the server checks against the body. The revisions to 2025-11-25
+open with `initialize`. Clients of both exist, so the server is dual-era as the specification
+describes: `initialize` selects the earlier behaviour and is negotiated the earlier way (echo a
+version it speaks, otherwise answer with 2025-11-25); a request whose `_meta` names a version is
+served by the 2026-07-28 rules (`server/discover`, `resultType`, the server's identity and cache
+hints on results); anything else is a request after an `initialize`, which needs no state, because
+nothing a client negotiates changes a read-only answer. There is no session and no stream.
+
+**The status codes are the protocol.** A 2026-07-28 client decides whether to fall back to
+`initialize` from a 400's body, and a 2025 client reads a 404 as a lost session, so each status is
+the one its revision assigns: 405 with `Allow: POST` for GET and DELETE; 403 for a present `Origin`
+that is not the configured origin; 429 with `Retry-After`; 415 for a body that is not
+`application/json`; 406 for an `Accept` that excludes it; 413 over 64 KB, declared or streamed; 400
+for a parse error, a batch or an invalid message; 202 for a notification or a stray response. For
+2026-07-28 requests: 400 with `-32602` for a missing version or capabilities, `-32022` with the
+supported versions for one it does not speak, `-32020` for a header that disagrees with the body,
+404 with `-32601` for an unknown method. Earlier requests get 200 for every JSON-RPC answer. An
+unknown tool is `-32602`, a refused argument is a tool result with `isError`, which a model can
+read and correct.
+
+**The `Origin` check is here because nothing else makes it.** React Router checks an action's
+origin for document and data requests and not for a resource route, and the MCP binding requires
+the check against DNS rebinding. An absent `Origin` is a server-side client and is served.
+
+**The rate limit in this process is the second line.** A token bucket per client, keyed on
+`CF-Connecting-IP`, then the first `X-Forwarded-For` hop, then one shared key, least recently used
+evicted at 10,000 clients, a burst of 60 and one a second by default. It lives in one process and
+forgets on a deploy. The real limit is a Cloudflare rate-limiting rule on the MCP path, which the
+owner adds; this one stops a single client exhausting the process between the edge and the app.
+
+**Tools.** `list_apps` (every app the host sells, documented or not, with `hasDocs`), `get_app`
+(facts and the outline), `search_docs` (the runtime's own `searchIndex()` over the bundle's index,
+hits capped at 20, each with the HTML address to cite, the `.md` address, the anchor and a snippet
+from `blockText()` of that section) and `get_page` (the page's markdown with its header, in windows
+of 20,000 code units that end between lines and never inside a surrogate pair, with `nextOffset`).
+Each has an input schema, an output schema, `readOnlyHint`, structured content and a text
+rendering. `kit/test/mcp/agents.test.ts` drives the endpoint with the SDK's own
+`StreamableHTTPClientTransport` over a real socket, and the SDK validates every structured result
+against its output schema, so a schema that drifted from what a tool returns fails there.
+
+**The search index on the server.** `hexdocs prefetch` writes each locale's index into
+`_bundles/<project>/<label>/search/` as well as into `public/`, because a server module cannot read
+`public/`: Vite copies that tree into the client build only. `DocsSources.search` is the lazy glob
+over it; a site without it serves everything else and answers a search with a 500 naming the glob.
+An index is checked once per process, the header and the shape and its commit against the
+manifest's, the same checks the browser makes.
+
+**The JSON search and the Server Card** are public and read-only, so both send
+`Access-Control-Allow-Origin: *`, a strong `ETag`, an hour of caching and a 304, and answer a
+preflight. The card follows SEP-2127's schema, names the streamable HTTP endpoint and every version
+the server speaks, and refuses to describe a server with no origin or a name that is not
+reverse-DNS. The host's `/.well-known/ai-catalog.json` points at it.
 
 ## Code style
 

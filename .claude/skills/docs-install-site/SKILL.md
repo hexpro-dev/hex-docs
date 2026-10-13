@@ -86,6 +86,80 @@ installed" are one fact.
 hexdocs scaffold site --site apps/front --project hex-nfc --commit <sha> --version 1.0.0 --released 2026-09-14
 ```
 
+## 4a. Machine text and the agent interface, which are optional
+
+A site that passes nothing serves the compiled `llms.txt`, root-relative links and `noindex` on
+every `.md`, which is what kcalc does. A site that wants machine text an agent can cite, and the
+public read-only agent interface, makes four changes by hand. None of them is checked by
+`verify-install`.
+
+**`app/lib/docs.server.ts`**: literals only, because this module may import only by relative path.
+
+```ts
+export const DOCS = docsServer({
+	configs: DOCS_SITES,
+	manifests: /* unchanged */,
+	pages: /* unchanged */,
+	text: /* unchanged */,
+	search: import.meta.glob("../docs/_bundles/*/*/search/*.idx.json", { import: "default" }),
+	origin: "https://apps.example.com",
+	licence: { name: "CC BY 4.0", url: "https://creativecommons.org/licenses/by/4.0/" },
+	agents: {
+		name: "com.example.apps/docs",
+		title: "Example app documentation",
+		description: "Search and read the documentation for the apps Example publishes.",
+		website: "https://apps.example.com",
+		mcp: "/mcp",
+		search: "/docs/search.json",
+		serverCard: "/mcp/server-card",
+	},
+});
+```
+
+`origin` is the scheme and host with no trailing slash; anything else is a 500 naming it. `name` is
+reverse-DNS with exactly one slash and `description` at most 100 characters, which is what a Server
+Card allows. The `search` glob reads the copy of each index `prefetch` writes beside the pages.
+
+**`app/routes/docs.machine.tsx`**: hand over the request, so conditional requests get a 304, and the
+app's facts from the site's own registries, so `llms.txt` says who makes the app, what it costs and
+where to get it.
+
+```ts
+export function loader({ request }: LoaderFunctionArgs) {
+	return DOCS.resource(request, { describe, apps });
+}
+```
+
+`describe(project)` returns `DocsAppFacts` and `apps()` returns every `DocsCatalogueApp` the site
+sells, documented or not (`project` names the docs project of one that is). Either alone is enough.
+Prices come from the site's own formatter as display strings.
+
+**Three resource routes**, top level beside `robots.txt`, each with no default export and no
+`headers` export:
+
+- `mcp.tsx` at the `mcp` path: `loader` and `action` both return `DOCS.mcp(request, { describe, apps })`.
+  The loader is what answers a GET with 405; the action answers the POSTs.
+- `docs.search.tsx` at the `search` path: `loader` returns `DOCS.search(request, { describe, apps })`.
+- `mcp.server-card.tsx` at the `serverCard` path: `loader` and `action` both return
+  `DOCS.serverCard(request)`. The action answers a CORS preflight.
+
+React Router does not check the `Origin` of a request to a resource route, so the MCP handler checks
+it itself against `origin`. Its token bucket is per process; add a rate-limiting rule for the MCP
+path at the edge, which is the real limit.
+
+**`routes/docs.tsx` `meta()`**: advertise the twin and the index, with the page data's own fields.
+
+```ts
+{ tagName: "link", rel: "alternate", type: "text/markdown", href: `${ORIGIN}${loaded.data.rawHref}` },
+{ tagName: "link", rel: "describedby", href: `${ORIGIN}${loaded.data.address.basePath}/llms.txt` },
+```
+
+`describedby` names the `llms.txt` that covers the page, which is the mount's own. A site-level
+`llms.txt` that lists every mount can use `docsMachineUrls(origin, site)` for each one's addresses.
+
+`loaded.data.updatedAt` is the page's `dateModified`, and each sitemap row's `lastmods[lang]` is the
+`<lastmod>` for that language's `<url>`.
+
 ## 5. Fill in the pages
 
 `pages` starts empty, and `sync` is what fills it. Do not maintain it by hand.
@@ -149,8 +223,20 @@ the tags they produce are right. Run the site and look:
 curl -s localhost:5173/hex-nfc/docs | grep -o 'hreflang="[^"]*"' | sort | uniq -c
 curl -si localhost:5173/hex-nfc/docs | grep -i 'content-security-policy'
 curl -s -o /dev/null -w '%{http_code}\n' localhost:5173/banana/hex-nfc/docs/llms.txt
-curl -si localhost:5173/hex-nfc/docs/index.md | grep -i 'x-robots-tag'
+curl -si localhost:5173/hex-nfc/docs/index.md | grep -i 'x-robots-tag\|^link'
 ```
+
+With an `origin`, a `.md` answers with a `Link` naming its canonical HTML page and no
+`X-Robots-Tag`; without one it answers `noindex`. With the agent interface mounted:
+
+```
+curl -si -X POST localhost:5173/mcp -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25"}}'
+curl -s -o /dev/null -w '%{http_code}\n' localhost:5173/mcp
+curl -s 'localhost:5173/docs/search.json?q=tag&limit=3'
+```
+
+The second must be a 405.
 
 Count `hreflang` attributes rather than `rel="alternate"` links, and expect only the languages
 the page is indexable in plus `x-default`. A missing CSP header means a docs route exported
