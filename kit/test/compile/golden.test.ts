@@ -202,6 +202,57 @@ describe('the compiled corpus', () => {
 		}
 	});
 
+	test('no raw object carries directive syntax, and every directive the corpus writes was met', () => {
+		// Every raw object, not only the seven goldened above. The build already rereads each
+		// one with the parser and refuses a leftover directive; this is a second reading that
+		// shares none of that code, a scan of the lines with the fences skipped, so weakening
+		// the reread does not also weaken the check on it.
+		const leftovers: string[] = [];
+		const met = new Set<string>();
+		for (const [slug, byLocale] of result.pages) {
+			for (const [locale, output] of byLocale) {
+				for (const record of output.parsed.directives) {
+					met.add(record.kind === 'container' ? record.name : record.kind);
+				}
+				let fence: string | undefined;
+				for (const line of output.raw.split('\n')) {
+					const body = line.replace(/^[\s>]*/, '');
+					const marker = /^(`{3,}|~{3,})/.exec(body)?.[1];
+					if (fence !== undefined) {
+						if (marker !== undefined && body.trim() === marker && marker.startsWith(fence)) {
+							fence = undefined;
+						}
+						continue;
+					}
+					if (marker !== undefined) {
+						fence = marker;
+						continue;
+					}
+					if (/^:{2,}/.test(body) || /^\[!\w+\]/.test(body) || /^#{1,6} .*\{#/.test(body)) {
+						leftovers.push(`${locale}/${slug}.md: ${line}`);
+					}
+				}
+			}
+		}
+		expect(leftovers).toEqual([]);
+		// Every kind of record the corpus pages produce, so a parse that stopped recording one
+		// reads as a failure here rather than as a corpus with nothing left to lower. The
+		// caution callout is not in the list because the corpus writes it only in a snippet,
+		// whose records belong to the snippet's own parse.
+		expect([...met].sort()).toEqual([
+			'alert',
+			'figure',
+			'headingId',
+			'include',
+			'note',
+			'step',
+			'steps',
+			'table',
+			'tip',
+			'warning',
+		]);
+	});
+
 	test('every destination in every raw object is one a served page can follow', () => {
 		// Every raw object in the bundle, not only the three goldened above, because a
 		// destination left relative is wrong from `llms-full.txt` on any page and the three

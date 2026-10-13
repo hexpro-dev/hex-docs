@@ -126,15 +126,27 @@ const SEPARATOR: Written = { text: '', soft: true };
 /** A blank line inside the quotation a callout is about to open. */
 const QUOTE_SEPARATOR: Written = { text: '>', soft: true };
 
+/**
+ * What a container adds to the start of a line inside it, at the column its content
+ * starts on that line.
+ *
+ * `floor` is the column the container's own content starts at, which is where the prefix
+ * goes on a blank line. A blank line carries no indent to measure, and inside a list item
+ * the parser hands a container a blank line at column one, so a quotation in a list item
+ * would otherwise put its `>` at the margin and close the list. `rank` is the line the
+ * container opened on, which puts an outer container's prefix before an inner one's at
+ * the same column. A callout's label running into its first paragraph is ranked after
+ * every container, because it is the start of the paragraph rather than a prefix to it.
+ */
+interface Prefix {
+	column: number;
+	floor: number;
+	text: string;
+	rank: number;
+}
+
 interface LinePlan {
-	/**
-	 * What the containers around this line add to its start, each at the column its
-	 * container's content starts. `rank` is the line the container opened on, which is
-	 * what puts an outer container's prefix before an inner one's at the same column. A
-	 * callout's label running into its first paragraph is ranked after every container,
-	 * because it is the start of the paragraph rather than a prefix to it.
-	 */
-	prefixes: { column: number; text: string; rank: number }[];
+	prefixes: Prefix[];
 	/** The line's own content from `column` on, replaced. `shape` is what that content must be. */
 	replace: { column: number; written: Written[]; shape: RegExp | undefined } | undefined;
 	/** Lines written before this one, in its context. */
@@ -200,8 +212,21 @@ function planLines(lowering: RawLowering): Map<number, LinePlan> {
 		plan.replace = { column: at.column, written, shape };
 	};
 	const prefix = (record: ContainerRecord, text: string): void => {
+		const floor = record.open.column;
+		const rank = record.open.line;
+		const covered = new Set<number>();
 		for (const point of record.inner) {
-			planOf(point.line).prefixes.push({ column: point.column, text, rank: record.open.line });
+			covered.add(point.line);
+			planOf(point.line).prefixes.push({ column: point.column, floor, text, rank });
+		}
+		// A run of blank lines inside a list item reaches the parser as one, so the others
+		// are in no container's inner lines. They are inside this one all the same, and a
+		// blank line with no `>` in the middle of a quotation ends it.
+		const last = record.close?.line ?? (record.inner.at(-1)?.line ?? record.open.line) + 1;
+		for (let number = record.open.line + 1; number < last; number += 1) {
+			if (!covered.has(number)) {
+				planOf(number).prefixes.push({ column: floor, floor, text, rank });
+			}
 		}
 	};
 	/**
@@ -215,8 +240,12 @@ function planLines(lowering: RawLowering): Map<number, LinePlan> {
 		if (first?.type !== 'paragraph') return false;
 		const origin = lowering.origins.get(first);
 		if (origin === undefined || origin.file !== lowering.file) return false;
+		// The space is not decoration. A closing `**` straight after a full-width colon and
+		// before a letter is not a closing delimiter to CommonMark, so without it the
+		// Chinese and Japanese labels would not be bold at all.
 		planOf(origin.line).prefixes.push({
 			column: origin.column,
+			floor: origin.column,
 			text: `${lead} `,
 			rank: Number.POSITIVE_INFINITY,
 		});
@@ -389,15 +418,24 @@ function applyPlan(source: string, number: number, plan: LinePlan, file: string)
 	if (cut - 1 > text.length) throw misfit('a directive');
 	let head = text.slice(0, cut - 1);
 	const rest = text.slice(cut - 1);
+	const blank = cut === text.length + 1 && isBlank(text);
 
 	// Right to left, and at one column the inner container first, so each insertion leaves
 	// the columns of the ones still to come where they were and the outermost prefix ends
 	// up leftmost.
-	const prefixes = [...plan.prefixes].sort((a, b) => b.column - a.column || b.rank - a.rank);
+	const prefixes = plan.prefixes
+		.map((prefix) => ({
+			...prefix,
+			column: blank ? Math.max(prefix.column, prefix.floor) : prefix.column,
+		}))
+		.sort((a, b) => b.column - a.column || b.rank - a.rank);
 	for (const { column, text: inserted } of prefixes) {
-		if (column > cut && rest.trim() !== '') throw misfit('a container prefix');
-		const at = Math.min(column - 1, head.length);
-		head = `${head.slice(0, at)}${inserted}${head.slice(at)}`;
+		if (column - 1 > head.length) {
+			// Only a blank line can be shorter than the column its prefix goes in at.
+			if (!blank) throw misfit('a container prefix');
+			head = head.padEnd(column - 1, ' ');
+		}
+		head = `${head.slice(0, column - 1)}${inserted}${head.slice(column - 1)}`;
 	}
 
 	const place = (written: Written): Written => ({
