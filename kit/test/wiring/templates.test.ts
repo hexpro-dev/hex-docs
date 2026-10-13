@@ -96,6 +96,7 @@ describe('the server module', () => {
 				`../docs/${BUNDLE_TREE}/*/*/pages/**/*.json`,
 				`../docs/${BUNDLE_TREE}/*/*/raw/**/*.md`,
 				`../docs/${BUNDLE_TREE}/*/*/llms/*.txt`,
+				`../docs/${BUNDLE_TREE}/*/*/search/*.idx.json`,
 			]);
 			// The type argument records what ?raw yields. The server's sources take unknown, so the
 			// same glob written without it fits too.

@@ -24,10 +24,10 @@
  * does no network at all.
  *
  * Two destinations, and the split is decided by shipped renderer code rather than by
- * taste. Page payloads, raw markdown, `llms.txt` and the manifest go under the site's app
- * source, where a lazy `import.meta.glob` turns each page into a code-split chunk and a
- * resource route can serve the markdown. **The search index and the assets go to
- * `public/`**, because `src/render/search.tsx` fetches the index at runtime through
+ * taste. Page payloads, raw markdown, `llms.txt`, the manifest and a copy of each search index
+ * go under the site's app source, where a lazy `import.meta.glob` turns each page into a
+ * code-split chunk, a resource route can serve the markdown and the agent interface can search.
+ * **The search index and the assets go to `public/`** as well, because `src/render/search.tsx` fetches the index at runtime through
  * `fetch(bundleUrl(props.bundleBase, searchKey(...)))` and an image is an `<img src>`:
  * both have to be same-origin static files, and `public/` is the only tree Vite copies
  * into `build/client/`, which is the only thing the Dockerfile copies.
@@ -98,7 +98,7 @@ import { PREFETCH_PARAMS, PREFETCH_POSITIONALS } from './prefetch-params.js';
 /** Where `<project>.docs.json` lives, relative to the consuming site directory. */
 const DOCS_DIR = ['app', 'docs'];
 
-/** Where page payloads, raw markdown, `llms.txt` and the manifest land. */
+/** Where page payloads, raw markdown, `llms.txt`, the manifest and the server's search index land. */
 const BUNDLE_DIR = [...DOCS_DIR, BUNDLE_TREE];
 
 /** Where the search index and the assets land: the only tree the browser can reach. */
@@ -135,7 +135,7 @@ export const prefetch = defineCommand({
 	writes: 'files',
 	summary: 'Download every labelled bundle a site declares and write it into the site.',
 	detail:
-		'Reads every <project>.docs.json under the site, caches each labelled commit under a commit-addressed cache directory, verifies both the stored and the uncompressed digest of every file, and writes the page payloads into the app source and the search index and the assets into public/. Anything under those two trees that no configured version writes is removed first, so a relabelled or removed version leaves nothing behind to be built. A warm cache makes no network call and needs no AWS credentials, which is what makes this safe to run from a prebuild hook on a laptop and in a container. Run it before every build of a site that mounts documentation.',
+		'Reads every <project>.docs.json under the site, caches each labelled commit under a commit-addressed cache directory, verifies both the stored and the uncompressed digest of every file, and writes the page payloads and a copy of the search index into the app source and the search index and the assets into public/. Anything under those two trees that no configured version writes is removed first, so a relabelled or removed version leaves nothing behind to be built. A warm cache makes no network call and needs no AWS credentials, which is what makes this safe to run from a prebuild hook on a laptop and in a container. Run it before every build of a site that mounts documentation.',
 	params: PREFETCH_PARAMS,
 	positionals: PREFETCH_POSITIONALS,
 	taughtBy: ['docs-install-site'],
@@ -775,6 +775,17 @@ function planExtraction(
 			entries.push({
 				key: searchKey(locale),
 				destination: localPath(publicDirectory, `search/${locale}.idx.json`),
+				digest: search.digest,
+				binary: false,
+			});
+			// A second copy beside the pages, for the server. The agent interface in
+			// `src/site/agents.ts` answers a search on the server with the same index the
+			// browser fetches, and a server-side module cannot read `public/`: Vite copies that
+			// tree into the client build and never into the server bundle, and the server's glob
+			// is over this tree. One index, two destinations, one digest checked for each.
+			entries.push({
+				key: searchKey(locale),
+				destination: localPath(bundleDirectory, `search/${locale}.idx.json`),
 				digest: search.digest,
 				binary: false,
 			});
