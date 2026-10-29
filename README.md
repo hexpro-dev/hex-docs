@@ -1,6 +1,24 @@
-# hex-docs
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/hexpro-dev/.github/main/profile/assets/banner-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/hexpro-dev/.github/main/profile/assets/banner-light.png">
+  <img alt="Hex Pro: Software for People" src="https://raw.githubusercontent.com/hexpro-dev/.github/main/profile/assets/banner-light.png" width="100%">
+</picture>
+
+<p align="center">
+  <a href="https://hex.pro"><img alt="hex.pro" src="https://img.shields.io/badge/hex.pro-the%20company-0B76D9?style=flat-square&labelColor=1b2530"></a>
+  <a href="https://apps.hex.pro"><img alt="apps.hex.pro" src="https://img.shields.io/badge/apps.hex.pro-apps%20%26%20tools-0B76D9?style=flat-square&labelColor=1b2530"></a>
+  <a href="https://citadel.hex.pro"><img alt="citadel.hex.pro" src="https://img.shields.io/badge/citadel.hex.pro-file%20sync-0B76D9?style=flat-square&labelColor=1b2530"></a>
+  <a href="https://games.hex.pro"><img alt="Hex Games" src="https://img.shields.io/badge/Hex%20Games-the%20game%20studio-9F9F9F?style=flat-square&logo=github&logoColor=white&labelColor=1b2530"></a>
+  <img alt="Australian owned and operated" src="https://img.shields.io/badge/Australian-owned%20%26%20operated-9F9F9F?style=flat-square&labelColor=1b2530">
+</p>
+
+# Hex Docs: Documentation Toolchain and Renderer for Hex Pro Apps
 
 A reusable documentation package for Hex Pro.
+
+[![CI](https://img.shields.io/github/actions/workflow/status/hexpro-dev/hex-docs/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/hexpro-dev/hex-docs/actions/workflows/ci.yml)
+[![Live: Hex NFC docs](https://img.shields.io/badge/live-Hex_NFC_docs-0b76d9?style=flat-square)](https://apps.hex.pro/hex-nfc/docs)
+[![No runtime dependencies](https://img.shields.io/badge/runtime_dependencies-none-9b958c?style=flat-square)](package.json)
 
 Documentation source lives in each app's own repository. A GitHub Action compiles it
 and publishes a bundle to S3 keyed by commit sha. The consuming website labels a sha
