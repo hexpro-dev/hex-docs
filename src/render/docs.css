@@ -519,13 +519,31 @@
 	border-radius: var(--hx-radius, 0.75rem);
 }
 
+/*
+ * A figure is drawn no wider than the figure size, and its caption wraps to the image so
+ * the two read as one thing. The corpus is iPhone screenshots, 1320 pixels across at 3x.
+ * At the column's full width one showed the app half again larger than the phone does,
+ * and a full screen ran 1341px down a 900px window. One width for every figure also keeps
+ * every screenshot at one scale, so a cropped panel and a whole screen show the app at the
+ * same size. An image narrower than that is drawn at its own size, never stretched. The
+ * figure is centred in the column: at half a desktop column's width, a start-aligned
+ * one leaves the page lopsided. On a phone the column is barely wider, so it moves a few
+ * pixels.
+ *
+ * The border is the control colour, the edge a table's scroll region has. These
+ * screenshots are near black, and on this ground an unbordered one had no visible edge:
+ * the top of the scan sheet simply was not there.
+ */
 .hx-root .hx-figure {
-	margin-inline: 0;
+	margin-inline: auto;
 	margin-block: 0 1rem;
+	inline-size: fit-content;
+	max-inline-size: min(100%, var(--hx-figure-size, 20rem));
 }
 
 .hx-root .hx-figure .hx-image {
 	display: block;
+	border: 1px solid var(--hx-control, #78716c);
 }
 
 .hx-root .hx-figure figcaption {

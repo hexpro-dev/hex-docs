@@ -196,6 +196,14 @@ export const THEME_TOKENS: readonly ThemeToken[] = [
 		// characters whatever the surrounding layout allows.
 		role: 'The reading column. Roughly 72 characters.',
 	},
+	{
+		name: 'figure-size',
+		host: null,
+		// Sized for an iPhone screenshot: 20rem is about three quarters of the phone's own
+		// width, and a full screen at that width fits a laptop window with room to spare.
+		fallback: '20rem',
+		role: 'The widest a figure is drawn. One width for every figure keeps screenshots at one scale.',
+	},
 	{ name: 'tree-size', host: null, fallback: '16rem', role: 'Sidebar width.' },
 	{ name: 'toc-size', host: null, fallback: '14rem', role: 'Table of contents width.' },
 	{ name: 'gutter', host: null, fallback: '2rem', role: 'Space between the three columns.' },
