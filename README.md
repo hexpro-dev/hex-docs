@@ -12,7 +12,9 @@
   <img alt="Australian owned and operated" src="https://img.shields.io/badge/Australian-owned%20%26%20operated-9F9F9F?style=flat-square&labelColor=1b2530">
 </p>
 
-# Hex Docs: Documentation Toolchain and Renderer for Hex Pro Apps
+# Hex Docs
+
+> _Documentation Toolchain and Renderer for Hex Pro Apps_
 
 A reusable documentation package for Hex Pro.
 
