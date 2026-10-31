@@ -294,7 +294,9 @@ export interface TextDirectiveOpen {
 	open: number;
 }
 
-const TEXT_DIRECTIVE_NAME = /[a-z][a-z0-9-]*/y;
+// Either case, so a capitalised `:More[` is refused by name rather than published as
+// literal text. Only the lower-case spelling is in `TEXT_DIRECTIVE_NAMES`.
+const TEXT_DIRECTIVE_NAME = /[A-Za-z][A-Za-z0-9-]*/y;
 
 const REFUSES_TEXT_DIRECTIVE_BEFORE = /[:A-Za-z0-9]/;
 

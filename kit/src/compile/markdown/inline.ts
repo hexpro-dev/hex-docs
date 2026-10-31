@@ -29,8 +29,12 @@ import {
 	type TextNode,
 } from '../../../../src/contracts/ast.js';
 import {
+	CALLOUT_ALERT_PATTERN,
+	CONTAINER_DIRECTIVE_PATTERN,
+	DIRECTIVE_CLOSE_PATTERN,
 	isContainerDirective,
 	isTextDirective,
+	LEAF_DIRECTIVE_PATTERN,
 	statusAt,
 	textDirectiveAt,
 	TEXT_DIRECTIVE_NAMES,
@@ -125,7 +129,10 @@ export interface InlineResult {
  * outline's row, and none of those can hold a button. A caption, a callout title and a
  * step title cannot either, and need no entry here, because each is a directive's label
  * and a label holds no `]`. A `:more` written in one makes the line fail the container
- * pattern and arrive as a paragraph, which the directive-label refusal below answers.
+ * pattern. Where that line arrives as a paragraph, `loweringHazard` refuses the `:more` by
+ * name, because without its markers the line is the container. A step label is the
+ * exception: inside a steps container the line is not a paragraph but loose text, which the
+ * steps container refuses with its own message before any inline parse runs.
  */
 const MORE_REFUSED_IN: Partial<Record<ProseKind, string>> = {
 	heading: 'a heading',
@@ -134,10 +141,125 @@ const MORE_REFUSED_IN: Partial<Record<ProseKind, string>> = {
 /**
  * The text a `:more` folds, short enough to quote in a finding.
  *
- * Folded text carries the break sentinel, which would print as U+0000 in a report.
+ * Cut by code points, so an astral character at the cut is not split into a lone surrogate,
+ * and with the break sentinel spelled as a space, because it would print as U+0000.
  */
 function excerptOf(text: string, from: number, to: number): string {
-	return text.slice(from, Math.min(to, from + 60)).replaceAll(BREAK_SENTINEL, ' ');
+	return Array.from(text.slice(from, to)).slice(0, 60).join('').replaceAll(BREAK_SENTINEL, ' ');
+}
+
+/**
+ * What a line's content starts as a block, if anything: the shapes `blocks.ts` reads a line
+ * as before it ever reaches the inline parser.
+ *
+ * Written against a line's content, after the container prefix and indent the fold already
+ * removed, which is the text `startsBlock` tests. Up to three spaces of indent are allowed,
+ * because removing a closing bracket that opened a line leaves the space after it.
+ */
+const BLOCK_STARTS: readonly [RegExp, string][] = [
+	[/^ {0,3}#{1,6}(?:[ \t]|$)/, 'a heading'],
+	[/^ {0,3}(?:`{3,}|~{3,})/, 'a code fence'],
+	[/^ {0,3}>/, 'a quotation'],
+	[/^ {0,3}([-*_])[ \t]*(?:\1[ \t]*){2,}$/, 'a thematic break'],
+	[/^ {0,3}[-+*][ \t]+\S/, 'a list item'],
+	[/^ {0,3}\d{1,9}[.)][ \t]+\S/, 'a numbered list item'],
+	[/^\s*<!--/, 'an authoring comment, which the raw markdown deletes'],
+];
+
+function blockStartOf(line: string): string | undefined {
+	const body = line.trim();
+	if (
+		CONTAINER_DIRECTIVE_PATTERN.test(body) ||
+		DIRECTIVE_CLOSE_PATTERN.test(body) ||
+		LEAF_DIRECTIVE_PATTERN.test(body)
+	) {
+		return 'a directive line, because a directive label holds no bracket';
+	}
+	if (CALLOUT_ALERT_PATTERN.test(body)) return 'a GitHub alert';
+	return BLOCK_STARTS.find(([pattern]) => pattern.test(line))?.[1];
+}
+
+/** Every inline directive the scanner would open in `line`. */
+function openingsIn(line: string): number {
+	let count = 0;
+	for (let at = line.indexOf(':'); at !== -1; at = line.indexOf(':', at + 1)) {
+		if (textDirectiveAt(line, at) !== undefined) count += 1;
+	}
+	return count;
+}
+
+/** Delimiters whose runs merge when two of them meet. */
+const JOINING = new Set(['`', '*', '_', '~']);
+
+/**
+ * What removing a `:more`'s markers would turn the text around it into, or `undefined` when
+ * the text without them says what the page says.
+ *
+ * The raw markdown is the source with the markers taken out, and the parser that wrote the
+ * page never saw the source that way. Taking out `:more[` and `]` can make a link from a
+ * bracket and the parenthesis that follows it, an image from a `!` and a bracket, one longer
+ * delimiter run from two that a marker kept apart, another `:more` from a colon and a word,
+ * and, when a marker is the first thing on a line, a heading, a list item, a fence or a
+ * directive line from what follows it. Each of those would publish a different document at
+ * `<slug>.md` from the one at the page's address, and the directive and the fence would make
+ * the build throw when the lowering rereads it. So each is refused, with the markers left in
+ * place, which the reread then refuses the same way.
+ */
+function loweringHazard(
+	folded: FoldedText,
+	colon: number,
+	open: number,
+	close: number,
+	lines: boolean,
+): string | undefined {
+	const { text } = folded;
+	const before = colon > 0 ? (text[colon - 1] as string) : '';
+	const first = text[open + 1] ?? '';
+	const last = text[close - 1] ?? '';
+	const after = text[close + 1] ?? '';
+	if (before === ']' && first === '(') return 'a link, from the bracket before it';
+	if (last === ']' && after === '(') return 'a link, from the parenthesis after it';
+	if (before === '!' && first === '[') return 'an image, from the "!" before it';
+	if (before !== '' && before === first && JOINING.has(first)) {
+		return `one run of "${first}" joined to the one before it`;
+	}
+	if (after !== '' && last === after && JOINING.has(after)) {
+		return `one run of "${after}" joined to the one after it`;
+	}
+
+	// The source lines the two markers sit on, each as the fold holds it.
+	const touched = new Set(
+		folded.runs.filter(
+			(run) =>
+				(colon >= run.offset && colon < run.offset + run.length) ||
+				(close >= run.offset && close < run.offset + run.length),
+		),
+	);
+	for (const run of touched) {
+		const end = run.offset + run.length;
+		const removals = [
+			[colon, open + 1],
+			[close, close + 1],
+		].filter(([from]) => (from as number) >= run.offset && (from as number) < end) as [
+			number,
+			number,
+		][];
+		let lowered = '';
+		let at = run.offset;
+		for (const [from, to] of removals) {
+			lowered += text.slice(at, from);
+			at = Math.min(to, end);
+		}
+		lowered += text.slice(at, end);
+		const original = text.slice(run.offset, end);
+		// A table cell's text is not a line: it sits after a pipe, so nothing in it can start a
+		// block whatever the markers leave at its front.
+		const becomes = lines ? blockStartOf(lowered) : undefined;
+		if (becomes !== undefined && blockStartOf(original) === undefined) return becomes;
+		const expected = openingsIn(original) - (removals.some(([from]) => from === colon) ? 1 : 0);
+		if (openingsIn(lowered) > expected) return 'another ":more" made from the text around it';
+	}
+	return undefined;
 }
 
 /**
@@ -473,12 +595,25 @@ export function parseInline(folded: FoldedText, context: InlineContext): InlineR
 			// An unknown name stays literal, colon and all, and the bracket after it is scanned
 			// as it would have been, so a link inside it still parses. The page shows what was
 			// typed, which is what the four-asterisk refusal does for the same reason.
+			//
+			// Refused only where a word could have been meant as one: at the start of the text,
+			// after a space or after a letter in a script with no spaces. After ASCII punctuation
+			// it is code somebody did not put in backticks, `(?:a[0-9])` or `[&:hover]:text-[x]`,
+			// and an error there would stop a publish over a sentence that reads correctly.
 			if (!isTextDirective(opening.name)) {
+				const before = cursor > 0 ? (text[cursor - 1] as string) : '';
+				if (PUNCTUATION.test(before)) {
+					cursor = opening.open;
+					return true;
+				}
+				const lower = opening.name.toLowerCase();
 				refuse(
 					`":${opening.name}[" is not an inline directive this AST major carries. The only one is ":${TEXT_DIRECTIVE_NAMES.join('[...]", ":')}[...]".`,
-					isContainerDirective(opening.name)
-						? `"${opening.name}" is a container: open it on a line of its own with three colons and close it with three.`
-						: 'Check the spelling. If the colon is meant literally, escape it as "\\:" or put the text in backticks.',
+					isTextDirective(lower)
+						? `Directive names are lower case: write ":${lower}[".`
+						: isContainerDirective(lower)
+							? `"${lower}" is a container: open it on a line of its own with three colons and close it with three.`
+							: 'Check the spelling. If the colon is meant literally, escape it as "\\:" or put the text in backticks.',
 				);
 				cursor = opening.open;
 				return true;
@@ -496,53 +631,56 @@ export function parseInline(folded: FoldedText, context: InlineContext): InlineR
 
 			const body = text.slice(opening.open + 1, close).replaceAll(BREAK_SENTINEL, ' ');
 			const where = MORE_REFUSED_IN[context.kind];
-			let refused = true;
-			// Whether the raw markdown drops the markers. It does for every `:more` whose words
-			// the page keeps, refused or not, because that is what the payload holds and because
-			// a refused one left in the text can come back: `:more[a :more[b] c]` lowers its outer
-			// markers, and an inner `:more[b]` left as typed reads as an accepted one on the
-			// reread. The one exception is the directive label, where removing them would write
-			// the container line the label case exists to refuse.
+			// Whether the raw markdown drops the markers. It does for an accepted `:more`, and for
+			// one refused inside another, because the outer one's markers go and an inner
+			// `:more[b]` left as typed would read as an accepted one on the reread. Every other
+			// refusal keeps them, so the reread meets the same text and refuses it the same way,
+			// rather than meeting text the removal made: `## Title :more[{#id}]` lowered is a
+			// heading with an explicit id.
 			let lower = true;
+			let refusal: [string, string] | undefined;
 			if (within === 'link') {
-				refuse(
+				refusal = [
 					`A ":${opening.name}[...]" inside link text.`,
 					'Move it after the link. The control that reveals it is a button, and a button inside a link is two controls in one, which no browser or screen reader can operate as either.',
-				);
+				];
+				lower = false;
 			} else if (within === 'more') {
-				refuse(
+				refusal = [
 					`A ":${opening.name}[...]" inside another ":${opening.name}[...]".`,
 					'Write the inner text plainly. Folded text that unfolds into more folded text asks the reader to click twice for one passage.',
-				);
+				];
 			} else if (where !== undefined) {
-				refuse(
+				refusal = [
 					`A ":${opening.name}[...]" inside ${where}.`,
 					'Put it in the paragraph that follows. A heading is read as a label in places a button cannot sit: the table of contents, the search results and the page outline.',
-				);
-			} else if (context.kind === 'paragraph' && /^:{2,}[a-z]/.test(text)) {
-				// `:::note[x :more[y]]` fails the container pattern, whose label holds no
-				// bracket, and arrives here as a paragraph. Accepting the `:more` would lower to
-				// `:::note[x y]`, which is a container, so the raw markdown would grow a
-				// directive the page does not have. Refused by name instead of becoming a
-				// paragraph that shows its own markers.
-				refuse(
-					`A ":${opening.name}[...]" inside a directive's label.`,
-					'A label is plain text and holds no brackets, so neither a link nor a ":more" can sit in one. Put the folded text in the first paragraph inside the container.',
-				);
+				];
 				lower = false;
 			} else if (body.trim() === '') {
-				refuse(
+				refusal = [
 					`An empty ":${opening.name}[]".`,
 					'Put the folded text inside it, or delete it. An empty one draws a question mark that reveals nothing.',
-				);
+				];
+				lower = false;
 			} else if (text[close + 1] === '{') {
-				refuse(
+				refusal = [
 					`":${opening.name}[...]" takes no attributes.`,
 					"Delete the {...}. remark-directive's attribute syntax is not part of this grammar: there is nothing an author could put in it that the page would honour.",
-				);
-			} else {
-				refused = false;
+				];
+				lower = false;
 			}
+			const hazard = lower
+				? loweringHazard(folded, cursor, opening.open, close, context.kind !== 'tableCell')
+				: undefined;
+			if (hazard !== undefined) {
+				refusal ??= [
+					`A ":${opening.name}[...]" whose markers, once removed for the raw markdown, would leave ${hazard}.`,
+					'Put a word between the marker and the punctuation beside it, or move the fold so it does not start a line. The page and its raw markdown have to say the same thing, and here they would not.',
+				];
+				lower = false;
+			}
+			if (refusal !== undefined) refuse(...refusal);
+			const refused = refusal !== undefined;
 
 			literal(cursor);
 			// Flushed before recursing, for the reason the link branch gives: the child parse
@@ -625,6 +763,17 @@ export function parseInline(folded: FoldedText, context: InlineContext): InlineR
 				if (close !== undefined && destination !== undefined && destination.end <= end) {
 					literal(cursor);
 					const alt = literalText(text, cursor + 2, close);
+					// Alt text is a literal string with no inline markup, so a `:more` in it would be
+					// read aloud as its own markers. Refused by name rather than published that way.
+					if (openingsIn(alt) > 0) {
+						context.problems.push(
+							raw('unsupported-syntax', at(cursor), null, 'A ":more[...]" inside image alt text.', {
+								remediation:
+									'Write the alternative text plainly. It is read aloud in full and has nowhere to fold anything.',
+								excerpt: excerptOf(text, cursor, destination.end),
+							}),
+						);
+					}
 					const resolved = context.services.resolveImage(destination.href);
 					if (resolved.ok) {
 						const image: ImageNode = {

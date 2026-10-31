@@ -1669,7 +1669,7 @@ describe('inline directives', () => {
 		]);
 	});
 
-	test('a refused one keeps its words, loses its markers, and is reported once', () => {
+	test('a refused one keeps its words in the page, is reported once, and keeps its markers in the raw text', () => {
 		const { blocks, problems, directives } = parseBody('## Title :more[hidden]');
 		const heading = blocks[0] as Heading;
 		expect(heading.children).toEqual([
@@ -1677,14 +1677,75 @@ describe('inline directives', () => {
 			{ type: 'text', value: 'hidden' },
 		]);
 		expect(onlyProblem(problems).message).toMatch(/inside a heading/);
-		// Recorded, so the raw markdown drops the markers the payload dropped.
-		expect(directives.filter((record) => record.kind === 'text')).toHaveLength(1);
+		// Not recorded, so its markers stay in the raw text and the reread refuses it again.
+		// Dropped, `## Title :more[{#id}]` would lower to a heading with an explicit id.
+		expect(directives.filter((record) => record.kind === 'text')).toEqual([]);
+	});
+
+	test('one refused inside an accepted one is recorded, so both sets of markers go', () => {
+		const { directives, problems } = parseBody('Outer :more[and :more[inner] text].');
+		expect(onlyProblem(problems).message).toMatch(/inside another/);
+		expect(directives.filter((record) => record.kind === 'text')).toHaveLength(2);
+	});
+
+	test('a close past the end of an enclosing span is no close at all', () => {
+		// The emphasis closes inside the brackets, so the bracket that would close the fold is
+		// outside the span being parsed. Taking it anyway would fold across the emphasis edge
+		// and publish the text after it twice.
+		const { problems, nodes } = parseInlineText('Text *a :more[b* c] end.');
+		expect(problems.map((problem) => problem.message)).toContainEqual(
+			expect.stringMatching(/with no "\]" to close it/),
+		);
+		expect(nodes.some((node) => node.type === 'more')).toBe(false);
+	});
+
+	test('emphasis inside link text carries the link with it', () => {
+		const { problems } = parseInlineText('[**the :more[x] guide**](first-tag.md)');
+		expect(onlyProblem(problems).message).toMatch(/inside link text/);
+	});
+
+	test("a refused one's body is parsed where the refused one was, so its own folds are refused the same way", () => {
+		const link = parseInlineText('[a :more[b :more[c] d]](first-tag.md)');
+		expect(link.problems.map((problem) => problem.message)).toEqual([
+			'A ":more[...]" inside link text.',
+			'A ":more[...]" inside link text.',
+		]);
+		const heading = parseBody('## T :more[a :more[b] c]');
+		expect(heading.problems.map((problem) => problem.message)).toEqual([
+			'A ":more[...]" inside a heading.',
+			'A ":more[...]" inside a heading.',
+		]);
+	});
+
+	test('an unknown name is refused and the bracket after it is still read, so a link survives', () => {
+		const { nodes, problems } = parseInlineText(':mroe[guide](first-tag.md)');
+		expect(onlyProblem(problems).message).toMatch(/":mroe\[" is not an inline directive/);
+		expect(nodes.some((node) => node.type === 'link')).toBe(true);
+	});
+
+	test('a fold holding nothing but a hard break is empty', () => {
+		const { problems } = parseInlineText(':more[\\\n]');
+		expect(onlyProblem(problems).message).toMatch(/An empty/);
+	});
+
+	test('a capitalised name is named with the spelling that works, and after punctuation an unknown name is code', () => {
+		expect(onlyProblem(parseInlineText('A :More[x] here.').problems).remediation).toMatch(
+			/write ":more\["/,
+		);
+		expect(parseInlineText('Match (?:a[0-9]) and [&:hover]:text-[red].').problems).toEqual([]);
+	});
+
+	test('one in image alt text is refused by name', () => {
+		const { problems } = parseInlineText('![A tag :more[on a desk]](scan.png)');
+		expect(problems.map((problem) => problem.message)).toContainEqual(
+			'A ":more[...]" inside image alt text.',
+		);
 	});
 
 	test('one in a directive label is refused and left as typed, so lowering cannot make a container', () => {
 		const { problems, directives } = parseBody(':::note[Careful :more[x]]\nText.\n:::');
 		expect(problems.map((problem) => problem.message)).toContainEqual(
-			expect.stringMatching(/inside a directive's label/),
+			expect.stringMatching(/would leave a directive line/),
 		);
 		expect(directives.filter((record) => record.kind === 'text')).toEqual([]);
 	});

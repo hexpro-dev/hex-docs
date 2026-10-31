@@ -81,11 +81,14 @@ export const TABLE_CELL_COLUMNS_MAX_PAIR = 400;
 /** Characters that take no column of their own: variation selectors, marks, joiners, bidi controls. */
 const ZERO_WIDTH = /[\p{M}\u200b-\u200f\u2060-\u2069\ufe00-\ufe0f\ufeff]/u;
 
+/** Emoji, which are drawn two columns wide like CJK. A joined sequence counts each part. */
+const PICTOGRAPH = /\p{Extended_Pictographic}/u;
+
 function columnsOf(text: string): number {
 	let columns = 0;
 	for (const character of text) {
 		if (ZERO_WIDTH.test(character)) continue;
-		columns += isWide(character) ? 2 : 1;
+		columns += isWide(character) || PICTOGRAPH.test(character) ? 2 : 1;
 	}
 	return columns;
 }
@@ -329,7 +332,7 @@ export function pageFindings(context: PageRuleContext): RawFinding[] {
 						{
 							remediation:
 								'Keep the lead a reader scans the column for, and fold the rest into ":more[...]" at a sentence boundary. A row is as tall as its tallest cell, so one long note pushes the whole table down the screen. The folded text is still searchable and is shown inline in print and with no script.',
-							excerpt: visible.text.slice(0, 80),
+							excerpt: Array.from(visible.text).slice(0, 80).join(''),
 						},
 					),
 				);

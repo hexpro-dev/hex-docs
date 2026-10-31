@@ -280,7 +280,7 @@ const CASES: readonly Case[] = [
 			},
 			{
 				rule: 'unsupported-syntax',
-				matches: /inside a directive's label/,
+				matches: /would leave a directive line/,
 				why: 'A label holds no bracket, and accepting it would lower `:::note[x :more[y]]` to a container the page does not have.',
 			},
 			{
@@ -733,6 +733,29 @@ beforeAll(() => {
 	produced = new Map(CASES.map((entry) => [entry.name, entry.run()]));
 });
 
+describe('folded text is still checked', () => {
+	test('an image with no alt text inside a :more is reported', () => {
+		const findings = page('## Section\n\nText. :more[See ![](scan.png) here.]\n');
+		expect(findings.some((finding) => finding.rule === 'alt-text-required')).toBe(true);
+	});
+
+	test('a broken anchor inside a :more is reported', () => {
+		const findings = built((repo) => {
+			const path = site(repo, 'content/en/guide/first-tag.md');
+			const text = readFileSync(path, 'utf8');
+			writeFileSync(path, `${text}\nFolded. :more[See [nowhere](#no-such-heading).]\n`);
+		});
+		expect(
+			findings.some(
+				(finding) =>
+					finding.rule === 'anchor-resolves' &&
+					finding.location.kind === 'file' &&
+					finding.location.file === 'content/en/guide/first-tag.md',
+			),
+		).toBe(true);
+	});
+});
+
 describe('table-cell-width measures what a reader sees', () => {
 	test('folded text, a status and a cell at the limit do not count against it', () => {
 		const widths = page(
@@ -745,7 +768,7 @@ describe('table-cell-width measures what a reader sees', () => {
 				`| NTAG215 | Yes | 144 bytes. :more[${'b'.repeat(500)}] |`,
 				`| NTAG216 | Yes | \u2705 ${'c'.repeat(196)} |`,
 				`| NTAG424 | Yes | ${'d'.repeat(150)} \u3042\u3042 [a link](chip-support.md) |`,
-				`| ICODE | Yes | ${'e'.repeat(197)}\u0301\ufe0f\u200f |`,
+				`| ICODE | Yes | ${'e'.repeat(199)}\u0301\ufe0f\u200f |`,
 			].join('\n'),
 		)
 			.filter((finding) => finding.rule === 'table-cell-width')
@@ -754,7 +777,8 @@ describe('table-cell-width measures what a reader sees', () => {
 		// A status counts two, so the third is 2 + 1 + 196 = 199. The fourth is 150, a space,
 		// two wide characters at two columns each, a space and the link's own words, with its
 		// destination unread: 150 + 1 + 4 + 1 + 6 = 162. On the last, the combining accent, the
-		// variation selector and the right-to-left mark take no column, so it is 197.
+		// variation selector and the right-to-left mark take no column, so it is 199, where
+		// counting them would make it 202.
 		expect(widths).toEqual([]);
 
 		const over = page(
@@ -770,6 +794,33 @@ describe('table-cell-width measures what a reader sees', () => {
 		expect(over.map((finding) => finding.message)).toEqual([
 			'This table cell is 201 columns wide and the limit for a table of 3 columns is 200.',
 		]);
+
+		// A header cell is a cell, and a wide one sets the height of the header row.
+		const header = page(
+			[
+				'## Section',
+				'',
+				`| Chip | Read | ${'h'.repeat(201)} |`,
+				'| --- | --- | --- |',
+				'| A | Yes | No |',
+			].join('\n'),
+		).filter((finding) => finding.rule === 'table-cell-width');
+		expect(header).toHaveLength(1);
+
+		// An emoji is drawn two columns wide: 198 letters and one emoji is 200, and passes;
+		// with one more letter it is over.
+		const emoji = (letters: number) =>
+			page(
+				[
+					'## Section',
+					'',
+					'| Chip | Read | Notes |',
+					'| --- | --- | --- |',
+					`| A | Yes | ${'e'.repeat(letters)}\u{1F4F1} |`,
+				].join('\n'),
+			).filter((finding) => finding.rule === 'table-cell-width');
+		expect(emoji(198)).toEqual([]);
+		expect(emoji(199)).toHaveLength(1);
 		expect(over[0]?.location).toMatchObject({ kind: 'file', line: 10 });
 	});
 });

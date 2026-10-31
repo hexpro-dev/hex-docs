@@ -106,8 +106,11 @@ read by every house rule, so folding is never a way to hide a sentence from a ch
   keeps `key:value[0]` literal.
 - Inside it, a link and inline code work as usual. A literal `]` that does not close a link
   is escaped `\]`, and in a table a literal `|` is `\|`, as everywhere in a table.
-- It is refused, as an `unsupported-syntax` error, in a heading, inside link text, inside
-  another `:more`, in a directive's label, when empty, and with `{...}` attributes.
+- It is refused, as an `unsupported-syntax` error, in a heading, inside link text, in image
+  alt text, inside another `:more`, in a directive's label, when empty, with `{...}`
+  attributes, and wherever removing its markers would change the text around it: first on a
+  line before `#`, `-`, `>`, a fence or `:::`, right after `]` before `(`, or between two
+  backtick runs. Put a word between the marker and the punctuation.
 - `table-cell-width` warns on a cell whose visible text, the folded part excluded, is
   wider than 200 display columns, or 400 in a table of two columns (a CJK character counts
   as two). That warning is the cue
