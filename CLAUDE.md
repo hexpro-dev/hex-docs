@@ -2293,13 +2293,33 @@ stops at the `[`, and the parser finds the close with `closingBracket`, because 
 links whose brackets nest; a `[^\]]*` pattern would close at the first link.
 
 Refused, each by its own message and each claimed by an arm in `rules-fire.test.ts`: an unknown
-name (left literal), a missing `]` (left literal), and, with the words kept and the markers
-dropped, one inside link text, one inside another, one in a heading, an empty one and one with
-`{...}` attributes. A caption, a callout title and a step title need no entry: each is a
-directive label, a label holds no `]`, and a line like `:::note[x :more[y]]` fails the container
-pattern and arrives as a paragraph, which the directive-label refusal answers. That one alone is
-left as typed in the raw markdown, because dropping its markers writes `:::note[x y]`, a container
-the page does not have.
+name (left literal, and not refused at all after ASCII punctuation, where it is unbackticked code
+such as `(?:a[0-9])` or `[&:hover]:text-[x]` and an error would stop a publish over a sentence
+that reads correctly), a capitalised name (named, with the lower-case spelling), a missing `]`,
+one inside link text, one inside another, one in a heading, one in image alt text, an empty one,
+one with `{...}` attributes, and one whose markers would change the text around them. A caption,
+a callout title and a step title need no entry of their own: each is a directive label and a
+label holds no `]`. A `:::note[x :more[y]]` line fails the container pattern and arrives as a
+paragraph, where the last refusal catches it; a `:::step[x :more[y]]` line inside steps is loose
+text, which the steps container refuses with its own message and without naming `:more`.
+
+**The words survive every refusal; the markers survive all but one.** Only a `:more` refused
+inside an accepted one has its markers removed, because the outer one's go and an inner one left
+as typed reads as accepted on the reread. Every other refusal keeps its markers, so the reread
+meets the text the author wrote and refuses it the same way.
+
+### A marker removed can change the document, so the parser asks first
+
+The review's sharpest finding. The raw markdown is the source with the markers taken out, which
+is text the parser never read: `:more[` first on a line followed by `# x`, `- x`, ` ``` `, `:::x`
+or `[!NOTE]` lowers to a heading, a list, a fence that swallows the rest of `<slug>.md`, a
+directive the reread throws on, or an alert; `[x]:more[(a.md)]` lowers to a link the page does not
+have; two backtick runs a marker kept apart become one; and a `:more[:]more[x]` lowers to another
+`:more`. A container label on a paragraph's second line threw, because the first version only
+looked at the paragraph's first line. `loweringHazard` in `inline.ts` takes out the markers from
+the source lines they sit on, as the fold holds them, and refuses when that line now starts a
+block it did not, when a new link, image, delimiter run or `:more` appears at a seam, and skips the
+block test in a table cell, whose text follows a pipe and cannot start a block.
 
 ### Lowering joins the link rewrite, and a refusal is lowered too
 
@@ -2347,6 +2367,30 @@ The mark is an empty `<button>` with a CSS-drawn circle and glyph (U+061F under 
 its name is its `aria-label` and it takes `interfaceLang`, the status-mark precedent. It has no
 `aria-expanded` because activating it removes it, and focus moves to the revealed text.
 
+What the browser pass found, and the rule each produced:
+
+- **A closed popover is still a fixed box.** The user agent's `[popover]` rule positions it to
+  the viewport with a background of its own whether it is open or not, so a page printed after
+  hydration put every note in a white band across the top of each sheet. `.hx-more-body:not
+(:popover-open)` lays a closed preview out as text, and `usePreview` takes its lengths off when
+  it closes, because an inline `max-height` would cut the printed text short.
+- **`scripting: enabled` is not the only gate.** An engine with the Popover API and without that
+  query (Chromium 114 to 119, by the release notes) would match none of the script-only rules,
+  hide the text as a closed popover and never show the mark. The component sets `data-ready`
+  once it hydrates and the same two rules hang off it.
+- **Closing on every scroll closed every keyboard preview**, because the browser scrolls a focused
+  mark into view. A scroll places it again while the mark is on screen and closes it once the
+  mark leaves.
+- **Hover and focus are separate reasons to stay open.** A pointer crossing a mark closed a
+  preview the keyboard had opened, with focus on a link inside it, and the focus ring went with
+  it. One preview is open at a time, held at module level.
+
+Two limits are known and left. Find in page cannot see folded text: `hidden="until-found"` would
+fix it, and does nothing on an inline element, which the fold has to be. And a page whose script
+never hydrates (a CSP nonce failure, a stale chunk after a deploy) keeps every note folded behind
+a disabled mark; that is the price of a first paint that does not shift when the script arrives,
+and the same failure leaves search and the page menu dead too.
+
 ### `table-cell-width`, a warning
 
 It counts a cell's visible text in display columns, wide characters twice, the folded part as the
@@ -2355,6 +2399,17 @@ a table of one or two, whose last column takes most of the measure. The second l
 hex-nfc's privacy page: the camera row says what it is for and that frames are never saved in 202
 Japanese columns, and the only remedy a 200 limit offered was to fold that guarantee. Columns rather than characters for the reason the
 title floor was removed: a character count is a measurement of Latin.
+
+### What the review found
+
+Three reviewers: one fed inputs to the parser and the lowering, one drove the hydrated page in
+headless Chrome over CDP, and one deleted guards one at a time. The first found the
+lowering hazards above and a label refusal that only read a paragraph's first line, both of
+which threw in the reread on inputs an author could write. The second found the five preview
+defects above, every one invisible to a happy-dom suite and to static paint probes, because each
+needs a hydrated page, a print medium or the browser's own scroll. The third deleted 66 guards
+and 18 survived. Each surviving gap now has a test, and the twelve that guard new code were made
+to fail on purpose.
 
 ### Guards a deletion did not trip, and what was done
 

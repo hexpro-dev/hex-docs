@@ -272,6 +272,28 @@ describe('the failure paths, exercised against a deliberately broken fixture', (
 		expect(problems.some((p) => p.includes('co-author trailer'))).toBe(true);
 	});
 
+	test('an agent worktree under .claude is not linted, and a worktrees directory anywhere else is', () => {
+		// A session's isolated agents check out a whole copy of this repository under
+		// `.claude/worktrees`, fixtures and all, and the copy's planted characters sit at paths
+		// `fixtures/planted.json` does not declare. Excluded by path, so the name alone hides
+		// nothing.
+		const dash = (where: string) => `A line with an em dash \u2014 in ${where}.\n`;
+		mkdirSync(join(root, '.claude', 'worktrees', 'agent-x'), { recursive: true });
+		mkdirSync(join(root, 'src', 'worktrees'), { recursive: true });
+		writeFileSync(join(root, '.claude', 'worktrees', 'agent-x', 'notes.md'), dash('a worktree'));
+		writeFileSync(join(root, '.claude', 'notes.md'), dash('.claude itself'));
+		writeFileSync(join(root, 'src', 'worktrees', 'note.ts'), `// ${dash('src')}`);
+		try {
+			const problems = (runHouseLint(root) as CheckResult[]).flatMap((row) => row.problems ?? []);
+			expect(problems.some((p) => p.includes(join('.claude', 'worktrees')))).toBe(false);
+			expect(problems.some((p) => p.includes(join('.claude', 'notes.md')))).toBe(true);
+			expect(problems.some((p) => p.includes(join('src', 'worktrees', 'note.ts')))).toBe(true);
+		} finally {
+			rmSync(join(root, '.claude'), { recursive: true, force: true });
+			rmSync(join(root, 'src', 'worktrees'), { recursive: true, force: true });
+		}
+	});
+
 	test('a missing rule pack is NOT RUN rather than a pass, and fails the run', () => {
 		rmSync(join(root, 'kit', 'schema', 'house-rules.json'));
 		const rows = runHouseLint(root) as CheckResult[];

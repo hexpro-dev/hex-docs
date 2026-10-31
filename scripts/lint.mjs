@@ -95,6 +95,18 @@ const EXCLUDED_DIRS = [
 ];
 
 /**
+ * Directories never descended into, named by where they sit rather than by name alone.
+ *
+ * `.claude/worktrees` is where a session's isolated agents check out a copy of this
+ * repository, and the copy is a whole repository: its fixtures carry the planted characters
+ * under a path `fixtures/planted.json` does not declare, so linting it failed a clean tree on
+ * every banned-character row for as long as an agent was working. It is a working copy, not
+ * source, and `.git/info/exclude` already keeps it out of git. By path, so a directory called
+ * `worktrees` anywhere else is still read.
+ */
+const EXCLUDED_PATHS = [join('.claude', 'worktrees')];
+
+/**
  * Files no walk can find, named individually.
  *
  * This list used to be the whole statement of what gets scanned outside `REQUIRED_DIRS`,
@@ -298,9 +310,10 @@ function loadPlanted(root) {
 
 /**
  * @param {string} dir
+ * @param {string} root  The repository root, which `EXCLUDED_PATHS` is relative to.
  * @returns {string[]}
  */
-function walk(dir) {
+function walk(dir, root) {
 	/** @type {string[]} */
 	const found = [];
 	/** @type {string[]} */
@@ -320,6 +333,7 @@ function walk(dir) {
 			if (entry.isSymbolicLink()) continue;
 			if (entry.isDirectory()) {
 				if (EXCLUDED_DIRS.includes(entry.name)) continue;
+				if (EXCLUDED_PATHS.includes(relative(root, full))) continue;
 				queue.push(full);
 			} else if (SCANNED_EXTENSIONS.some((extension) => entry.name.endsWith(extension))) {
 				found.push(full);
@@ -345,7 +359,7 @@ function collectFiles(root) {
 	const problems = [];
 
 	for (const dir of REQUIRED_DIRS) {
-		const found = walk(join(root, dir));
+		const found = walk(join(root, dir), root);
 		perRoot[dir] = found.length;
 		files.push(...found);
 		if (found.length === 0) {
@@ -357,7 +371,7 @@ function collectFiles(root) {
 
 	for (const [dir, owner] of Object.entries(OPTIONAL_DIRS)) {
 		if (!existsSync(join(root, dir))) continue;
-		const found = walk(join(root, dir));
+		const found = walk(join(root, dir), root);
 		perRoot[dir] = found.length;
 		files.push(...found);
 		if (found.length === 0) {
