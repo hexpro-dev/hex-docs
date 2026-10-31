@@ -608,10 +608,10 @@ function onScreen(element: Element): boolean {
  * took the focus ring down with it. Escape closes it whatever holds it, and only one preview
  * is ever open.
  *
- * A scroll or a resize places it again while the mark is still on screen, and closes it once
- * the mark has gone. Closing on every scroll was the first version, and it closed almost every
- * keyboard preview: the browser scrolls a focused mark into view, so tabbing down a long table
- * opened a preview and scrolled it shut in the same frame. A scroll inside the preview itself
+ * A scroll or a resize places it again while the mark is on screen or still on its way there,
+ * and closes it once a mark that was on screen has gone. Closing on every scroll was the first
+ * version, and it closed almost every keyboard preview: the browser scrolls a focused mark into
+ * view, so tabbing down a long table opened a preview and scrolled it shut in the same frame. A scroll inside the preview itself
  * is ignored, because a passage taller than its room scrolls.
  *
  * Imperative rather than state, for one reason that decides it: the size has to be measured
@@ -688,9 +688,18 @@ export function usePreview(
 			event.preventDefault();
 			hide();
 		};
+		// Whether the mark has been on screen since the preview opened. A keyboard arriving on a
+		// mark below the fold opens the preview before the browser has scrolled the mark into
+		// view, and a host with smooth scrolling (hex-web has it) sends a dozen scroll events
+		// while the mark is still on its way. Closing on the first of them closed every keyboard
+		// preview below the fold, measured on hex-web's production build, so the preview
+		// follows the mark in and closes only once a mark that was on screen has left it.
+		let seen = onScreen(anchor);
 		const onMove = (event: Event): void => {
 			if (event.target instanceof Node && element.contains(event.target)) return;
-			if (onScreen(anchor)) place();
+			const visible = onScreen(anchor);
+			if (visible) seen = true;
+			if (visible || !seen) place();
 			else hide();
 		};
 		document.addEventListener('keydown', onKey);

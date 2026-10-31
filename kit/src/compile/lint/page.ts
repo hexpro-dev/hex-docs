@@ -56,10 +56,12 @@ const SENTENCE_ENDINGS = ['.', '!', '?', '。', '！', '？', '؟'];
  * `table-cell-width` suggests folding some of it, in a table of three or more columns.
  *
  * A row is as tall as its tallest cell, so one long note pushes every status in the row,
- * and every row after it, down the screen. Two hundred columns is about five lines in the
- * Notes column of a seven-column support matrix on a desktop. Measured on hex-nfc's chip
- * support matrix before it was folded: 9 of its Notes cells were over this in English and
- * 15 in Spanish, the longest 2321 and 3002 columns.
+ * and every row after it, down the screen. The limit is for the cells that ran to dozens of
+ * lines, and it is not a promise that every row is short: measured on hex-web's production
+ * build at 1280px, the Notes column of hex-nfc's seven-column matrix is 186px wide, about 19
+ * columns a line, so a 163-column lead there is nine lines and two hundred would be ten.
+ * Before folding, 9 of that matrix's Notes cells were over the limit in English and 15 in
+ * Spanish, the longest 2321 and 3002 columns.
  *
  * A table of one or two columns gets twice as much, `TABLE_CELL_COLUMNS_MAX_PAIR`, because
  * its last column takes most of the measure. hex-nfc's privacy page says what the camera is

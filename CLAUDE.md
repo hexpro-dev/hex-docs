@@ -2379,8 +2379,11 @@ What the browser pass found, and the rule each produced:
   hide the text as a closed popover and never show the mark. The component sets `data-ready`
   once it hydrates and the same two rules hang off it.
 - **Closing on every scroll closed every keyboard preview**, because the browser scrolls a focused
-  mark into view. A scroll places it again while the mark is on screen and closes it once the
-  mark leaves.
+  mark into view. A scroll places it again while the mark is on screen and closes it once a mark
+  that was on screen leaves. The second half came from hex-web's production build, after the
+  first fix shipped to a branch: hex-web scrolls smoothly, so a mark below the fold is still off
+  screen for the first dozen scroll events after Tab reaches it, and "close while off screen"
+  closed it on the way in.
 - **Hover and focus are separate reasons to stay open.** A pointer crossing a mark closed a
   preview the keyboard had opened, with focus on a link inside it, and the focus ring went with
   it. One preview is open at a time, held at module level.
