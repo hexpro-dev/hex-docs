@@ -10,6 +10,8 @@
 
 import { beforeAll, describe, expect, test } from 'vitest';
 
+import { AST_VERSION } from '../../src/contracts/ast.js';
+
 import { TRANSLATION_STATES, type TranslationState } from '../../src/contracts/frontmatter.js';
 import { LOCALES, type Locale } from '../../src/contracts/locales.js';
 import {
@@ -241,7 +243,10 @@ describe('page()', () => {
 				'another ast',
 				{
 					...sources.pages,
-					[key]: async () => ({ ...((await sources.pages[key]?.()) as object), ast: 2 }),
+					[key]: async () => ({
+						...((await sources.pages[key]?.()) as object),
+						ast: AST_VERSION + 1,
+					}),
 				},
 			],
 		];
@@ -277,7 +282,7 @@ describe('a bundle that cannot be served', () => {
 			['a manifest that is a string', withManifest('manifest'), 'is not an object'],
 			['a manifest that is null', withManifest(null), 'is not an object'],
 			['an empty object', withManifest({}), 'manifest version is undefined'],
-			['another ast major', withManifest({ ...manifest, ast: 2 }), 'ast-2'],
+			['another ast major', withManifest({ ...manifest, ast: AST_VERSION + 1 }), 'ast-2'],
 			[
 				'another project',
 				withManifest({ ...manifest, project: 'other-app' }),
@@ -290,7 +295,12 @@ describe('a bundle that cannot be served', () => {
 			],
 			[
 				'identity and nothing else',
-				withManifest({ manifest: 1, ast: 1, project: manifest.project, commit: manifest.commit }),
+				withManifest({
+					manifest: 1,
+					ast: AST_VERSION,
+					project: manifest.project,
+					commit: manifest.commit,
+				}),
 				'not shaped like a manifest',
 			],
 			[

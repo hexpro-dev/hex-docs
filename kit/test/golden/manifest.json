@@ -1,8 +1,8 @@
 {
 	"manifest": 1,
-	"ast": 1,
+	"ast": 2,
 	"project": "fixture-app",
-	"commit": "fc2ef4dea95fb36e5201504e7d06fd2cd0c79b56",
+	"commit": "54ce86a3b69d49475fdb30d20499cc2b48c14cb1",
 	"commitTimestamp": "2026-04-02T10:45:00Z",
 	"generator": "@hex-pro/docs-kit@0.1.0",
 	"locales": [
@@ -21,7 +21,7 @@
 			"since": "1.1.0",
 			"locales": {
 				"en": {
-					"digest": "5716c93d29e25cf190ea3e3f2be4eabb6ae4facc6ab8b7c5421b6413b1daf177",
+					"digest": "607357c5da0f2ff26925c87347b804ef652eceaf4f1c6b79218952aa27d5465b",
 					"bytes": 11965,
 					"rawDigest": "3c0007fd9be9dde37f7c7f3841a6c16e30cabf90a8acd153f39eb9f1401afb15",
 					"rawBytes": 4730,
@@ -57,7 +57,7 @@
 			"since": "1.0.0",
 			"locales": {
 				"en": {
-					"digest": "64bc2406c233fa10e2d7b8aa3e1725c77ccdce9a20624faf3bb304fba3fe6b60",
+					"digest": "0c5149155845fd7a59a35461af0937c02abbff04daf4239fbe7890da7a960a41",
 					"bytes": 8542,
 					"rawDigest": "e9bb057ef3efc71208e80392776af123503c5f1bdde5595d0badc635fadfe331",
 					"rawBytes": 4400,
@@ -87,7 +87,7 @@
 					]
 				},
 				"zh": {
-					"digest": "5a26283e3db873c4f1a4d97e2a8494bab9e0cbb00bfb45291cb50783d8d9a576",
+					"digest": "410614a24a895b045b70d6c0d5317fe309cc280ff7bb95b209013fdac224a7bf",
 					"bytes": 8628,
 					"rawDigest": "7f4a5e94c14c25da2bc9f124f7462c645447864716abdc8d9660a135ddab5ca8",
 					"rawBytes": 4385,
@@ -117,7 +117,7 @@
 					]
 				},
 				"ar": {
-					"digest": "dc88a1ba39097a00ae1dcfec6e92d889ec89f2b1304fc400a6f71e45dee4b2c0",
+					"digest": "078746b5a1893fb1ea8c94c1a6df045475d0beda05334fca4af8c3820ad6246e",
 					"bytes": 11026,
 					"rawDigest": "184e0244371aae135c9d705cc998991dc6d93d95f9c38ef3fd3c4e0e574c09fb",
 					"rawBytes": 6575,
@@ -147,7 +147,7 @@
 					]
 				},
 				"es": {
-					"digest": "f0d28724f27fa85388b2bf6ef235d63f5651bfa0aa6e7d91f46cf880b0c4f5eb",
+					"digest": "6d1c31f190ccef42c1707028d00639549bbab188baae3c03b7cad01e0e003432",
 					"bytes": 9487,
 					"rawDigest": "de81d6584169d5db2a8820a8a98e41f100b877942eb1c2fb9b78e9f7fbd727f8",
 					"rawBytes": 5143,
@@ -177,7 +177,7 @@
 					]
 				},
 				"ja": {
-					"digest": "e11812c863af24ba279f39d9f6f716c91bb1aebe83b062d32bc13ee0b6be9c9f",
+					"digest": "bf9c475636bf19506fce81279cd3c36d95a8b40db3ff6a8176dc07e1180106c6",
 					"bytes": 10395,
 					"rawDigest": "e976e50b52f354748ae654e22be4035e084eaac9f72e7c604e8edd9fba192992",
 					"rawBytes": 6069,
@@ -207,7 +207,7 @@
 					]
 				},
 				"fr": {
-					"digest": "2647cb30546c498773be64d6a382afb6cf27db7b1161e7d27fe769c6ac958ee8",
+					"digest": "df481653dce13aa74436360a1b0715ef315a98b24d807c4f0aa8d3bee7b13e58",
 					"bytes": 9607,
 					"rawDigest": "8164f9854c0b808de14ee8ea252a39f36e4e6e5bbae064e87f678287f85fd681",
 					"rawBytes": 5268,
@@ -237,7 +237,7 @@
 					]
 				},
 				"pt-BR": {
-					"digest": "baedf1738b56b1c7c4a0011add83f6510dcdb487e57a5345898f84968fa521c8",
+					"digest": "1509ad718326ed20b08d8aa4f39664279bcc368901c2db5aa689d702589f1680",
 					"bytes": 9369,
 					"rawDigest": "f9b790da23810ec52bad121eebb4825206237b0b8f037c0010d653dc1a989d57",
 					"rawBytes": 5006,
@@ -273,7 +273,7 @@
 			"since": null,
 			"locales": {
 				"en": {
-					"digest": "84df590d719a277566251c55f4e9e74c8fd17a72caac03eddd4f409a1a1f5179",
+					"digest": "d56ec5855e85ca423422f3993721f96e1ef240e3531781d67f7d55410b662ef7",
 					"bytes": 4443,
 					"rawDigest": "cb8a6fd57adbe4b4facc652cefc938ea298f382b317689045ee2c05edfa12622",
 					"rawBytes": 2432,
@@ -299,7 +299,7 @@
 					]
 				},
 				"zh": {
-					"digest": "7906e9fff762f1fba52e18e3c344b706f4b7d4c175a91050f35471be06f8a07d",
+					"digest": "77091fc9bf61c7062077af48c503118fba2f08e60e88376bfed29e3771cd599e",
 					"bytes": 4484,
 					"rawDigest": "09b19762fff61686b03c29591b30b7bcb0f9446a662ed9d3c26dc24bf39a425f",
 					"rawBytes": 2358,
@@ -325,7 +325,7 @@
 					]
 				},
 				"ar": {
-					"digest": "0aa7638400000a945716b5d583fbae0162dfe00ff8f44fa1c7f5a228a05f3028",
+					"digest": "743eb086ac6ad6e616609459af0ba2554f49366adad97fdd18cae57cbe3d8216",
 					"bytes": 5990,
 					"rawDigest": "6ae55ee59e29b01eacabc69cbbe03875445cd5e39c3b14dfb71d5b81d4bd8c2f",
 					"rawBytes": 3598,
@@ -351,7 +351,7 @@
 					]
 				},
 				"es": {
-					"digest": "dc82983dd79bb7a309d9c828551784817e0fdc246da57dec7028c27578a514a0",
+					"digest": "72e046a4e71f68fe647debf98cec1c2837090440cb93e69ed637f77b05b1d154",
 					"bytes": 5086,
 					"rawDigest": "c084fc03fe441f71b9ecc11ac20b86e62176a3bf3572fcdd23bd6f9da8a83e4e",
 					"rawBytes": 2877,
@@ -377,7 +377,7 @@
 					]
 				},
 				"ja": {
-					"digest": "fcc657ad63148de25becb7e8aa6bed2a9e783d220211c012c9e6a8e82abc1ff4",
+					"digest": "73f02848cf29c7351751300a2d4c4775b241653ce73e948798f4957a38c9cc20",
 					"bytes": 5562,
 					"rawDigest": "cbc103a4b570783fd697fb2993cf33b93021b8f902634f485f186662d7206852",
 					"rawBytes": 3386,
@@ -403,7 +403,7 @@
 					]
 				},
 				"fr": {
-					"digest": "d8a450b4ff6dad66084b3f77737451e49c3b26fcc507beb5e8b9c2fb56b3064e",
+					"digest": "c8ad448e67822f6844a1e4b3048e0d9820e237dd06eb952b90b60cb28cc675a3",
 					"bytes": 5162,
 					"rawDigest": "09153f88a745fa57efa64d13fba88512de32298f1903eb43ff9214505c83510e",
 					"rawBytes": 2929,
@@ -429,7 +429,7 @@
 					]
 				},
 				"pt-BR": {
-					"digest": "6aa8c2a625c27017501b9b929d280180c583b7a37bd87a69bfd8a9ce8e3cbe45",
+					"digest": "e9bc5d4085c382119a1b87c3ab60d8c725d5a8875b5027a3579eaae7d728a159",
 					"bytes": 4967,
 					"rawDigest": "088dbebccaeed0d1352dcaa1962e8c62cd92a826b73cf9756a6a822e7c43239d",
 					"rawBytes": 2755,
@@ -461,16 +461,16 @@
 			"since": null,
 			"locales": {
 				"en": {
-					"digest": "155d76dca8eb621502b971e87a528a4dcbc7cbd5cb336bd8756b3fb3853c0876",
-					"bytes": 8344,
-					"rawDigest": "359e09f8f9ece97fb31bcd3cf9f010d5327dd9fe3517efc52963f1227deb1274",
-					"rawBytes": 4251,
+					"digest": "14cc6e7e206da6faa5fb46b1b7dcf053ed2c5ebe1a8a5efc3e9ea1f57f593d43",
+					"bytes": 8534,
+					"rawDigest": "931f4f8c15f85afe275e1f4baa264f89d1dec45c3806f0bf6a58920e57625260",
+					"rawBytes": 4358,
 					"title": "When a scan does not work",
 					"navTitle": "Troubleshooting",
 					"description": "Common reasons a scan fails, and what to do about each one.",
 					"updatedAt": "2026-01-05T09:00:00Z",
 					"state": "source",
-					"words": 746,
+					"words": 767,
 					"headings": [
 						{
 							"id": "why-does-nothing-happen-when-i-hold-a-tag-to-my-phone",
@@ -503,7 +503,7 @@
 					]
 				},
 				"ar": {
-					"digest": "2325366bd5dcbdb8a0f52d8ea5968f5cf439f3e2e3729bc5ed07574e7c89c02f",
+					"digest": "7959fefe57692cb0184aefcc4721458acff31f6a66aba4a7ed18b9479c1fe379",
 					"bytes": 11400,
 					"rawDigest": "47d66bc18103cfcf26ea194a8228dfb11c505a00dc0e49a7c1f6fa7ecb052209",
 					"rawBytes": 6340,
@@ -545,7 +545,7 @@
 					]
 				},
 				"ja": {
-					"digest": "e08e1acfbdc6d145088c9eb4f4577d42b77191052a494ea2e73739098523fdd5",
+					"digest": "3b296223b9edfdab59652516b02932384c912f610551877debd7fdfcfc2f71d1",
 					"bytes": 10944,
 					"rawDigest": "9341c169b9fbda5b10b4f74d943fa90fddd8f398640bfaba2533dbabe8785ec6",
 					"rawBytes": 6030,
@@ -593,7 +593,7 @@
 			"since": null,
 			"locales": {
 				"en": {
-					"digest": "efe3811721613fbf90668c771e0c15dcf54a13681a9a63d4f2b7a93af91e9160",
+					"digest": "3e19c6451733666135014f0621dbcd69413ef04bcde22578ad1023c78f12eec8",
 					"bytes": 5579,
 					"rawDigest": "235f4e0ac0584ebe2d06e0f050c692961d7826c9bd25048442681b0e13afd9b6",
 					"rawBytes": 2508,
@@ -619,7 +619,7 @@
 					]
 				},
 				"zh": {
-					"digest": "2abfb659c9734c47c51fee614b1106ac43d5be69ba36bff982a8fbb817a94917",
+					"digest": "e6712e8e3f653e6fc01133bf4438fcb4d356f31cc93a56e9222d7027032da263",
 					"bytes": 5768,
 					"rawDigest": "eae82de489e7e80a4707e1d99a58568b7390f76ceb799d8c76c7afbcfa95ea1f",
 					"rawBytes": 2596,
@@ -646,7 +646,7 @@
 					]
 				},
 				"ar": {
-					"digest": "85ad13a38748019894db9bc42837cc282ecfcab6b9e3d6d744527ddfa2d5a0b1",
+					"digest": "109d8461d0de37491d8a2ceb3661515d2e29b5083ac6153924c34ba123209c84",
 					"bytes": 7191,
 					"rawDigest": "ba33b3b6283f147be5696d052c66d6925778e19cdad4e8270501ef1a64c9058c",
 					"rawBytes": 3836,
@@ -673,7 +673,7 @@
 					]
 				},
 				"es": {
-					"digest": "c3c30feb1efe1911287ace5975c936afadd804ef3c1939fec2b4d7042c6b2ed3",
+					"digest": "5923d3121bd056bff23a86298b23dc6affabf29403b917f1d444a9ee57b8d5b2",
 					"bytes": 6196,
 					"rawDigest": "21b27dfebd07af295b9994bea3cdd2df51a26ecd838402a9352b4a1f954d2597",
 					"rawBytes": 2998,
@@ -700,7 +700,7 @@
 					]
 				},
 				"ja": {
-					"digest": "45bc3561853563b9ae349070eb6b9d8c62aea6bcf803d3a1cff9af15ba8e1516",
+					"digest": "38456f15cdb71d78a4ca65fab09c2c4b7907033dc0052d1de36651ab208a86c4",
 					"bytes": 6846,
 					"rawDigest": "feecf0f7c51194c361b031816fc30b6ae6d4766494d0c0e886f29a199e1b1260",
 					"rawBytes": 3630,
@@ -727,7 +727,7 @@
 					]
 				},
 				"fr": {
-					"digest": "adc0a8b1bf37a6ba3c620013048ba9b3c33f8ddd3c5e19941954d0f402b75541",
+					"digest": "42d3801a6d116637611fbabbf0f399ddf548d8ade554c7ac750f677c6548aa2a",
 					"bytes": 6318,
 					"rawDigest": "f8b09d6dad98ccc44a64d81adc2b14f2a3c3ff2789802c728611bdcdb7f1ccaf",
 					"rawBytes": 3080,
@@ -754,7 +754,7 @@
 					]
 				},
 				"pt-BR": {
-					"digest": "bfbc9537cb7ea487a59686a96da60fc9610eef6fee84dbe9662e273862781456",
+					"digest": "4c87ef207c13d8c1b5914541c78f607d4d8f878794d3fbd6b872ef875ab3e9b4",
 					"bytes": 6181,
 					"rawDigest": "d03220897388ac5106784fc33a3e876f97cef4953792f01b11744c94dfc05b80",
 					"rawBytes": 2958,
@@ -787,7 +787,7 @@
 			"since": null,
 			"locales": {
 				"en": {
-					"digest": "de02fddbe45e89e81723a694f5c31870dc6545757c82fddffcffa1ed98a87ae2",
+					"digest": "1c898cbec0f7d32d167232f7d2f82fd637a14241bd80a392ada20761359bf250",
 					"bytes": 15213,
 					"rawDigest": "a107581c3a65aad115ad028721d763688b07a90c19c108378a6e302a58413192",
 					"rawBytes": 5904,
@@ -835,16 +835,16 @@
 			"since": null,
 			"locales": {
 				"en": {
-					"digest": "30f871f15c0f483a270b49afa7a1e4bfa5e090a393a0afd576650dca321a7d16",
-					"bytes": 8873,
-					"rawDigest": "dd0615ad3dd53ddd6f796eb9b5dc2ebb7c915a5a2932d5882e21e5389c797fbd",
-					"rawBytes": 3556,
+					"digest": "7a1760f7cd7ebc1023263c7806ac8bb1f8c1fc11b8fa49245780a9a6383eb4c7",
+					"bytes": 9250,
+					"rawDigest": "158325cd85e544695f512eafeb5193a01e4c0d53db8c9cfbca3d24aee9b6d7ec",
+					"rawBytes": 3713,
 					"title": "Chip support matrix",
 					"navTitle": "Chip support",
 					"description": "Which NFC chips Fixture App can read and write on iOS, and the caveats that apply to each one.",
 					"updatedAt": "2026-01-05T09:00:00Z",
 					"state": "source",
-					"words": 557,
+					"words": 578,
 					"headings": [
 						{
 							"id": "what-the-caveats-mean",
@@ -857,16 +857,16 @@
 					]
 				},
 				"zh": {
-					"digest": "b49da0a9d3c92da349a1f40fc608a99f6ec9888fef312c2d19f4bf553ffc3948",
-					"bytes": 9061,
-					"rawDigest": "3542b1d7fbd304001e11014dabeb316c16dafe23d1f983cfc218ecec9db1676c",
-					"rawBytes": 3590,
+					"digest": "d10b7d73397feae891d7cfffd45fd40965caff6b0d536f5ce3139f6540874a0c",
+					"bytes": 9445,
+					"rawDigest": "46dec35ea00cab1d0c62c8e4fe9d02a4eb0a09cafa80b9326a21a9b05a5d42c5",
+					"rawBytes": 3754,
 					"title": "\u82af\u7247\u652f\u6301\u77e9\u9635",
 					"navTitle": "\u82af\u7247\u652f\u6301",
 					"description": "Fixture App\u5728iOS\u4e0a\u80fd\u8bfb\u3001\u80fd\u5199\u54ea\u4e9bNFC\u82af\u7247\uff0c\u4ee5\u53ca\u6bcf\u4e00\u6b3e\u5404\u81ea\u7684\u6ce8\u610f\u4e8b\u9879\u3002",
 					"updatedAt": "2026-02-10T11:30:00Z",
 					"state": "current",
-					"words": 845,
+					"words": 880,
 					"headings": [
 						{
 							"id": "\u8fd9\u4e9b\u6ce8\u610f\u4e8b\u9879\u662f\u4ec0\u4e48\u610f\u601d",
@@ -879,16 +879,16 @@
 					]
 				},
 				"ar": {
-					"digest": "2b44c50608e549fe13831b0e421c1ede3097bb3c37d10b6166031b64d0934434",
-					"bytes": 10685,
-					"rawDigest": "7a05dad5533884be325910e35af5976d125de1bd39448af19d24df7e2fda9309",
-					"rawBytes": 5055,
+					"digest": "4edf165b0853231ebe567f000baff151e5379baa5116cea9d30fa0940925d0aa",
+					"bytes": 11121,
+					"rawDigest": "1ef4a92a4c91c646d0161509a232c6aa243aadc29926dadcf1d306f4a9338a89",
+					"rawBytes": 5271,
 					"title": "\u062c\u062f\u0648\u0644 \u062f\u0639\u0645 \u0627\u0644\u0634\u0631\u0627\u0626\u062d",
 					"navTitle": "\u062f\u0639\u0645 \u0627\u0644\u0634\u0631\u0627\u0626\u062d",
 					"description": "\u0623\u064a \u0634\u0631\u0627\u0626\u062d NFC \u064a\u0633\u062a\u0637\u064a\u0639 Fixture App \u0642\u0631\u0627\u0621\u062a\u0647\u0627 \u0648\u0627\u0644\u0643\u062a\u0627\u0628\u0629 \u0639\u0644\u064a\u0647\u0627 \u0639\u0644\u0649 iOS\u060c \u0648\u0627\u0644\u062a\u062d\u0641\u0638\u0627\u062a \u0627\u0644\u0645\u0646\u0637\u0628\u0642\u0629 \u0639\u0644\u0649 \u0643\u0644 \u0648\u0627\u062d\u062f\u0629.",
 					"updatedAt": "2026-02-10T11:30:00Z",
 					"state": "current",
-					"words": 480,
+					"words": 499,
 					"headings": [
 						{
 							"id": "\u0645\u0627-\u0627\u0644\u0630\u064a-\u062a\u0639\u0646\u064a\u0647-\u0627\u0644\u062a\u062d\u0641\u0638\u0627\u062a",
@@ -901,16 +901,16 @@
 					]
 				},
 				"es": {
-					"digest": "7ffcf7a4e4f5fd8d12c3faab1e01fbcbd48ddc6aa8a06f5ba392d8d08ade40c0",
-					"bytes": 9039,
-					"rawDigest": "74fe65eb56b8a130051173250568f65f9fa83a5342b10c74c0c66c61aaa196c0",
-					"rawBytes": 3674,
+					"digest": "3dcdd244227d50d081efebcb1beaa79c51140fd5784d207c02de720c2b59a7af",
+					"bytes": 9416,
+					"rawDigest": "a81c996da57504158b34e9d2ce4e197e4eb73f7b54d5da9e169cd68166d6a842",
+					"rawBytes": 3831,
 					"title": "Chip support matrix",
 					"navTitle": "Chip support",
 					"description": "Which NFC chips Fixture App can read and write on iOS, and the caveats that apply to each one.",
 					"updatedAt": "2026-02-10T11:30:00Z",
 					"state": "scaffolded",
-					"words": 573,
+					"words": 594,
 					"headings": [
 						{
 							"id": "what-the-caveats-mean",
@@ -923,16 +923,16 @@
 					]
 				},
 				"ja": {
-					"digest": "702339bd3ca629b26d5024c879ec214dc02749087bec1ffe9aec35fadf54bd9a",
-					"bytes": 10351,
-					"rawDigest": "c35e393567c738464b42e771e5c777c69ff527a169d1197fa010f23fccaef74f",
-					"rawBytes": 4919,
+					"digest": "5cbfcded02cb2d591c80b1f015d39b6fd2e1b7d105b47c7f6502921e1c08e1b5",
+					"bytes": 10792,
+					"rawDigest": "e79667c204bc85d608850ba8720d6663f82d236299726b1b3464a42ff294a396",
+					"rawBytes": 5140,
 					"title": "\u30c1\u30c3\u30d7\u5bfe\u5fdc\u8868",
 					"navTitle": "\u30c1\u30c3\u30d7\u5bfe\u5fdc",
 					"description": "Fixture App \u304c iOS \u3067\u8aad\u307f\u66f8\u304d\u3067\u304d\u308b NFC \u30c1\u30c3\u30d7\u3068\u3001\u305d\u308c\u305e\u308c\u306b\u5f53\u3066\u306f\u307e\u308b\u6ce8\u610f\u70b9\u3002",
 					"updatedAt": "2026-02-10T11:30:00Z",
 					"state": "current",
-					"words": 1263,
+					"words": 1317,
 					"headings": [
 						{
 							"id": "\u6ce8\u610f\u70b9\u306e\u610f\u5473",
@@ -951,7 +951,7 @@
 			"since": null,
 			"locales": {
 				"en": {
-					"digest": "295017b46e41fab9f2ff4e9d5cadb30f47dd6c4fd2e0041803752846d593280e",
+					"digest": "af588b19eaf6856fb0eacf8dda7070da79a7759ac5f6aeefc47134bf88a4e6f3",
 					"bytes": 3291,
 					"rawDigest": "c340fc4441ec64c544abc515943f451bca9b3ef67e049c68710c560d98b7b299",
 					"rawBytes": 1213,
@@ -973,7 +973,7 @@
 					]
 				},
 				"zh": {
-					"digest": "1b1f87a6fb13f22c3825a591fb112b6f6efab3924e01500f8bbf70f0e1c87946",
+					"digest": "d2c7f44d37f99052faaf52867c2f493219958515b6e850fca78ea10f1c55babd",
 					"bytes": 3362,
 					"rawDigest": "7ebf14a749fc1ef2a90529c67f489c99a9fadf895ccc9c185166d10e7c44e85d",
 					"rawBytes": 1211,
@@ -995,7 +995,7 @@
 					]
 				},
 				"ar": {
-					"digest": "02e7f29ac69f989e95285c8e8d3a0fd3f6706f9e17cf064912481706a8166892",
+					"digest": "c38402672f6886f066914c9859da2d75902029910e4b88719803d4b2ef8c558e",
 					"bytes": 4159,
 					"rawDigest": "7cb099296e70d8ed36890dcaf1abf7d10db450d49e9fafac8c14e5dc6cdd438f",
 					"rawBytes": 1810,
@@ -1017,7 +1017,7 @@
 					]
 				},
 				"es": {
-					"digest": "1a255a30257c794109bde8807776d4f208534d0d905f5df59edcfb0b4e77899a",
+					"digest": "e3dc4b17bc42a8eb0e1f300a569153305846113890beec354f297be10e306736",
 					"bytes": 3705,
 					"rawDigest": "e570d98692aecd1331109f4ac528e1dfb72fdd307385a25cb0724d3e665d3a63",
 					"rawBytes": 1424,
@@ -1039,7 +1039,7 @@
 					]
 				},
 				"ja": {
-					"digest": "a2e613a32d08591c1dcfb5f9c0bfd10233f2b674073bf991c8a017dde95ef186",
+					"digest": "af21d5e8257bfb4df9c51c8a73bfed040e186740c9189f110d65be3d04910c16",
 					"bytes": 3825,
 					"rawDigest": "80f3af503732ade4be3787eb7657a479008b2c542cfbc280363907d5153b2154",
 					"rawBytes": 1643,
@@ -1061,7 +1061,7 @@
 					]
 				},
 				"fr": {
-					"digest": "e37f8b12f298ce5ac559c2124f172007a6d4ac512b8923b8fa6b02b9e8ce0b8d",
+					"digest": "692616b86132042d269ddb7f2ab044ebe37ac9932572a63c6ae7b8fd540625b2",
 					"bytes": 3800,
 					"rawDigest": "34b39f5ba03831ca10bac2349eb49b4f23a0596bd4a784ba1742a24e2ec5fc66",
 					"rawBytes": 1515,
@@ -1083,7 +1083,7 @@
 					]
 				},
 				"pt-BR": {
-					"digest": "739989cb2c54fc0403650b9d41416a68b6929b196c305e092fc05c8c3e4930fa",
+					"digest": "bdc786453db5cbaf248afd2f12549f134ec34f96414d6b2871a456db7e859cf8",
 					"bytes": 3729,
 					"rawDigest": "8aa29de1e8f07356f0e61bb8dde5ace7102803f08ca163a4875df29894a98fc1",
 					"rawBytes": 1442,
@@ -1227,46 +1227,46 @@
 	],
 	"search": {
 		"en": {
-			"digest": "634122d8b0d56d71fb8f1d06c2011b5ff4cba856e8c2c89ddb095caa9886c68d",
-			"bytes": 39842,
+			"digest": "2b8b4b9c031bb46ae4a7a4265f23881cfc00df642353f3377c03f0fcf94bf682",
+			"bytes": 40094,
 			"records": 40,
-			"terms": 1108
+			"terms": 1116
 		},
 		"zh": {
-			"digest": "083b5aae084c49531413254d6003efe20fe83d984a7d50fb3d72c1cf70238e53",
-			"bytes": 69703,
+			"digest": "c3059d9141843bdd1c788d26024165cc7baedd867b93dcf00bef28ae21a410cf",
+			"bytes": 70118,
 			"records": 40,
-			"terms": 2581
+			"terms": 2595
 		},
 		"ar": {
-			"digest": "242bea76311c580e235d6606c82e1363449d0a2b5213f6a357e3f462a219f904",
-			"bytes": 53953,
+			"digest": "5b1c339176bfabfe58f8436f236bee5f545203d4b1da1102503ecca378bbbf43",
+			"bytes": 54101,
 			"records": 40,
-			"terms": 1664
+			"terms": 1668
 		},
 		"es": {
-			"digest": "1c97d561bdf28eac539bf1c69ca48c11d93f07e746240407368f9c1324507cac",
-			"bytes": 45943,
+			"digest": "de3129659502d2d68f4e2529215648270333aee3154a4162f140e27ef86c7eb7",
+			"bytes": 46214,
 			"records": 40,
-			"terms": 1434
+			"terms": 1443
 		},
 		"ja": {
-			"digest": "d898e01f4947ff02852fc67af7ff9365f59ea389915e56331025be2460fd4be2",
-			"bytes": 82956,
+			"digest": "b7b5a0652da82168b63833609504f4b50823d00a0ea0a96c6a5bb8c191d9e9f2",
+			"bytes": 83272,
 			"records": 40,
-			"terms": 2836
+			"terms": 2846
 		},
 		"fr": {
-			"digest": "9cf29107ad50f7de674f76019fae36c6af54f1da343a5b9a8cd31fa0fff5f8f6",
-			"bytes": 46344,
+			"digest": "3c0f56728abe0735212575156154f1da9c4902fbf68ab207bd6d405a235b606c",
+			"bytes": 46615,
 			"records": 40,
-			"terms": 1428
+			"terms": 1437
 		},
 		"pt-BR": {
-			"digest": "d1927528483277a94c941ed182f11ce7da16af7e7126d01320e077a6b7b75073",
-			"bytes": 45932,
+			"digest": "8db4cce2de04eee6158701ec74be50294f702fb8baf8fe9a1b58864cef0830e8",
+			"bytes": 46203,
 			"records": 40,
-			"terms": 1433
+			"terms": 1442
 		}
 	},
 	"llms": {
@@ -1357,193 +1357,193 @@
 		},
 		{
 			"key": "pages/ar/guide/first-tag.json.gz",
-			"digest": "4bdb40ac81cc08fbd950452dbf146c64ee63df4a2cbe75998477a5042f882dae",
-			"bytes": 3376
+			"digest": "57aa2fb4f282db1adb6347dbf60438bd6396fbdc1e518779523403f8137dcd2c",
+			"bytes": 3373
 		},
 		{
 			"key": "pages/ar/guide/index.json.gz",
-			"digest": "a05a7f3461dc275a82a71604c5e77af49ec461f566f2580b701fe704a2ebc900",
-			"bytes": 2144
+			"digest": "fcd00f6330287a762bafb45cba0d142aca8ec481dc36388b6ca0227589960df0",
+			"bytes": 2142
 		},
 		{
 			"key": "pages/ar/guide/troubleshooting.json.gz",
-			"digest": "604b98f699da538b223039742f2091320d6587e1d064acc3219973910411d1df",
-			"bytes": 3588
+			"digest": "4cb32157aac37220e0a00bc1de6dadc903947124bd7b6ffc130ebb51313ba3b1",
+			"bytes": 3584
 		},
 		{
 			"key": "pages/ar/index.json.gz",
-			"digest": "7d24695be6320d0178ae4f9b28f88fca8df93ae88d7f5947da35cd1b0d3816d4",
-			"bytes": 2418
+			"digest": "2af80ac7525987d20e0ceec943837d3d748ba01d4be69b2c15b5fd45cdc5305f",
+			"bytes": 2416
 		},
 		{
 			"key": "pages/ar/reference/chip-support.json.gz",
-			"digest": "c208c8a3aadbcc2dc58994a17a9dc81754107c5d516f28f00fefb2ba2e5616ae",
-			"bytes": 2825
+			"digest": "a25975e6e7414fb0e665cf20c8a4779a036a55faf53f5059389caca7aab95104",
+			"bytes": 2926
 		},
 		{
 			"key": "pages/ar/reference/index.json.gz",
-			"digest": "f0a1a9618c3310487510bd04b3f6250f28c86db3e2e214006a80c446c6e7a06e",
-			"bytes": 1436
+			"digest": "a2527fa438a6a0a28439903fa4e4b8b12195cd562d2302a8c93ee3b7a0e56113",
+			"bytes": 1434
 		},
 		{
 			"key": "pages/en/developer/architecture.json.gz",
-			"digest": "d789f6ff1fb8238627d155c0a9b5ca5a611ee1f81ed96a6411f362cf5cc73f30",
-			"bytes": 3098
+			"digest": "37a2fe5b5cc058ccfc15c599f09bc2573258ad45bb944e2a41766114ad89de4b",
+			"bytes": 3096
 		},
 		{
 			"key": "pages/en/guide/first-tag.json.gz",
-			"digest": "ce531864085fe00d4724cf9cb8b37eff5df94daf993400133c221e847397df18",
-			"bytes": 2653
+			"digest": "5eaaa1adedeb29995132893bca65809a9f9b2f82901e7e892fc31e959954e6bc",
+			"bytes": 2651
 		},
 		{
 			"key": "pages/en/guide/index.json.gz",
-			"digest": "4a338ab50e59483c7466413be242c52656c1f1bccba94dcc479d6c1e47133a68",
-			"bytes": 1672
+			"digest": "989ca6506d7db6010012fce6c794acb1f3bbdf4b11ffc5980ab880a33cdfd366",
+			"bytes": 1670
 		},
 		{
 			"key": "pages/en/guide/troubleshooting.json.gz",
-			"digest": "336fa866fa5c4d1814ccb36cf008720800daae51d9aeeec8bb5fde0c103a491a",
-			"bytes": 2754
+			"digest": "ba2783388b66aae0d8c8a5ea25a03b2f91ccc328ec6007a4b80b7b0976e80d20",
+			"bytes": 2812
 		},
 		{
 			"key": "pages/en/index.json.gz",
-			"digest": "6bc28aecdd01ddd0373fe300aa1446e22d26a094d50a7c869bf2eb45d6939e73",
-			"bytes": 1837
+			"digest": "e18009bf87585e520a4c5dddba2eb2033197368a6ef4a953b5022ccc2012cdba",
+			"bytes": 1835
 		},
 		{
 			"key": "pages/en/reference/api.json.gz",
-			"digest": "68e1ca2cf3b0fd6a9d63aa4fecea243987aa425b6d85d32b267b96606d7f4759",
-			"bytes": 3767
+			"digest": "d9f4da7b7512c69118b4e2b53cb3909ae4a018ff3ca34b9a0c603ee69f932e40",
+			"bytes": 3765
 		},
 		{
 			"key": "pages/en/reference/chip-support.json.gz",
-			"digest": "82dfd1c8daa88d959adc1646f8758ee94a496f27c4207b789620829883c516cf",
-			"bytes": 2247
+			"digest": "2dd55e1afebc6fd943fc22743f0c5da56f94864edbc51014236847f85124cf38",
+			"bytes": 2337
 		},
 		{
 			"key": "pages/en/reference/index.json.gz",
-			"digest": "d5db3a43b8cbb0f9414b9d5d0f7823e466ccea084e50b79765799d6a9df85951",
+			"digest": "611150b52ef154ccc4f373804f1bcb3e0d740531f80c1297bcb490a9cab4d95f",
 			"bytes": 1104
 		},
 		{
 			"key": "pages/es/guide/first-tag.json.gz",
-			"digest": "324ba1396f14c1232ea9d8ad70db5257d615a36af43c65cc734940e6086ab970",
-			"bytes": 2968
-		},
-		{
-			"key": "pages/es/guide/index.json.gz",
-			"digest": "d171e455b14bcd19303ed18804a0504ccc93b31874d27c1e28c1070a2e669cae",
-			"bytes": 1952
-		},
-		{
-			"key": "pages/es/index.json.gz",
-			"digest": "13eb5e236949f7493af7f4795c23c3d404b57299070e3b5a26d72a6667e4f368",
-			"bytes": 2097
-		},
-		{
-			"key": "pages/es/reference/chip-support.json.gz",
-			"digest": "5cad0ee0aedfddbb7f856da3f904a8c2f9d6a1e88f89a0c99b8b1d9585105ecb",
-			"bytes": 2389
-		},
-		{
-			"key": "pages/es/reference/index.json.gz",
-			"digest": "7b681ca859052b2658b0391b5031409e6663df3192c3ac66c08fbb18c57572a6",
-			"bytes": 1258
-		},
-		{
-			"key": "pages/fr/guide/first-tag.json.gz",
-			"digest": "ebebb5880040806230fa1873ff655c5fea52f377f36ec41fe01d8fe389f0aab5",
-			"bytes": 3098
-		},
-		{
-			"key": "pages/fr/guide/index.json.gz",
-			"digest": "35f11797f85ad3398c24c8c61366b5506adada3d85eafcc3b8d544b7814a052b",
-			"bytes": 1995
-		},
-		{
-			"key": "pages/fr/index.json.gz",
-			"digest": "36807b616fbe85396a8995ba07dcd7eea9ac85414f0469a9cc1bb711c4aa288c",
-			"bytes": 2178
-		},
-		{
-			"key": "pages/fr/reference/index.json.gz",
-			"digest": "02391067e8d41db5ed4d7eac996b8349278bdf0f5149c238c5f23c197b93d566",
-			"bytes": 1302
-		},
-		{
-			"key": "pages/ja/guide/first-tag.json.gz",
-			"digest": "5c523964cdee7d588d553bc3d29019014cbee5cd75ecc53bce1e8c91fc787dca",
-			"bytes": 3352
-		},
-		{
-			"key": "pages/ja/guide/index.json.gz",
-			"digest": "759a248c8547bb8b12bbf826f9f9409b9bd2b3f3354343e7f0f67419be0b26f1",
-			"bytes": 2207
-		},
-		{
-			"key": "pages/ja/guide/troubleshooting.json.gz",
-			"digest": "6330ff26a0dbd2f7d8df45a19b461f22449800361a2ffc9bb8b7b7ab653dbb5a",
-			"bytes": 3585
-		},
-		{
-			"key": "pages/ja/index.json.gz",
-			"digest": "9be096e2ac44f0343ab33c2a73108c589bdb81e9854ac449fe3b47f712c92c15",
-			"bytes": 2477
-		},
-		{
-			"key": "pages/ja/reference/chip-support.json.gz",
-			"digest": "5ae319bef7ba7f8256f5e9357206f58fdeb6f6cbb46d070338d1951a782713bf",
-			"bytes": 2913
-		},
-		{
-			"key": "pages/ja/reference/index.json.gz",
-			"digest": "890c90e1f0dd59365c53553e926248205b6c9c5f5311c952e0557f63a75073fa",
-			"bytes": 1461
-		},
-		{
-			"key": "pages/pt-BR/guide/first-tag.json.gz",
-			"digest": "805018f6961d17b0264f0364a1315f7d425427b3add7eb2e364c506132c65265",
+			"digest": "401e3f36e7035ffb177a64cfc4042297e41bb742f1ffeb6cceb56a7e8ae92293",
 			"bytes": 2966
 		},
 		{
+			"key": "pages/es/guide/index.json.gz",
+			"digest": "d66be2f8d5f66dee0af6dbdd89fbfbac3cea34239238e6ce92790de8d83c4113",
+			"bytes": 1950
+		},
+		{
+			"key": "pages/es/index.json.gz",
+			"digest": "fb9637377b15eaf268d374c0169e04b7b2e27b74325c7219f95338fd353a0682",
+			"bytes": 2095
+		},
+		{
+			"key": "pages/es/reference/chip-support.json.gz",
+			"digest": "154fff33acc263ae2753f68e03a3b0d10044c05b8cefb7f9621e3eda71140e6d",
+			"bytes": 2479
+		},
+		{
+			"key": "pages/es/reference/index.json.gz",
+			"digest": "b6076d7b7b53a45d74a8c5b3dbd1cce915de9675def286316ff329a2061a7c5c",
+			"bytes": 1257
+		},
+		{
+			"key": "pages/fr/guide/first-tag.json.gz",
+			"digest": "87e5b914b2b345620aebe902393f72e388f892080464aeb98c01a231bd9c9da0",
+			"bytes": 3096
+		},
+		{
+			"key": "pages/fr/guide/index.json.gz",
+			"digest": "c8251d386542794b4b80b7e581d269ed894a7129667f58df6649ef832c1a9115",
+			"bytes": 1992
+		},
+		{
+			"key": "pages/fr/index.json.gz",
+			"digest": "00f6b7cf4cdc3c19799bcf7eff39d852c3bf540a6690b7e3df9e4402abb9ca0f",
+			"bytes": 2176
+		},
+		{
+			"key": "pages/fr/reference/index.json.gz",
+			"digest": "63e9b69070cac45032948446bcef57353059bcd6c922c232d280f7de4fe290a5",
+			"bytes": 1300
+		},
+		{
+			"key": "pages/ja/guide/first-tag.json.gz",
+			"digest": "47e88b34eb706cd56ba910521c78c385f858d506805b8b3c6762960b86f7a753",
+			"bytes": 3350
+		},
+		{
+			"key": "pages/ja/guide/index.json.gz",
+			"digest": "f704e03054bd78179dc2b9d08dca8b84489bcb69dacbf960b34d06ae758ad50b",
+			"bytes": 2205
+		},
+		{
+			"key": "pages/ja/guide/troubleshooting.json.gz",
+			"digest": "29119097d1a15de0f4692947e5dd243e0dcfc9d807bb8ea842ae1bc5fa2042e9",
+			"bytes": 3581
+		},
+		{
+			"key": "pages/ja/index.json.gz",
+			"digest": "55dfdb8a55c59806c47ed9e64902d2efba8bc634b20d068b96d657ae9b67bbbf",
+			"bytes": 2474
+		},
+		{
+			"key": "pages/ja/reference/chip-support.json.gz",
+			"digest": "1c2ef59b2c6bda70f8837676e7631d1bd814f7b0a1c90095d4682ac2e5dfb0a7",
+			"bytes": 3011
+		},
+		{
+			"key": "pages/ja/reference/index.json.gz",
+			"digest": "e4effe33a5616b43ae70b65fdcd2345cc8ba620bc59c9d7af36f1886f23ac275",
+			"bytes": 1459
+		},
+		{
+			"key": "pages/pt-BR/guide/first-tag.json.gz",
+			"digest": "5f0e6facde20e9336f75de50b6d542159b892a5524ab660bc505db75a7fe1a2a",
+			"bytes": 2963
+		},
+		{
 			"key": "pages/pt-BR/guide/index.json.gz",
-			"digest": "04210f97585d53a3184d9123fe069a55e6980a1f1be8604fbb3185e716a0603b",
-			"bytes": 1911
+			"digest": "7706ebeeb87a6a1aa6603cb0f242802ba4759b2e0cb14b04ef0764bde246d9bb",
+			"bytes": 1909
 		},
 		{
 			"key": "pages/pt-BR/index.json.gz",
-			"digest": "d1275d1eb81fcd7bdc9dff9265e4ced37b3683e6e3da91e4303611a18d685b9e",
-			"bytes": 2098
+			"digest": "07bb807ee83acfadd2d359613a8ebbf3fdc1bd09c20126724c3e607d978d71a4",
+			"bytes": 2096
 		},
 		{
 			"key": "pages/pt-BR/reference/index.json.gz",
-			"digest": "fdfe1ae3beb0542ec3de9dd5caede0c6b81aeff0116664dcead86bc449df10e2",
-			"bytes": 1277
+			"digest": "82da3f3ff7a33109bf5f07088ca9f0add4d4520becad35dcc3614e2944482d27",
+			"bytes": 1275
 		},
 		{
 			"key": "pages/zh/guide/first-tag.json.gz",
-			"digest": "b397185bc6880a9f5909745aa4672353cac6a7156ee578635ae8b90fb41e81e7",
-			"bytes": 3272
+			"digest": "58ff8826205429b8bfb3583ce375fec88e6d48d771be94d5b2bbbd051d9324a8",
+			"bytes": 3270
 		},
 		{
 			"key": "pages/zh/guide/index.json.gz",
-			"digest": "5964ada24c5d84b4ffdc0c6bf3960d6d08b8594b6102e50c09622fea2d9d200d",
-			"bytes": 2100
+			"digest": "367d4db9765d3d5e8c10d13b19b99b3180cda338d396fac534a859a3627aba57",
+			"bytes": 2098
 		},
 		{
 			"key": "pages/zh/index.json.gz",
-			"digest": "4571619e23c988a50b09118b279ea2de928c4f1fc4d07086b35c3e637233eac9",
-			"bytes": 2362
+			"digest": "965f4817d3e47a2439512f89ba256b16bccbcfaa1a4364b2151f285c6a38640b",
+			"bytes": 2360
 		},
 		{
 			"key": "pages/zh/reference/chip-support.json.gz",
-			"digest": "c5c263d0676144ab82d953ddf21e6aaacbc832fb64d0ffba54a5fe82a6c0caed",
-			"bytes": 2828
+			"digest": "455f8280d4216209a14640a9ed39058b660e729ab7c58ce045f06f571636eb7c",
+			"bytes": 2932
 		},
 		{
 			"key": "pages/zh/reference/index.json.gz",
-			"digest": "8bc309c99054eccde9046e5e215cf44a66ed244b64f4d6042477644473d72ee4",
-			"bytes": 1376
+			"digest": "002b7223c3115431b33c560d94d3aeeaa45b0b6df44ce5bf864fdda816ad6403",
+			"bytes": 1374
 		},
 		{
 			"key": "raw/ar/guide/first-tag.md.gz",
@@ -1567,8 +1567,8 @@
 		},
 		{
 			"key": "raw/ar/reference/chip-support.md.gz",
-			"digest": "16f53355c832b3d3bbe9ce4135787f129fb3aafcd7b303d195d02221e8436d5b",
-			"bytes": 2129
+			"digest": "4648ad7e679177c754099eb0f58a128e0ac9ff68df4d3e8749d2e16b12a04f5e",
+			"bytes": 2220
 		},
 		{
 			"key": "raw/ar/reference/index.md.gz",
@@ -1592,8 +1592,8 @@
 		},
 		{
 			"key": "raw/en/guide/troubleshooting.md.gz",
-			"digest": "0c11f505103095f95c48040a42ea646ab31a0bb09d8412f3e82b859aec22c569",
-			"bytes": 2105
+			"digest": "8b4ce82ed0ea7df710ecd1d387e302b7831fd4b522a7f75e9ade61d702ac92ee",
+			"bytes": 2158
 		},
 		{
 			"key": "raw/en/index.md.gz",
@@ -1607,8 +1607,8 @@
 		},
 		{
 			"key": "raw/en/reference/chip-support.md.gz",
-			"digest": "b3870560172d70042ba49e924f6241940b910bf84831b5a3db4a7e87906b62cc",
-			"bytes": 1744
+			"digest": "ebff57233ab4cdfb19862871d06f890dd6b80baf7acefffbe22a0ce08d117ac7",
+			"bytes": 1810
 		},
 		{
 			"key": "raw/en/reference/index.md.gz",
@@ -1632,8 +1632,8 @@
 		},
 		{
 			"key": "raw/es/reference/chip-support.md.gz",
-			"digest": "4d0ec55d01b49baf42c20ad2af63d0377bc0fe6d5c9ede4d686e4f937f38693d",
-			"bytes": 1860
+			"digest": "8aa3dc505b955914f23214cab46c694d2a46ae3953a2cdac9c80ea7414ff0213",
+			"bytes": 1927
 		},
 		{
 			"key": "raw/es/reference/index.md.gz",
@@ -1682,8 +1682,8 @@
 		},
 		{
 			"key": "raw/ja/reference/chip-support.md.gz",
-			"digest": "4fa624c2969231edacdbef8d9e81851cde616d4f30389f9b0a177dd18ec035fa",
-			"bytes": 2295
+			"digest": "9be911ad648625f8e7fcdb0d047ea6a9e952b362b29ac29da4d2b6e9e58a5300",
+			"bytes": 2389
 		},
 		{
 			"key": "raw/ja/reference/index.md.gz",
@@ -1727,8 +1727,8 @@
 		},
 		{
 			"key": "raw/zh/reference/chip-support.md.gz",
-			"digest": "835f73daa6f89e97156013906401a6cb5a5f08e4d99e621edf348ce13d8305bd",
-			"bytes": 2145
+			"digest": "77515ddf08ff7aeda066010ecfa2f62b2555a1813778001651c434f34c41c606",
+			"bytes": 2243
 		},
 		{
 			"key": "raw/zh/reference/index.md.gz",
@@ -1737,45 +1737,45 @@
 		},
 		{
 			"key": "search/ar.idx.json.gz",
-			"digest": "d3564d3b8b2717a3cd25187e5fe0e3119cb29400968b36ff9f9b6e5d90cbcb2a",
-			"bytes": 13034
+			"digest": "51335700b05fbd57bab102a0ac9a98b20c19dbc07053f4b984542f131451023d",
+			"bytes": 13063
 		},
 		{
 			"key": "search/en.idx.json.gz",
-			"digest": "bd17041259f3f9ffbd3f9542c50dc82eb0b1699ff7a38da4a3abd04bbd779d49",
-			"bytes": 9956
+			"digest": "519369c40137aa5420cbe5da18353d0b03defcdee8d14ae6ce1781892f851a10",
+			"bytes": 10037
 		},
 		{
 			"key": "search/es.idx.json.gz",
-			"digest": "15dbe3cece27d9320bf443f124084c48833a5b044b48f142722779db87b99fb5",
-			"bytes": 11751
+			"digest": "b2c54b7074c46eca0bb8c4c4121adb52fcf881326d302f5b52b2ae2d2d5d997e",
+			"bytes": 11819
 		},
 		{
 			"key": "search/fr.idx.json.gz",
-			"digest": "84a8fbdac559abc8642eb2732b5cbfcb7c5100442427613248635a18531a2c81",
-			"bytes": 11947
+			"digest": "167788a45d44ec56ef9ebf33b256d5a4989d1d120389c015f4b4666136705ea7",
+			"bytes": 12015
 		},
 		{
 			"key": "search/ja.idx.json.gz",
-			"digest": "8fb7992e8002aa8f3bba97617dfe298e9910c6de45c701414f1d5a852a969cfc",
-			"bytes": 20802
+			"digest": "95ba239ed218b41e0b0b973e44f3650bcb68e734d930631fe4a1904d537793c2",
+			"bytes": 20875
 		},
 		{
 			"key": "search/pt-BR.idx.json.gz",
-			"digest": "4c629175bca88070548bcc854d7a3d2eb42bb50705ccf76454cae81e6929d917",
-			"bytes": 11805
+			"digest": "0377a7782d1fefaef05481b8cbcf773f4f8e4eb9723a724ced4483006533e92d",
+			"bytes": 11866
 		},
 		{
 			"key": "search/zh.idx.json.gz",
-			"digest": "d4ccc6ff10ee1dca782243b0fabee8916a630303b6b9e20b28484ef53c4ced5a",
-			"bytes": 18749
+			"digest": "c9d35bdd231739b8303c9ed2eaceef235504b98f642e2f01d1e731cd628aba83",
+			"bytes": 18855
 		}
 	],
 	"counts": {
 		"pages": 8,
 		"locales": 7,
 		"objects": 92,
-		"bytes": 264968
+		"bytes": 266395
 	},
 	"coverage": {
 		"en": {

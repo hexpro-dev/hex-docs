@@ -212,7 +212,13 @@ describe('the compiled corpus', () => {
 		for (const [slug, byLocale] of result.pages) {
 			for (const [locale, output] of byLocale) {
 				for (const record of output.parsed.directives) {
-					met.add(record.kind === 'container' ? record.name : record.kind);
+					met.add(
+						record.kind === 'container'
+							? record.name
+							: record.kind === 'text'
+								? `:${record.name}`
+								: record.kind,
+					);
 				}
 				let fence: string | undefined;
 				for (const line of output.raw.split('\n')) {
@@ -231,6 +237,13 @@ describe('the compiled corpus', () => {
 					if (/^:{2,}/.test(body) || /^\[!\w+\]/.test(body) || /^#{1,6} .*\{#/.test(body)) {
 						leftovers.push(`${locale}/${slug}.md: ${line}`);
 					}
+					// An inline directive sits mid-line, so the line-start patterns above cannot see
+					// one. Code spans are removed first, because a page documenting `:more[...]`
+					// writes it in backticks, and the letter-or-digit exclusion is the grammar's
+					// own, which is what keeps the `hexdocs:page/` tokens out of this.
+					if (/(?:^|[^:A-Za-z0-9]):[a-z][a-z0-9-]*\[/.test(body.replace(/`[^`]*`/g, ''))) {
+						leftovers.push(`${locale}/${slug}.md: ${line}`);
+					}
 				}
 			}
 		}
@@ -240,6 +253,7 @@ describe('the compiled corpus', () => {
 		// caution callout is not in the list because the corpus writes it only in a snippet,
 		// whose records belong to the snippet's own parse.
 		expect([...met].sort()).toEqual([
+			':more',
 			'alert',
 			'figure',
 			'headingId',

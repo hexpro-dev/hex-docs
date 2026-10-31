@@ -13,6 +13,8 @@
 
 import { beforeAll, describe, expect, test } from 'vitest';
 
+import { AST_VERSION } from '../../src/contracts/ast.js';
+
 import type { DocsCatalogueApp, DocsHostFacts } from '../../src/contracts/host.js';
 import type { DocsSiteConfig } from '../../src/contracts/site.js';
 import {
@@ -894,7 +896,7 @@ describe('search_docs', () => {
 					[key]: async () => ({
 						kind: 'hexdocs.index',
 						v: 1,
-						ast: 1,
+						ast: AST_VERSION,
 						tokeniser: 2,
 						norm: 'NFKC',
 						stem: false,

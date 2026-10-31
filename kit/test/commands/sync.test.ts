@@ -95,7 +95,7 @@ const KIT_VERSION = '@hex-pro/docs-kit@0.0.1';
 const VERSIONS = [
 	{
 		label: '1.1.0',
-		commit: 'fc2ef4dea95fb36e5201504e7d06fd2cd0c79b56',
+		commit: '54ce86a3b69d49475fdb30d20499cc2b48c14cb1',
 		at: '2026-04-08T09:00:00Z',
 	},
 	{

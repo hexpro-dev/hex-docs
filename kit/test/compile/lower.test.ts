@@ -372,6 +372,60 @@ describe('one container inside another', () => {
 	});
 });
 
+describe('an inline :more', () => {
+	test('loses its markers and keeps its words, beside and around a rewritten link', () => {
+		// The link before the fold and the link inside it are both rewritten on this line, to
+		// tokens of a different length than the paths they replace, and the closing bracket
+		// comes after the second. Lowered in a pass of its own afterwards, from the parser's
+		// columns, the bracket's column would point into the middle of the token.
+		expect(rawOf('See [one](first-tag.md). :more[Then [two](first-tag.md) and more.] Done.')).toBe(
+			`See [one](${RAW_PAGE_LINK}guide/first-tag.md). Then [two](${RAW_PAGE_LINK}guide/first-tag.md) and more. Done.`,
+		);
+	});
+
+	test('two on one line, and one whose body crosses a wrap', () => {
+		expect(rawOf('A :more[one] and B :more[two].')).toBe('A one and B two.');
+		expect(rawOf(lines('Lead :more[first line', 'second line] end.'))).toBe(
+			lines('Lead first line', 'second line end.'),
+		);
+	});
+
+	test('in a table cell, with an escaped pipe inside it', () => {
+		expect(
+			rawOf(
+				lines('| Chip | Notes |', '| --- | --- |', '| NTAG213 | 144. :more[Read \\| write.] |'),
+			),
+		).toBe(lines('| Chip | Notes |', '| --- | --- |', '| NTAG213 | 144. Read \\| write. |'));
+	});
+
+	test('inside a callout and a step, after the prefixes those add', () => {
+		expect(rawOf(lines(':::note', ':more[Folded] first.', ':::'))).toBe(
+			'> **Note:** Folded first.',
+		);
+		expect(
+			rawOf(lines('::::steps', ':::step[Scan]', 'Hold it. :more[Near the top.]', ':::', '::::')),
+		).toBe(lines('1. **Scan**', '', '   Hold it. Near the top.'));
+	});
+
+	test('in code is code', () => {
+		expect(rawOf('Write `:more[text]` to fold.')).toBe('Write `:more[text]` to fold.');
+		expect(rawOf(lines('```markdown', 'A :more[b] c.', '```'))).toBe(
+			lines('```markdown', 'A :more[b] c.', '```'),
+		);
+	});
+
+	test('refused inside another, both sets of markers go, so the reread finds nothing', () => {
+		// The outer is accepted and lowered. The inner was refused, and left as typed it would
+		// read as an accepted one on the reread, which throws: the defect a refusal recorded
+		// nothing for.
+		const output = compile('Outer :more[and :more[inner] text].');
+		expect(output.raw.split('\n').slice(2).join('\n').trimEnd()).toBe('Outer and inner text.');
+		expect(output.findings.map((finding) => finding.message)).toContainEqual(
+			expect.stringMatching(/inside another ":more/),
+		);
+	});
+});
+
 describe('directive syntax that is code', () => {
 	test('is left exactly as typed, at the top and inside a step', () => {
 		const sample = [':::note[Title]', '::include[safety-note]', '## Heading {#anchor}'];

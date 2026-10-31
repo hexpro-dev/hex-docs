@@ -44,7 +44,9 @@
  *   architecture diagram in the corpus is box-drawing art in a code fence. An author
  *   who needs a diagram today commits an SVG and uses an image.
  * - **Footnotes and `<details>`.** No instances, no plan warrant, and footnotes add
- *   an index-ordering invariant that nothing would test.
+ *   an index-ordering invariant that nothing would test. A block-level `<details>` is
+ *   still absent; what `ast-2` added is the inline `more` node, for the one place the
+ *   corpus needed to fold text, which was inside table cells.
  *
  * Adding any of these later bumps `AST_VERSION`, which costs a recompile of the
  * bundles (additive, they are commit-addressed) and one commit bumping the submodule
@@ -66,7 +68,7 @@ import type { AssertCovers, Exact, Expect } from './exact.js';
  * refuses one it does not know, so an unknown field can only reach a renderer that
  * already agreed it understands the shape.
  */
-export const AST_VERSION = 1;
+export const AST_VERSION = 2;
 
 export type AstVersion = typeof AST_VERSION;
 
@@ -235,6 +237,32 @@ export interface StatusNode {
 	value: StatusValue;
 }
 
+/**
+ * Supporting detail folded behind a circled question mark, written `:more[...]`.
+ *
+ * It exists for table cells. The Notes column of hex-nfc's chip support matrix ran to
+ * 2321 characters in one English cell and 3002 in its Spanish translation, and a cell
+ * that long sets the height of its whole row, so every status beside it is a screen
+ * away from the next. The reader who scans the matrix needs the lead (the memory size,
+ * whether the chip was tested); the reader who needs the rest asks for it.
+ *
+ * It is the only node whose words the renderer does not show by default, so three
+ * things about it are load-bearing. Its text is in the search index, the table of
+ * contents text and the raw markdown exactly as if it were ordinary prose, because
+ * hiding a passage from a sighted reader is a layout decision and not a statement that
+ * the passage matters less. With no script it renders inline, because a control nobody
+ * can operate would make the words unreachable. And it carries no id, because the
+ * control that reveals it is replaced by what it reveals, so nothing ever has to point
+ * at it.
+ *
+ * `ast-1` had no such node, which is why it is `ast-2`: an older renderer meeting one
+ * would render nothing for it, links included, with no error.
+ */
+export interface More {
+	type: 'more';
+	children: Inline[];
+}
+
 export type Inline =
 	| TextNode
 	| Emphasis
@@ -244,7 +272,8 @@ export type Inline =
 	| Link
 	| ImageNode
 	| BreakNode
-	| StatusNode;
+	| StatusNode
+	| More;
 
 export type InlineType = Inline['type'];
 
@@ -583,6 +612,7 @@ export const INLINE_TYPES = [
 	'image',
 	'break',
 	'status',
+	'more',
 ] as const;
 
 export const CHILD_TYPES = ['listItem', 'tableCell', 'step'] as const;

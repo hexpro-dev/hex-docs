@@ -30,10 +30,16 @@ export const LINT_RULE_IDS = [
 	'no-raw-html',
 	'code-fence-language',
 	'table-header-required',
+	// A table cell whose visible text is wide enough to set the height of its whole
+	// row. A warning that suggests `:more[...]`, never an error: a long cell is a
+	// layout problem, and the page is still correct.
+	'table-cell-width',
 	'page-size',
 	// Source spelling this AST major cannot represent: the reserved `$$` math
-	// delimiter, a directive name that is not in `CONTAINER_DIRECTIVE_NAMES`, a
-	// container closed at the wrong colon width, an unreadable fence option. Added in
+	// delimiter, a directive name that is not in `CONTAINER_DIRECTIVE_NAMES` or
+	// `TEXT_DIRECTIVE_NAMES`, a `:more` somewhere its control cannot sit (a heading, a
+	// link, another `:more`), a container closed at the wrong colon width, an
+	// unreadable fence option. Added in
 	// step 3 rather than step 1 because the parser is what discovers that a refusal
 	// needs somewhere to be reported, and a refusal with no rule id ends up as a
 	// thrown error with a file path and no line.
@@ -335,6 +341,7 @@ export const RULE_CATEGORIES = {
 	'no-raw-html': 'structure',
 	'code-fence-language': 'structure',
 	'table-header-required': 'structure',
+	'table-cell-width': 'structure',
 	'page-size': 'structure',
 	'unsupported-syntax': 'structure',
 

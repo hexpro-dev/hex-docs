@@ -1264,6 +1264,34 @@ describe('the publish-time smoke test', () => {
 		expect(swept).toBe(SMOKE_QUERIES.length);
 	});
 
+	test('words folded behind a :more are searched like any other words', () => {
+		// The fold is a layout decision. A reader who searches for a term that is only in a
+		// folded note has to land on the page, or folding the long notes of a support matrix
+		// would quietly take its details out of search. Each phrase occurs once in its page,
+		// inside a `:more`, so a hit can only have come from folded text.
+		const folded: readonly { locale: Locale; query: string; slug: string }[] = [
+			{ locale: 'en', query: 'ChangeFileSettings', slug: CHIP_SLUG },
+			{ locale: 'en', query: 'wakes on the energy', slug: 'guide/troubleshooting' },
+		];
+		for (const entry of folded) {
+			const source = readAppFile(`docs/site/${contentPath(entry.locale, entry.slug)}`);
+			const at = source.indexOf(entry.query);
+			expect(at, `${entry.query} is not in ${entry.slug}`).toBeGreaterThan(-1);
+			expect(source.indexOf(entry.query, at + 1), `${entry.query} occurs twice`).toBe(-1);
+			const open = source.lastIndexOf(':more[', at);
+			expect(open, `${entry.query} is not inside a :more`).toBeGreaterThan(-1);
+			expect(source.slice(open, at).includes(']'), `${entry.query} is after the fold closes`).toBe(
+				false,
+			);
+
+			const hits = searchIndex(indexes.get(entry.locale) as SearchIndex, entry.query);
+			expect(
+				hits.some((hit) => hit.doc.slug === entry.slug),
+				`${entry.locale} ${entry.query}`,
+			).toBe(true);
+		}
+	});
+
 	test('a CJK run is indexed as overlapping bigrams, not as one term and not as pieces', () => {
 		// The failure the smoke table alone cannot see. A tokeniser that emitted one term
 		// per run, or non-overlapping pairs, still answers every query above, because a

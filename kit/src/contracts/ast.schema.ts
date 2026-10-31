@@ -197,6 +197,13 @@ export const statusSchema = z.strictObject({
 	value: z.enum(STATUS_VALUES),
 });
 
+export const moreSchema = z.strictObject({
+	type: z.literal('more'),
+	get children() {
+		return inlineArray();
+	},
+});
+
 /**
  * Keyed by discriminant so a node type added to `Inline` without a schema is a
  * missing key here, which `satisfies` reports by name.
@@ -211,6 +218,7 @@ export const INLINE_SCHEMAS = {
 	image: imageSchema,
 	break: breakSchema,
 	status: statusSchema,
+	more: moreSchema,
 } as const satisfies Record<InlineType, z.ZodType>;
 
 /**

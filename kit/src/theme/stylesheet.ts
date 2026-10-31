@@ -131,6 +131,8 @@ ${calloutRules()}
 
 ${statusRules()}
 
+${MORE}
+
 ${SCRIPTS}
 
 ${MOTION}
@@ -1703,6 +1705,134 @@ const PHONE = `/*
 	.hx-root .hx-tree-summary::after,
 	.hx-root .hx-toc-summary::after {
 		background: CanvasText;
+	}
+}`;
+
+const MORE = `/*
+ * \`:more[...]\`, a passage folded behind a circled question mark. \`src/render/more.tsx\`
+ * describes the three states; this is how each one is drawn.
+ *
+ * The text is inline unless something here hides it, and the only thing that does is a
+ * rule inside \`scripting: enabled\`. That inversion is the point. A reader with no script,
+ * or an engine that does not know the query, gets the words where the author wrote them
+ * and no mark, rather than a mark nobody can operate over words nobody can reach. The
+ * mark is hidden by default for the same reason and shown only where a script can run it.
+ *
+ * With script, the text is hidden until it is either previewed, which puts it in the top
+ * layer as a popover, or revealed, which sets \`data-open\` on the wrapper and drops the
+ * hiding rule. \`:popover-open\` is selected through \`:not([data-open])\` as well, because
+ * that selector is what has to outrank the hiding rule, and two rules of equal weight would
+ * leave the answer to their order in this file.
+ *
+ * The preview states everything the user agent's \`[popover]\` rule sets (a centred
+ * \`margin: auto\`, \`inset: 0\`, a \`Canvas\` background, a solid border) and everything a
+ * host's base layer resets, because unlayered beats layered only for what a rule names.
+ * Its position is two lengths written by \`usePreview\`, which measures the page, so it
+ * states no side here.
+ *
+ * The mark is a CSS circle and a question mark from the stylesheet, so its name is its
+ * label and no font has to cover a glyph. In Arabic it is U+061F, the Arabic question mark,
+ * which is the mirrored form an Arabic reader expects; it follows the mark's own language,
+ * which is the reader's, so an English page served at an Arabic address still draws it.
+ */
+.hx-root .hx-more-mark {
+	position: relative;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	inline-size: 1.15em;
+	block-size: 1.15em;
+	vertical-align: -0.15em;
+	margin: 0;
+	margin-inline: 0.15em;
+	padding: 0;
+	background: transparent;
+	border: 1.5px solid currentColor;
+	border-radius: 50%;
+	color: ${t('dim')};
+	font: inherit;
+	line-height: 1;
+	cursor: pointer;
+}
+
+/*
+ * A larger target than the circle, with no effect on the line. The mark sits inside a
+ * sentence, where WCAG's target-size rule exempts it, but it is also the only way to reach
+ * the text on a phone.
+ */
+.hx-root .hx-more-mark::after {
+	content: '';
+	position: absolute;
+	inset-block: -0.4em;
+	inset-inline: -0.4em;
+}
+
+.hx-root .hx-more-mark::before {
+	content: '?';
+	font-size: 0.75em;
+	font-weight: 700;
+	line-height: 1;
+}
+
+.hx-root .hx-more-mark:lang(ar)::before {
+	content: '\\61F';
+}
+
+.hx-root .hx-more-mark:not(:disabled):hover,
+.hx-root .hx-more-mark:focus-visible {
+	color: ${t('accent-link')};
+}
+
+.hx-root .hx-more-mark:disabled {
+	color: ${t('faint')};
+	cursor: default;
+}
+
+.hx-root .hx-more-mark {
+	display: none;
+}
+
+@media (scripting: enabled) {
+	.hx-root .hx-more-mark {
+		display: inline-flex;
+	}
+
+	.hx-root .hx-more:not([data-open]) .hx-more-body {
+		display: none;
+	}
+}
+
+.hx-root .hx-more:not([data-open]) .hx-more-body:popover-open {
+	display: block;
+	position: fixed;
+	inset-block: auto;
+	inset-inline: auto;
+	box-sizing: border-box;
+	inline-size: max-content;
+	max-inline-size: min(24rem, calc(100vw - 1rem));
+	block-size: auto;
+	margin: 0;
+	padding: 0.6rem 0.8rem;
+	overflow: auto;
+	background: ${t('surface')};
+	border: 1px solid ${t('control')};
+	border-radius: 8px;
+	color: ${t('ink')};
+	font-size: 0.875rem;
+	font-weight: 400;
+	line-height: 1.55;
+	text-align: start;
+	white-space: normal;
+}
+
+/* Paper has no pointer. Every folded passage prints where it was written. */
+@media print {
+	.hx-root .hx-more-mark {
+		display: none;
+	}
+
+	.hx-root .hx-more:not([data-open]) .hx-more-body {
+		display: inline;
 	}
 }`;
 

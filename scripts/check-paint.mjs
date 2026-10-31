@@ -121,6 +121,10 @@ const page = (css, body, host) =>
  *   and attached to the measurement as `pixels`.
  * @property {{ name: string, value: string }[]} [media]  Media features the page is emulated
  *   under, such as a forced colour palette. None by default.
+ * @property {'print'} [mediaType]  The media type the page is emulated under. Screen by default.
+ * @property {false} [script]  With `false`, the page's own scripting is turned off, so
+ *   `@media (scripting: none)` matches. The probe's expression still runs: it is DevTools
+ *   evaluating it, not the page.
  */
 
 const DESKTOP = 1280;
@@ -229,6 +233,14 @@ export const FRAGMENTS = {
 	 * direction said. The label is in its own span and the button carries nothing, which is
 	 * what keeps the auto margin resolving in the bar's direction and not the label's.
 	 */
+	/**
+	 * A support matrix row whose note folds its detail behind a question mark, as the server
+	 * renders it: the mark disabled, the text inline in the markup and hidden by the stylesheet
+	 * only under `scripting: enabled`. The probes that need the script's state add it
+	 * themselves, the way the hydrated component would.
+	 */
+	moreTable:
+		'<div class="hx-scroll" tabindex="0" role="group" aria-label="Table"><table class="hx-table"><thead><tr><th scope="col">Chip</th><th scope="col">Notes</th></tr></thead><tbody><tr><td>NTAG213</td><td>144 bytes. <span class="hx-more"><button type="button" class="hx-more-mark" aria-label="Show details" disabled=""></button><span class="hx-more-body">Write protection confirmed on real tags after the September 2026 rework; read protection has not been run on the reworked code.</span></span></td></tr></tbody></table></div>',
 	fallbackFence:
 		'<div class="hx-fence"><div class="hx-fence-bar"><button type="button" class="hx-copy" disabled=""><span lang="ar" dir="rtl">\u0646\u0633\u062e</span></button></div><pre class="hx-pre" dir="ltr" tabindex="0" role="group" aria-label="\u0643\u062a\u0644\u0629 \u0628\u0631\u0645\u062c\u064a\u0629"><code><span class="hx-line">let session = NFCNDEFReaderSession()\n</span></code></pre></div>',
 };
@@ -516,6 +528,9 @@ const EDGES = `(() => {
  */
 const BASE_STYLES = `(() => {
 	document.querySelector('dialog.hx-search').showModal();
+	const preview = document.querySelector('.hx-more-body');
+	preview.setAttribute('popover', 'manual');
+	preview.showPopover();
 	const style = (selector) => getComputedStyle(document.querySelector(selector));
 	return JSON.stringify({
 		'page title weight': style('.hx-title').fontWeight,
@@ -538,6 +553,15 @@ const BASE_STYLES = `(() => {
 		'fence font': style('.hx-pre').fontFamily,
 		'fence code font': style('.hx-pre code').fontFamily,
 		'search dialog inline margin': style('dialog.hx-search').marginInlineStart,
+		'more mark border': style('.hx-more-mark').borderTopWidth + ' ' + style('.hx-more-mark').borderTopStyle,
+		'more mark radius': style('.hx-more-mark').borderTopLeftRadius,
+		'more mark padding': style('.hx-more-mark').paddingInlineStart,
+		'more mark size': style('.hx-more-mark').inlineSize,
+		'more mark colour': style('.hx-more-mark').color,
+		'more preview margin': style('.hx-more-body').marginBlockStart,
+		'more preview padding': style('.hx-more-body').paddingInlineStart,
+		'more preview border': style('.hx-more-body').borderTopWidth,
+		'more preview background': style('.hx-more-body').backgroundColor,
 	});
 })()`;
 
@@ -625,6 +649,7 @@ const BASE_PAGE = hosted(
 		prose:
 			'<h2 id="before" class="hx-heading">Before you start</h2><p>The <a href="/fixture-app/docs/reference/chip-support">chip support matrix</a> lists every chip.</p><ul class="hx-list hx-tight"><li><p>text records</p><ul class="hx-list hx-tight"><li><p>with the language code the tag declares</p></li></ul></li></ul><ol class="hx-list hx-tight"><li><p>Create the package.</p></li></ol><blockquote><p>Hold the tag still.</p></blockquote>' +
 			FRAGMENTS.figure +
+			FRAGMENTS.moreTable +
 			'<div class="hx-fence" data-lang="swift"><pre class="hx-pre" dir="ltr" tabindex="0" role="group" aria-label="Swift code block"><code><span class="hx-line"><span class="hx-s-keyword">let</span> session</span></code></pre></div>',
 	}).replace(
 		'<h1 id="hx-title" class="hx-title">Scan your first tag</h1>',
@@ -936,6 +961,100 @@ const CHEVRONS = `(() => {
  *
  * @type {Probe[]}
  */
+/** The folded state, as the hydrated component leaves it: the mark enabled, the text a popover. */
+const HYDRATE_MORE = `
+	const mark = document.querySelector('.hx-more-mark');
+	const body = document.querySelector('.hx-more-body');
+	mark.disabled = false;
+	body.setAttribute('popover', 'manual');`;
+
+/**
+ * The folded state, read twice: in the server's markup with the script about to run, and
+ * after hydration. The first is the one the stylesheet's own rule decides. Once the text is a
+ * popover the user agent hides it as well, so a probe that only looked after hydration would
+ * pass with the rule deleted, and every page would flash its notes open and shut on load.
+ */
+const MORE_FOLDED = `(() => {
+	const server = getComputedStyle(document.querySelector('.hx-more-body')).display;
+	const serverCell = Math.round(document.querySelector('.hx-more').closest('td').getBoundingClientRect().height);${HYDRATE_MORE}
+	const box = mark.getBoundingClientRect();
+	const style = getComputedStyle(mark);
+	const cell = mark.closest('td');
+	const lead = document.createRange();
+	lead.selectNodeContents(cell.firstChild);
+	const line = lead.getClientRects()[0];
+	return JSON.stringify({
+		server,
+		serverCell,
+		display: style.display,
+		body: getComputedStyle(body).display,
+		glyph: getComputedStyle(mark, '::before').content,
+		width: Math.round(box.width * 10) / 10,
+		height: Math.round(box.height * 10) / 10,
+		radius: style.borderTopLeftRadius,
+		background: style.backgroundColor,
+		sameLine: box.top < line.bottom && box.bottom > line.top,
+		cell: Math.round(cell.getBoundingClientRect().height),
+		lineHeight: Math.round(parseFloat(getComputedStyle(cell).lineHeight)),
+	});
+})()`;
+
+/**
+ * Opens the preview the way \`usePreview\` does, at the corner \`placePopover\` gives a mark
+ * with room below it, and reads where it painted.
+ *
+ * The sample point is inside the preview's padding, beside its last line rather than on it,
+ * and below the table, so what it reads is the preview's own background or, if the preview
+ * were clipped by the table's scroll wrapper or buried under something, whatever is there
+ * instead.
+ */
+const MORE_PREVIEW = `(() => {${HYDRATE_MORE}
+	body.style.top = '0px';
+	body.style.left = '0px';
+	body.showPopover();
+	const anchor = mark.getBoundingClientRect();
+	body.style.top = (anchor.bottom + 6) + 'px';
+	body.style.left = Math.max(8, Math.min(anchor.left, innerWidth - 8 - body.getBoundingClientRect().width)) + 'px';
+	const box = body.getBoundingClientRect();
+	const style = getComputedStyle(body);
+	const x = Math.round(box.left + 4);
+	const y = Math.round(box.bottom - 4);
+	const table = document.querySelector('.hx-scroll').getBoundingClientRect();
+	return JSON.stringify({
+		open: body.matches(':popover-open'),
+		position: style.position,
+		margin: style.marginTop,
+		width: Math.round(box.width),
+		onScreen: box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight,
+		outsideTable: y > table.bottom + 2,
+		topmost: body.contains(document.elementFromPoint(x, y)),
+		background: style.backgroundColor,
+		samples: { inside: [x, y] },
+	});
+})()`;
+
+const MORE_REVEALED = `(() => {${HYDRATE_MORE}
+	body.removeAttribute('popover');
+	mark.remove();
+	document.querySelector('.hx-more').setAttribute('data-open', '');
+	const cell = body.closest('td');
+	const lead = document.createRange();
+	lead.selectNodeContents(cell.firstChild);
+	const leadLine = lead.getClientRects()[0];
+	const first = body.getClientRects()[0];
+	return JSON.stringify({
+		display: getComputedStyle(body).display,
+		sameLine: first !== undefined && first.top < leadLine.bottom && first.bottom > leadLine.top,
+		lines: Math.round(cell.getBoundingClientRect().height / parseFloat(getComputedStyle(cell).lineHeight)),
+	});
+})()`;
+
+/** What a reader with no pointer to operate the mark gets: whether the mark shows, and the text. */
+const MORE_STATE = `JSON.stringify({
+	mark: getComputedStyle(document.querySelector('.hx-more-mark')).display,
+	body: getComputedStyle(document.querySelector('.hx-more-body')).display,
+})`;
+
 export const PROBES = [
 	{
 		id: 'baseline',
@@ -1277,6 +1396,53 @@ export const PROBES = [
 		why: "The chevron on the Pages chip and on the bar is the only sign either disclosure is open or closed. Under a forced colour palette its token background is repainted as the ground's own colour unless the stylesheet paints it in the palette's text colour. The chevron is sampled down its middle, where its point crosses whichever way it is turned, beside a point of ground just before it.",
 	},
 	{
+		id: 'more-folded',
+		host: HOST_BASE,
+		body: hosted(shell({ prose: FRAGMENTS.moreTable })),
+		expression: MORE_FOLDED,
+		why: 'With script, a folded note is a circled question mark on the line it belongs to, and the text behind it takes no room, so the row is one line high however long the note is.',
+	},
+	{
+		id: 'more-preview',
+		host: HOST_BASE,
+		sample: true,
+		body: hosted(shell({ prose: FRAGMENTS.moreTable })),
+		expression: MORE_PREVIEW,
+		why: 'The preview opens below the mark, outside the table, whose scroll wrapper clips everything outside its box in both axes. Only the top layer escapes that, so the preview has to be on screen, the topmost thing at its own centre, and painted in its own background rather than clipped away.',
+	},
+	{
+		id: 'more-revealed',
+		host: HOST_BASE,
+		body: hosted(shell({ prose: FRAGMENTS.moreTable })),
+		expression: MORE_REVEALED,
+		why: 'Revealed, the text takes the place of the mark, inline, on the line the note starts on, which is what makes the cell grow to fit it.',
+	},
+	{
+		id: 'more-noscript',
+		host: HOST_BASE,
+		script: false,
+		body: hosted(shell({ prose: FRAGMENTS.moreTable })),
+		expression: MORE_STATE,
+		why: 'With no script nothing can operate the mark, so there is none and the text is where the author wrote it. A stylesheet that hid the text by default would lock this reader out of it.',
+	},
+	{
+		id: 'more-print',
+		host: HOST_BASE,
+		mediaType: 'print',
+		body: hosted(shell({ prose: FRAGMENTS.moreTable })),
+		expression: MORE_STATE,
+		why: 'Paper has no pointer, so a printed page shows every folded note in full and no mark.',
+	},
+	{
+		id: 'more-arabic',
+		host: HOST_BASE,
+		body: hosted(
+			`<div lang="ar" dir="rtl">${shell({ prose: FRAGMENTS.moreTable, dir: 'rtl' })}</div>`,
+		),
+		expression: `getComputedStyle(document.querySelector('.hx-more-mark'), '::before').content`,
+		why: 'In Arabic the mark is the Arabic question mark, U+061F, which is the mirrored form an Arabic reader expects to see on a help mark.',
+	},
+	{
 		id: 'base-bare',
 		body: BASE_PAGE,
 		expression: BASE_STYLES,
@@ -1477,12 +1643,22 @@ async function measure(binary, probes, root) {
 		await send('Emulation.setFocusEmulationEnabled', { enabled: true }, session);
 
 		let width = 0;
-		let media = '[]';
+		let media = JSON.stringify(['', []]);
+		let scripting = true;
 		for (const probe of probes) {
-			const features = JSON.stringify(probe.media ?? []);
+			const features = JSON.stringify([probe.mediaType ?? '', probe.media ?? []]);
 			if (features !== media) {
-				await send('Emulation.setEmulatedMedia', { features: probe.media ?? [] }, session);
+				await send(
+					'Emulation.setEmulatedMedia',
+					{ media: probe.mediaType ?? '', features: probe.media ?? [] },
+					session,
+				);
 				media = features;
+			}
+			const wantsScript = probe.script !== false;
+			if (wantsScript !== scripting) {
+				await send('Emulation.setScriptExecutionDisabled', { value: !wantsScript }, session);
+				scripting = wantsScript;
 			}
 			const wanted = probe.width ?? DESKTOP;
 			if (wanted !== width) {
@@ -1816,6 +1992,102 @@ function layoutProblems(measured) {
 	) {
 		problems.push(
 			`An image in a paragraph computes display ${image.inline} and shares a line with the text before it ${image.shared}, and an image in a figure computes ${image.figure}. ${why('image-display')}`,
+		);
+	}
+
+	const folded = read('more-folded');
+	if (folded !== undefined) {
+		/** @type {string[]} */
+		const found = [];
+		if (folded.display !== 'inline-flex')
+			found.push(`the mark computing display ${folded.display}`);
+		if (folded.body !== 'none') found.push(`the folded text computing display ${folded.body}`);
+		if (folded.server !== 'none' || folded.serverCell > folded.lineHeight * 2) {
+			found.push(
+				`the folded text computing display ${folded.server} in the server's markup, in a cell ${folded.serverCell}px tall, before the script makes it a popover`,
+			);
+		}
+		if (folded.glyph !== '"?"')
+			found.push(`the mark drawing ${folded.glyph} rather than a question mark`);
+		if (
+			Math.abs(folded.width - folded.height) > 0.5 ||
+			folded.radius !== '50%' ||
+			folded.width < 12
+		) {
+			found.push(
+				`a mark ${folded.width} by ${folded.height} with radius ${folded.radius}, which is not a circle the size of a letter`,
+			);
+		}
+		if (folded.background !== 'rgba(0, 0, 0, 0)')
+			found.push(`the mark painting a ${folded.background} background`);
+		if (folded.sameLine !== true)
+			found.push('the mark on a line of its own rather than after the lead');
+		if (folded.cell > folded.lineHeight * 2) {
+			found.push(
+				`the cell ${folded.cell}px tall with a ${folded.lineHeight}px line, so the folded text still takes room`,
+			);
+		}
+		if (found.length > 0)
+			problems.push(`The more-folded probe found ${found.join(', and ')}. ${why('more-folded')}`);
+	}
+
+	const preview = read('more-preview');
+	if (preview !== undefined) {
+		/** @type {string[]} */
+		const found = [];
+		const painted = preview.pixels?.inside;
+		const expected = /^rgba?\((\d+), (\d+), (\d+)/.exec(preview.background);
+		if (preview.open !== true) found.push('the preview not open after showPopover');
+		if (preview.position !== 'fixed' || preview.margin !== '0px') {
+			found.push(
+				`the preview at position ${preview.position} with margin ${preview.margin}, where the user agent centres a popover unless told otherwise`,
+			);
+		}
+		if (preview.width < 160 || preview.width > 384)
+			found.push(`the preview ${preview.width}px wide`);
+		if (preview.outsideTable !== true) {
+			found.push(
+				'the point sampled inside the preview also inside the table, where a clipped preview cannot be told from one that escaped',
+			);
+		}
+		if (preview.onScreen !== true) found.push('the preview partly off screen');
+		if (preview.topmost !== true)
+			found.push('something other than the preview topmost at its own centre');
+		if (
+			expected === null ||
+			painted === undefined ||
+			painted.some((value, index) => Math.abs(value - Number(expected[index + 1])) > 2)
+		) {
+			found.push(
+				`the colour inside the preview ${JSON.stringify(painted)} rather than its own ${preview.background}`,
+			);
+		}
+		if (found.length > 0)
+			problems.push(`The more-preview probe found ${found.join(', and ')}. ${why('more-preview')}`);
+	}
+
+	const revealed = read('more-revealed');
+	if (
+		revealed !== undefined &&
+		(revealed.display !== 'inline' || revealed.sameLine !== true || revealed.lines < 2)
+	) {
+		problems.push(
+			`The more-revealed probe found the text computing display ${revealed.display}, starting on the lead's line ${revealed.sameLine}, over ${revealed.lines} lines. ${why('more-revealed')}`,
+		);
+	}
+
+	for (const id of ['more-noscript', 'more-print']) {
+		const state = read(id);
+		if (state !== undefined && (state.mark !== 'none' || state.body !== 'inline')) {
+			problems.push(
+				`The ${id} probe found the mark computing display ${state.mark} and the text ${state.body}. ${why(id)}`,
+			);
+		}
+	}
+
+	if (measured['more-arabic'] !== '"\u061F"') {
+		problems.push(
+			`The more-arabic probe found the mark drawing ${String(measured['more-arabic'])}. ${why('more-arabic')}`,
 		);
 	}
 

@@ -356,6 +356,17 @@ describe('coverage of the unions', () => {
 			text: 'yes',
 			why: 'Only when a caller supplies a `status` labeller, which has to come from outside.',
 		},
+		more: {
+			node: {
+				type: 'more',
+				children: [
+					{ type: 'text', value: 'Folded ' },
+					{ type: 'inlineCode', value: 'code' },
+				],
+			},
+			text: 'Folded code',
+			why: 'Its words in full: folding is a layout decision, so search and the reading estimate count what is folded.',
+		},
 		break: {
 			node: { type: 'break' },
 			text: ' ',
@@ -395,7 +406,7 @@ describe('coverage of the unions', () => {
 			examined += 1;
 		}
 		expect(examined).toBe(AST_NODE_TYPES.length);
-		expect(examined).toBe(22);
+		expect(examined).toBe(23);
 	});
 
 	test('the child types are walked through their parents as well as directly', () => {

@@ -1,5 +1,5 @@
 {
-	"ast": 1,
+	"ast": 2,
 	"project": "fixture-app",
 	"slug": "guide/troubleshooting",
 	"locale": "en",
@@ -72,7 +72,20 @@
 			"children": [
 				{
 					"type": "text",
-					"value": "The NFC antenna sits at the top of the back panel, beside the camera bar. Resting the centre of the phone on a tag leaves roughly 40 mm between the antenna and the chip, which is enough for the tag to stay asleep. Slide the top edge of the phone over the tag instead."
+					"value": "The NFC antenna sits at the top of the back panel, beside the camera bar. Resting the centre of the phone on a tag leaves roughly 40 mm between the antenna and the chip, which is enough for the tag to stay asleep. "
+				},
+				{
+					"type": "more",
+					"children": [
+						{
+							"type": "text",
+							"value": "A tag has no battery and wakes on the energy in the phone's field, which falls away quickly with distance."
+						}
+					]
+				},
+				{
+					"type": "text",
+					"value": " Slide the top edge of the phone over the tag instead."
 				}
 			]
 		},
@@ -441,7 +454,7 @@
 		"sourceUpdated": "2026-01-05T09:00:00Z"
 	},
 	"reading": {
-		"words": 746,
+		"words": 767,
 		"minutes": 4
 	},
 	"snippets": [],

@@ -1,5 +1,5 @@
 {
-	"ast": 1,
+	"ast": 2,
 	"project": "fixture-app",
 	"slug": "reference/chip-support",
 	"locale": "en",
@@ -408,7 +408,39 @@
 						"children": [
 							{
 								"type": "text",
-								"value": "416"
+								"value": "416 "
+							},
+							{
+								"type": "more",
+								"children": [
+									{
+										"type": "text",
+										"value": "The NDEF file holds 256 bytes until the application key is entered and "
+									},
+									{
+										"type": "inlineCode",
+										"value": "ChangeFileSettings"
+									},
+									{
+										"type": "text",
+										"value": " resizes it. See "
+									},
+									{
+										"type": "link",
+										"kind": "anchor",
+										"anchor": "what-the-caveats-mean",
+										"children": [
+											{
+												"type": "text",
+												"value": "what the caveats mean"
+											}
+										]
+									},
+									{
+										"type": "text",
+										"value": "."
+									}
+								]
 							}
 						]
 					}
@@ -767,7 +799,7 @@
 		"sourceUpdated": "2026-01-05T09:00:00Z"
 	},
 	"reading": {
-		"words": 557,
+		"words": 578,
 		"minutes": 3
 	},
 	"snippets": [

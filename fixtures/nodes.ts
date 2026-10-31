@@ -379,6 +379,28 @@ export const NODE_CLAIMS: readonly NodeClaim[] = [
 		pattern: /\| \u2014 \|/,
 		why: 'An em dash as a whole cell, which is how the real matrix spells "not applicable". Recognising it anywhere else would hand every author a one-character way to write an em dash that no prose rule can see.',
 	},
+	{
+		type: 'more',
+		variant: 'in a table cell',
+		file: 'content/en/reference/chip-support.md',
+		pattern: /\| 416 :more\[The NDEF file holds/,
+		why: 'The case the node exists for: a long note in a table cell, folded so the row stays one line high. The cell is right-aligned, so the folded text also inherits an alignment the popover has to undo.',
+	},
+	{
+		type: 'more',
+		variant: 'holding a link',
+		file: 'content/en/reference/chip-support.md',
+		pattern:
+			/`ChangeFileSettings` resizes it\. See \[what the caveats mean\]\(#what-the-caveats-mean\)\.\]/,
+		why: 'A link and inline code inside the fold. The link is what makes the closing bracket hard to find, because its own brackets nest inside, and what makes the raw markdown hard to lower, because its destination is rewritten on the same line as the marker that has to come off after it.',
+	},
+	{
+		type: 'more',
+		variant: 'in prose',
+		file: 'content/en/guide/troubleshooting.md',
+		pattern: /asleep\. :more\[A tag has no battery and wakes on the energy in the\nphone's field/,
+		why: 'A fold in a paragraph whose body crosses a soft wrap, so its two markers sit on different source lines and the raw markdown has to remove each from its own.',
+	},
 ];
 
 /**
@@ -441,6 +463,7 @@ export const REQUIRED_VARIANTS: Record<AstNodeType, readonly string[]> = {
 	image: ['inline, mid sentence'],
 	break: [''],
 	status: ['yes', 'partial', 'no', 'inline, outside a table cell', 'na'],
+	more: ['in a table cell', 'holding a link', 'in prose'],
 };
 
 /**

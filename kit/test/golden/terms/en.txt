@@ -27,6 +27,7 @@
 213
 215
 216
+256
 3
 316
 3des
@@ -129,6 +130,7 @@ badge
 banner
 bar
 batch
+battery
 be
 because
 been
@@ -190,6 +192,7 @@ centimetre
 centre
 change
 changed
+changefilesettings
 changes
 charge
 cheap
@@ -296,6 +299,7 @@ disabled
 discard
 discovery
 dispatching
+distance
 distinguishes
 dna
 do
@@ -322,7 +326,9 @@ embedding
 empty
 ended
 ends
+energy
 enough
+entered
 entitlement
 environment
 error
@@ -793,6 +799,7 @@ replaces
 report
 reporting
 reports
+resizes
 resizing
 resolved
 rest
@@ -1057,6 +1064,7 @@ views
 vnd
 wait
 waiting
+wakes
 walk
 walks
 walkthrough

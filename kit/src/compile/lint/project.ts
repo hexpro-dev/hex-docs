@@ -215,7 +215,10 @@ function walkLinks(blocks: readonly Block[], visit: (link: Link) => void): void 
 			} else if (
 				node.type === 'emphasis' ||
 				node.type === 'strong' ||
-				node.type === 'strikethrough'
+				node.type === 'strikethrough' ||
+				// Folded text holds links like any other text, and a broken `#anchor` behind a
+				// question mark is as broken as one in plain sight.
+				node.type === 'more'
 			) {
 				inline(node.children);
 			}

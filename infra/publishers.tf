@@ -46,7 +46,7 @@ locals {
       object_arns = [for project in publisher.projects : "${local.bucket_arn}/${project}/*"]
 
       # The listing prefixes, which are a different condition on a different action. The
-      # client lists `<project>/<sha>/ast-1/`, so this is StringLike with a trailing star
+      # client lists `<project>/<sha>/ast-2/`, so this is StringLike with a trailing star
       # rather than StringEquals on the bare project.
       list_prefixes = [for project in publisher.projects : "${project}/*"]
     }

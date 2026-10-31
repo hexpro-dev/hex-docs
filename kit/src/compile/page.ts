@@ -33,6 +33,7 @@ import type { SourceDocument } from './project.js';
 import {
 	locate,
 	raw,
+	type DirectiveRecord,
 	type NodeOrigins,
 	type ParseServices,
 	type ParsedDocument,
@@ -328,14 +329,23 @@ export function rewriteDestinations(
 	body: string,
 	firstLine: number,
 	destinations: readonly ResolvedDestination[],
+	directives: readonly DirectiveRecord[] = [],
 ): string {
 	const lines = body.split('\n');
-	const edits = destinations
-		.flatMap((destination) => [
+	// An inline directive's markers come off in this same pass rather than in
+	// `lowerDirectives`. Doing it afterwards would read columns this pass has already
+	// moved: `:more[see [the guide](guide.md)]` has its closing bracket after a destination
+	// that has just been replaced by a token of a different length.
+	const markers = directives.flatMap((record) =>
+		record.kind === 'text' ? record.remove.map((range) => ({ ...range, text: '' })) : [],
+	);
+	const edits = [
+		...destinations.flatMap((destination) => [
 			{ ...destination.at, length: 0, text: rawDestination(destination.target) },
 			...destination.remove.map((range) => ({ ...range, text: '' })),
-		])
-		.sort((a, b) => a.line - b.line || b.column - a.column || b.length - a.length);
+		]),
+		...markers,
+	].sort((a, b) => a.line - b.line || b.column - a.column || b.length - a.length);
 
 	let previous: { line: number; column: number } | undefined;
 	for (const edit of edits) {
@@ -382,7 +392,7 @@ export function rawSnippetBody(
 	destinations: readonly ResolvedDestination[],
 	lowering?: RawLowering,
 ): string {
-	const blanked = rewriteDestinations(body, firstLine, destinations)
+	const blanked = rewriteDestinations(body, firstLine, destinations, lowering?.directives)
 		.split('\n')
 		.map((line) => (WHOLE_LINE_COMMENT.test(line) ? '' : line))
 		.join('\n');
@@ -431,6 +441,7 @@ function rawMarkdown(
 		parsed.frontMatter.body,
 		parsed.frontMatter.bodyLine,
 		parsed.destinations,
+		parsed.directives,
 	);
 
 	for (const line of body.split('\n')) {

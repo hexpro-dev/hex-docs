@@ -246,6 +246,106 @@ const CASES: readonly Case[] = [
 		run: () => page('## Section\n\nThe ****important**** part.\n'),
 	},
 	{
+		name: 'every way a :more can be written where it cannot go',
+		// `unsupported-syntax` belongs to the case above, so every refusal here is an arm,
+		// claimed by the message only that arm produces. A refusal whose branch is deleted
+		// leaves its `:more` either folded where it cannot work or published as markers, and
+		// both are a page nobody can read.
+		rules: [],
+		arms: [
+			{
+				rule: 'unsupported-syntax',
+				matches: /":mroe\[" is not an inline directive/,
+				why: 'A misspelled name, which would otherwise publish as literal text the author thought was folded.',
+			},
+			{
+				rule: 'unsupported-syntax',
+				matches: /with no "\]" to close it/,
+				why: 'An open with no close, which would otherwise swallow the rest of the paragraph.',
+			},
+			{
+				rule: 'unsupported-syntax',
+				matches: /inside link text/,
+				why: 'A button inside a link, which no browser or screen reader can operate as either.',
+			},
+			{
+				rule: 'unsupported-syntax',
+				matches: /inside another ":more/,
+				why: 'A fold inside a fold, which asks for two clicks to read one passage.',
+			},
+			{
+				rule: 'unsupported-syntax',
+				matches: /inside a heading/,
+				why: 'A heading is the table of contents entry and the search result, neither of which can hold a button.',
+			},
+			{
+				rule: 'unsupported-syntax',
+				matches: /inside a directive's label/,
+				why: 'A label holds no bracket, and accepting it would lower `:::note[x :more[y]]` to a container the page does not have.',
+			},
+			{
+				rule: 'unsupported-syntax',
+				matches: /An empty ":more\[\]"/,
+				why: 'A question mark that reveals nothing.',
+			},
+			{
+				rule: 'unsupported-syntax',
+				matches: /takes no attributes/,
+				why: "remark-directive's attribute syntax, which this grammar does not have and would otherwise publish as text.",
+			},
+		],
+		run: () =>
+			page(
+				[
+					'## Section :more[hidden]',
+					'',
+					'A :mroe[typo] here.',
+					'',
+					'Never :more[closed.',
+					'',
+					'See [the matrix :more[hidden]](chip-support.md).',
+					'',
+					'Outer :more[and :more[inner] text].',
+					'',
+					'An :more[ ] here.',
+					'',
+					'Wide :more[text]{.wide} here.',
+					'',
+					':::note[Careful :more[hidden]]',
+					'Text.',
+					':::',
+				].join('\n'),
+			),
+	},
+	{
+		name: 'a table cell wide enough to set the height of its row',
+		rules: ['table-cell-width'],
+		arms: [
+			{
+				rule: 'table-cell-width',
+				matches: /is 201 columns wide/,
+				why: 'A Latin cell one column over the limit.',
+			},
+			{
+				rule: 'table-cell-width',
+				matches: /is 202 columns wide/,
+				why: 'A cell of 101 Japanese characters, which is 202 columns because each is drawn twice as wide. Counted as characters it would be half the limit and pass.',
+			},
+		],
+		run: () =>
+			page(
+				[
+					'## Section',
+					'',
+					'| Chip | Notes |',
+					'| --- | --- |',
+					`| NTAG213 | ${'a'.repeat(201)} |`,
+					`| NTAG215 | ${'\u3042'.repeat(101)} |`,
+					`| NTAG216 | 144 bytes. :more[${'b'.repeat(500)}] |`,
+				].join('\n'),
+			),
+	},
+	{
 		name: 'every bullet in a list opening with a bolded lead-in',
 		rules: ['no-bolded-bullet-leadins'],
 		run: () => page('## Section\n\n- **Speed:** it is fast.\n- **Range:** it is short.\n'),
@@ -621,6 +721,46 @@ let produced: Map<string, RawFinding[]>;
 
 beforeAll(() => {
 	produced = new Map(CASES.map((entry) => [entry.name, entry.run()]));
+});
+
+describe('table-cell-width measures what a reader sees', () => {
+	test('folded text, a status and a cell at the limit do not count against it', () => {
+		const widths = page(
+			[
+				'## Section',
+				'',
+				'| Chip | Notes |',
+				'| --- | --- |',
+				`| NTAG213 | ${'a'.repeat(200)} |`,
+				`| NTAG215 | 144 bytes. :more[${'b'.repeat(500)}] |`,
+				`| NTAG216 | \u2705 ${'c'.repeat(196)} |`,
+				`| NTAG424 | ${'d'.repeat(150)} \u3042\u3042 [a link](chip-support.md) |`,
+				`| ICODE | ${'e'.repeat(197)}\u0301\ufe0f\u200f |`,
+			].join('\n'),
+		)
+			.filter((finding) => finding.rule === 'table-cell-width')
+			.map((finding) => finding.message);
+		// Exactly the one that is over: 150 + a space + two wide characters at two columns
+		// each + a space + the link's own words. Its destination is not read, so it is
+		// 150 + 1 + 4 + 1 + 6 = 162 and under; the combining accent, the variation selector
+		// and the right-to-left mark on the last row take no column, so it is 197 and under.
+		expect(widths).toEqual([]);
+
+		const over = page(
+			[
+				'## Section',
+				'',
+				'| Chip | Notes |',
+				'| --- | --- |',
+				`| NTAG213 | ${'a'.repeat(199)}\u3042 |`,
+			].join('\n'),
+		).filter((finding) => finding.rule === 'table-cell-width');
+		// 199 Latin columns and one wide character is 201.
+		expect(over.map((finding) => finding.message)).toEqual([
+			'This table cell is 201 columns wide and the limit is 200.',
+		]);
+		expect(over[0]?.location).toMatchObject({ kind: 'file', line: 10 });
+	});
 });
 
 describe('bidi-balance points at the character', () => {

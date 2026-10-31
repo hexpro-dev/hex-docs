@@ -9,7 +9,9 @@ on screen and work from there.
 The NFC antenna sits at the top of the back panel, beside the camera
 bar. Resting the centre of the phone on a tag leaves roughly 40 mm
 between the antenna and the chip, which is enough for the tag to stay
-asleep. Slide the top edge of the phone over the tag instead.
+asleep. A tag has no battery and wakes on the energy in the
+phone's field, which falls away quickly with distance. Slide the top
+edge of the phone over the tag instead.
 
 The Scan sheet shows a ![contactless](hexdocs:asset/e58ff68f6c7bd6e46d20ea7549e3b2fd36a18753a219eac80b64b7cb1bce6949.svg)
 badge in its top right corner for as long as the radio is listening. If

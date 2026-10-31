@@ -341,7 +341,12 @@ export interface SourcePoint {
  * with that parse for the reason its destinations do.
  */
 export type DirectiveRecord =
-	ContainerRecord | AlertRecord | IncludeRecord | DroppedLineRecord | HeadingIdRecord;
+	| ContainerRecord
+	| AlertRecord
+	| IncludeRecord
+	| DroppedLineRecord
+	| HeadingIdRecord
+	| TextDirectiveRecord;
 
 /** A `:::name[label]` container, from its opening line to its close. */
 export interface ContainerRecord {
@@ -396,6 +401,27 @@ export interface DroppedLineRecord {
 export interface HeadingIdRecord {
 	kind: 'headingId';
 	line: number;
+}
+
+/**
+ * An inline `:more[...]` whose words the page keeps, and the two markers that come off it.
+ *
+ * Unlike every other record here it sits in the middle of a line, two can share one, and
+ * a link inside it rewrites columns on the same line, so it cannot be lowered by the line
+ * plan in `lower.ts`. Its markers are removed by the same right-to-left edit pass that
+ * rewrites link destinations (`rewriteDestinations`), from ranges the inline parser
+ * measured, and the record exists in this list so `assertLowered` can name one that
+ * survived. A refused one is recorded too, because its words are kept and its markers are
+ * not, which is what the payload holds; the exception is one written in a directive's
+ * label, which `inline.ts` says why it leaves as typed.
+ */
+export interface TextDirectiveRecord {
+	kind: 'text';
+	name: string;
+	/** The colon that opens it. */
+	at: SourcePoint;
+	/** `:more[` and the closing `]`, as source ranges. */
+	remove: SourceRange[];
 }
 
 /** What `parseDocument` returns for one markdown file. */

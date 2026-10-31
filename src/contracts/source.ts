@@ -196,7 +196,9 @@ export function sectionNumberAnchor(number: string): string {
  *
  * Not invented here. A container opens with three or more colons and a name and
  * closes with a line of colons; a leaf directive is two colons, a name and a bracketed
- * argument. Nesting adds a colon to the outer marker, which is what lets a `step` sit
+ * argument; an inline directive is one colon, a name and a bracketed body, and is
+ * declared with `TEXT_DIRECTIVE_NAMES` below because it is recognised mid-line by the
+ * inline parser rather than by a whole-line pattern. Nesting adds a colon to the outer marker, which is what lets a `step` sit
  * inside a `steps` without an ambiguous close.
  *
  * Borrowing a real extension's spelling rather than picking one costs nothing and buys
@@ -250,6 +252,70 @@ const CONTAINER_NAME_SET: ReadonlySet<string> = new Set<string>(CONTAINER_DIRECT
 
 export function isContainerDirective(name: string): name is ContainerDirectiveName {
 	return CONTAINER_NAME_SET.has(name);
+}
+
+/**
+ * Inline directives: `:more[...]`, one colon, a name and a bracketed body, written in
+ * the middle of a sentence or a table cell.
+ *
+ * This is remark-directive's text directive, the third of its three forms, with one
+ * deliberate difference. remark-directive refuses an opening colon only when another
+ * colon precedes it. Here an ASCII letter or digit before the colon refuses it too, so
+ * `key:value[0]` and `ratio:x[2]` written without backticks in a technical page stay
+ * literal text rather than becoming an unknown directive and failing the build. That is
+ * the same trade the underscore rule makes for `FIXTURE_TAG_LOG`. A CJK or Arabic letter
+ * before the colon is accepted, because CJK prose has no spaces to put there.
+ *
+ * The body is inline markdown and may hold a link, whose brackets nest. The scanner
+ * therefore stops at the opening bracket and leaves the close to the parser, which
+ * already balances brackets around code spans and escapes for links. A pattern ending
+ * in `[^\]]*\]`, the shape the two line-level patterns above use, would close at the
+ * first link's `]` and publish the rest of the body as text.
+ *
+ * Attributes (`:more[...]{.x}`) are remark-directive grammar and not this one: there is
+ * nothing an author could say in them that the renderer would honour, and accepting
+ * them silently is how a directive acquires meaning nobody wrote down.
+ */
+export const TEXT_DIRECTIVE_NAMES = ['more'] as const;
+
+export type TextDirectiveName = (typeof TEXT_DIRECTIVE_NAMES)[number];
+
+const TEXT_DIRECTIVE_NAME_SET: ReadonlySet<string> = new Set<string>(TEXT_DIRECTIVE_NAMES);
+
+export function isTextDirective(name: string): name is TextDirectiveName {
+	return TEXT_DIRECTIVE_NAME_SET.has(name);
+}
+
+/** The opening of an inline directive, as `textDirectiveAt` found it. */
+export interface TextDirectiveOpen {
+	/** The name as written. It may not be a known one, which the parser refuses by name. */
+	name: string;
+	/** Index of the `[` that opens the body. */
+	open: number;
+}
+
+const TEXT_DIRECTIVE_NAME = /[a-z][a-z0-9-]*/y;
+
+const REFUSES_TEXT_DIRECTIVE_BEFORE = /[:A-Za-z0-9]/;
+
+/**
+ * The inline directive opening at `index`, or `undefined` if there is not one there.
+ *
+ * `index` is the colon. The character before it decides whether this is a directive at
+ * all (see `TEXT_DIRECTIVE_NAMES`), so the caller passes the whole text rather than a
+ * slice: a slice starting at the colon would make every colon look like the start of
+ * one.
+ */
+export function textDirectiveAt(text: string, index: number): TextDirectiveOpen | undefined {
+	if (text[index] !== ':') return undefined;
+	const before = index > 0 ? text[index - 1] : undefined;
+	if (before !== undefined && REFUSES_TEXT_DIRECTIVE_BEFORE.test(before)) return undefined;
+	TEXT_DIRECTIVE_NAME.lastIndex = index + 1;
+	const name = TEXT_DIRECTIVE_NAME.exec(text);
+	if (name === null) return undefined;
+	const open = index + 1 + name[0].length;
+	if (text[open] !== '[') return undefined;
+	return { name: name[0], open };
 }
 
 /**

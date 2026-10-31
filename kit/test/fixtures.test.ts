@@ -9,6 +9,8 @@ import {
 	LEAF_DIRECTIVE_PATTERN,
 	SNIPPET_INCLUDE_NAME,
 	isContainerDirective,
+	isTextDirective,
+	textDirectiveAt,
 	parseFenceInfo,
 	parseHighlightLines,
 } from '../../src/contracts/source.js';
@@ -219,6 +221,26 @@ describe('the source spellings the compiler will look for', () => {
 		// Measured, not asserted. If this ever counted one, the corpus would have stopped
 		// exercising the grammar and every assertion above it would still pass.
 		expect(seen.size).toBeGreaterThanOrEqual(7);
+	});
+
+	test('every inline directive in the corpus has a name this AST major understands', () => {
+		// The scanner the compiler uses, so this agrees with it about which colons open one.
+		// Code spans are removed first: an inline directive in backticks is a sample.
+		let found = 0;
+		for (const path of [...markdown, ...GUIDES]) {
+			for (const line of proseLines(path)) {
+				const text = line.replace(/`[^`]*`/g, '');
+				for (let index = text.indexOf(':'); index !== -1; index = text.indexOf(':', index + 1)) {
+					const opening = textDirectiveAt(text, index);
+					if (opening === undefined) continue;
+					found += 1;
+					expect(isTextDirective(opening.name), `${path}: ${line}`).toBe(true);
+				}
+			}
+		}
+		// The five chip tables and the troubleshooting paragraph. Measured, so a corpus edit
+		// that drops them reads as a failure here rather than as a grammar nobody exercises.
+		expect(found).toBeGreaterThanOrEqual(6);
 	});
 
 	test('every container directive is closed, at the colon count it opened with', () => {

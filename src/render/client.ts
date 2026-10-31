@@ -23,13 +23,16 @@ import {
 	useEffect,
 	useRef,
 	useSyncExternalStore,
+	type FocusEvent,
 	type KeyboardEvent,
 	type MouseEvent,
+	type PointerEvent,
 	type RefObject,
 	type SyntheticEvent,
 } from 'react';
 
 import type { PageHeading } from '../contracts/page.js';
+import { placePopover } from '../site/popover.js';
 import type { DocsEventMap } from '../contracts/theme.js';
 import type { EmitFn } from './context.js';
 
@@ -538,5 +541,163 @@ export function escapeCloses(
 		event.preventDefault();
 		details.open = false;
 		details.querySelector('summary')?.focus();
+	};
+}
+
+/** How long a pointer rests on a `:more` before its preview opens. */
+export const PREVIEW_OPEN_DELAY = 100;
+
+/**
+ * How long a pointer may be away from a `:more` and its preview before the preview closes.
+ *
+ * Not zero, because the preview sits a few pixels from the question mark and a pointer
+ * crossing that gap leaves both. WCAG 1.4.13 asks that a reader can move the pointer onto
+ * content that appeared on hover without it vanishing, and this delay is the whole of how
+ * that is met: the preview is a DOM descendant of the element the handlers are on, so
+ * arriving on it counts as arriving back.
+ */
+export const PREVIEW_CLOSE_DELAY = 150;
+
+/** What `usePreview` hands a `:more`: the handlers for its wrapper and mark, and a way to close. */
+export interface Preview {
+	onPointerEnter: (event: PointerEvent<HTMLElement>) => void;
+	onPointerLeave: (event: PointerEvent<HTMLElement>) => void;
+	/** For the mark. A keyboard arriving on it opens the preview, a click does not. */
+	onFocus: (event: FocusEvent<HTMLElement>) => void;
+	/** For the wrapper, so focus moving from the mark into a link in the preview keeps it open. */
+	onBlur: (event: FocusEvent<HTMLElement>) => void;
+	hide: () => void;
+}
+
+/** `:focus-visible` where the engine knows it, and a plain no where it does not. */
+function focusVisible(element: Element): boolean {
+	try {
+		return element.matches(':focus-visible');
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * The hover and focus preview of a `:more`: a top-layer popover, positioned beside its mark.
+ *
+ * Shown on a resting mouse or pen pointer and on keyboard focus, never on touch, where a tap
+ * is a click and a click reveals the text in place; a preview that flashed up first would
+ * be gone again before it could be read. Hidden when the pointer leaves, when focus leaves,
+ * on Escape, and on any scroll or resize, because a fixed-position box left behind by a
+ * scroll points at nothing. A scroll inside the preview itself is not one of those: a
+ * passage taller than the room it was given scrolls, and closing it there would make its
+ * end unreadable.
+ *
+ * Imperative rather than state, for one reason that decides it: the size has to be measured
+ * after the element is shown and the position written before the frame paints, and a state
+ * change paints in between. `showPopover`, the measurement and the two lengths happen in one
+ * task, so the reader never sees it in the wrong place.
+ *
+ * `enabled` is false before hydration and once the text has been revealed, and an engine
+ * without the Popover API gets no preview at all and keeps the click.
+ */
+export function usePreview(
+	mark: RefObject<HTMLElement | null>,
+	popover: RefObject<HTMLElement | null>,
+	enabled: boolean,
+): Preview {
+	const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	const opened = useRef<(() => void) | undefined>(undefined);
+
+	const clear = useCallback((): void => {
+		if (timer.current === undefined) return;
+		clearTimeout(timer.current);
+		timer.current = undefined;
+	}, []);
+
+	const hide = useCallback((): void => {
+		clear();
+		const close = opened.current;
+		opened.current = undefined;
+		close?.();
+	}, [clear]);
+
+	const show = useCallback((): void => {
+		clear();
+		const element = popover.current;
+		const anchor = mark.current;
+		if (!enabled || element === null || anchor === null || opened.current !== undefined) return;
+		if (typeof element.showPopover !== 'function') return;
+
+		// Measured at the origin with no height cap, because a fixed box near the right edge
+		// shrinks to the room left of it, and the last placement's cap would be measured as
+		// the size.
+		element.style.top = '0px';
+		element.style.left = '0px';
+		element.style.maxHeight = '';
+		element.showPopover();
+		const box = element.getBoundingClientRect();
+		const root = document.documentElement;
+		const placement = placePopover(
+			anchor.getBoundingClientRect(),
+			{ width: box.width, height: box.height },
+			{ width: root.clientWidth, height: root.clientHeight },
+			getComputedStyle(anchor).direction === 'rtl' ? 'rtl' : 'ltr',
+		);
+		element.style.top = `${placement.top}px`;
+		element.style.left = `${placement.left}px`;
+		element.style.maxHeight = `${placement.maxHeight}px`;
+
+		const onKey = (event: globalThis.KeyboardEvent): void => {
+			// Marked as taken, so a dialog a consumer put around the page does not close as
+			// well, and left alone when somebody else already took it: `escapeCloses` says why.
+			if (event.key !== 'Escape' || event.defaultPrevented) return;
+			event.preventDefault();
+			hide();
+		};
+		const onMove = (event: Event): void => {
+			if (event.target instanceof Node && element.contains(event.target)) return;
+			hide();
+		};
+		document.addEventListener('keydown', onKey);
+		window.addEventListener('scroll', onMove, { capture: true, passive: true });
+		window.addEventListener('resize', onMove);
+		opened.current = () => {
+			document.removeEventListener('keydown', onKey);
+			window.removeEventListener('scroll', onMove, { capture: true });
+			window.removeEventListener('resize', onMove);
+			// Guarded, because a popover the browser already closed, or one whose attribute a
+			// re-render removed, throws in some engines, and the reveal must not fail over it.
+			try {
+				element.hidePopover();
+			} catch {
+				// Already closed.
+			}
+		};
+	}, [clear, enabled, hide, mark, popover]);
+
+	// A preview left open by a navigation or a reveal would stay in the top layer with its
+	// listeners attached, over a page that no longer has its mark.
+	useEffect(() => {
+		if (!enabled) hide();
+		return hide;
+	}, [enabled, hide]);
+
+	return {
+		onPointerEnter: (event) => {
+			if (event.pointerType === 'touch') return;
+			clear();
+			if (opened.current === undefined) timer.current = setTimeout(show, PREVIEW_OPEN_DELAY);
+		},
+		onPointerLeave: (event) => {
+			if (event.pointerType === 'touch') return;
+			clear();
+			timer.current = setTimeout(hide, PREVIEW_CLOSE_DELAY);
+		},
+		onFocus: (event) => {
+			if (focusVisible(event.currentTarget)) show();
+		},
+		onBlur: (event) => {
+			const next = event.relatedTarget;
+			if (next instanceof Node && event.currentTarget.contains(next)) return;
+			hide();
+		},
+		hide,
 	};
 }

@@ -235,6 +235,40 @@ describe('the probe markup is the markup the renderer emits', () => {
 		).toBe(FRAGMENTS.status);
 	});
 
+	test('a table whose last cell folds a note behind a :more', () => {
+		expect(
+			blocks([
+				{
+					type: 'table',
+					align: [null, null],
+					header: [
+						{ type: 'tableCell', children: [text('Chip')] },
+						{ type: 'tableCell', children: [text('Notes')] },
+					],
+					rows: [
+						[
+							{ type: 'tableCell', children: [text('NTAG213')] },
+							{
+								type: 'tableCell',
+								children: [
+									text('144 bytes. '),
+									{
+										type: 'more',
+										children: [
+											text(
+												'Write protection confirmed on real tags after the September 2026 rework; read protection has not been run on the reworked code.',
+											),
+										],
+									},
+								],
+							},
+						],
+					],
+				},
+			]),
+		).toBe(FRAGMENTS.moreTable);
+	});
+
 	test('the skip link, and every class any probe selects on, appear in rendered pages', async () => {
 		const site = JSON.parse(
 			readFileSync(join(CONSUMER_ROOT, 'fixture-app.docs.json'), 'utf8'),
@@ -443,8 +477,8 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 		expect(rows[0]?.state).toBe('PASS');
 		// A literal, so a deleted probe is a failure here rather than a smaller number on the
 		// ladder, which does not fail.
-		expect(rows[0]?.examined).toBe(32);
-		expect(PROBES.length).toBe(32);
+		expect(rows[0]?.examined).toBe(38);
+		expect(PROBES.length).toBe(38);
 		expect(rows[0]?.unit).toBe('probes');
 	}, 60_000);
 
@@ -1139,6 +1173,59 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 				return css.slice(0, start + 1) + css.slice(css.indexOf('\n}\n', start) + 3);
 			},
 			expect: ['The phone-forced probe'],
+		},
+		{
+			name: 'a folded note left visible with script',
+			edit: (css) =>
+				once(
+					css,
+					'\n\t.hx-root .hx-more:not([data-open]) .hx-more-body {\n\t\tdisplay: none;\n\t}\n}',
+					'\n}',
+				),
+			expect: ['The more-folded probe'],
+		},
+		{
+			name: 'a preview left to the user agent popover rule',
+			edit: (css) => {
+				const head = '.hx-root .hx-more:not([data-open]) .hx-more-body:popover-open {\n';
+				const start = css.indexOf(head);
+				expect(start).toBeGreaterThan(0);
+				return css.slice(0, start) + css.slice(css.indexOf('\n}\n', start) + 3);
+			},
+			// The base page opens the same preview bare and hosted, and with no rule of its own
+			// the two disagree about every property the preflight resets.
+			expect: [
+				'The more-preview probe',
+				'A host base layer changed the more preview margin:',
+				'A host base layer changed the more preview padding:',
+				'A host base layer changed the more preview border:',
+			],
+		},
+		{
+			name: 'a mark border left to the host',
+			edit: (css) => once(css, '\tborder: 1.5px solid currentColor;\n', ''),
+			expect: ['A host base layer changed the more mark border:'],
+		},
+		{
+			name: 'a mark shown where no script can run it',
+			edit: (css) => once(css, '.hx-root .hx-more-mark {\n\tdisplay: none;\n}\n\n', ''),
+			expect: ['The more-noscript probe'],
+		},
+		{
+			name: 'a printed page that keeps its notes folded',
+			edit: (css) => {
+				const head = '\n@media print {\n\t.hx-root .hx-more-mark';
+				const start = css.indexOf(head);
+				expect(start).toBeGreaterThan(0);
+				return css.slice(0, start + 1) + css.slice(css.indexOf('\n}\n', start) + 3);
+			},
+			expect: ['The more-print probe'],
+		},
+		{
+			name: 'an Arabic mark drawn with the Latin question mark',
+			edit: (css) =>
+				once(css, ".hx-root .hx-more-mark:lang(ar)::before {\n\tcontent: '\\61F';\n}\n\n", ''),
+			expect: ['The more-arabic probe'],
 		},
 	];
 
