@@ -86,6 +86,31 @@ function firstMore(): { wrapper: HTMLElement; mark: HTMLButtonElement; body: HTM
 	};
 }
 
+/**
+ * Gives happy-dom a viewport and the mark a box in it, which it cannot lay out itself.
+ * Returns a function that moves the mark and one that takes the viewport away again.
+ */
+function placeMark(
+	mark: HTMLElement,
+	top: number,
+): { move: (to: number) => void; done: () => void } {
+	const root = document.documentElement;
+	Object.defineProperty(root, 'clientHeight', { value: 800, configurable: true });
+	Object.defineProperty(root, 'clientWidth', { value: 1280, configurable: true });
+	let at = top;
+	mark.getBoundingClientRect = () =>
+		({ top: at, bottom: at + 16, left: 40, right: 56, width: 16, height: 16 }) as DOMRect;
+	return {
+		move: (to) => {
+			at = to;
+		},
+		done: () => {
+			delete (root as unknown as Record<string, unknown>)['clientHeight'];
+			delete (root as unknown as Record<string, unknown>)['clientWidth'];
+		},
+	};
+}
+
 describe('before the script runs', () => {
 	test('the mark is disabled and the text carries no popover attribute', async () => {
 		// The user agent hides an element with `popover` and no `:popover-open`, and no media
@@ -191,14 +216,16 @@ describe('the preview', () => {
 	test('closes on a scroll that takes the mark off screen, and not on a scroll inside itself', async () => {
 		vi.useFakeTimers();
 		render(<DocsPage {...await data('en', CHIPS)} />);
-		const { wrapper, body } = firstMore();
+		const { wrapper, mark, body } = firstMore();
+		const box = placeMark(mark, 100);
 		fireEvent.pointerEnter(wrapper, { pointerType: 'mouse' });
 		act(() => vi.advanceTimersByTime(PREVIEW_OPEN_DELAY));
 		fireEvent.scroll(body);
 		expect(hidden).toEqual([]);
-		// happy-dom measures every box as zero-sized at the origin, which is off screen.
+		box.move(-200);
 		fireEvent.scroll(window);
 		expect(hidden).toEqual([body]);
+		box.done();
 		// And the lengths it was placed with go with it, because a closed preview is laid out
 		// as text in print, where a left-over max-height would cut it short.
 		expect([body.style.top, body.style.left, body.style.maxHeight]).toEqual(['', '', '']);
@@ -337,14 +364,45 @@ describe('the preview from the keyboard', () => {
 		delete (root as unknown as Record<string, unknown>)['clientWidth'];
 	});
 
+	test('follows a mark the browser is still scrolling into view, and closes once it leaves', async () => {
+		// A keyboard reaching a mark below the fold opens the preview first, and the browser's
+		// smooth scroll brings the mark in over several events.
+		render(<DocsPage {...await data('en', CHIPS)} />);
+		const { mark, body } = firstMore();
+		const root = document.documentElement;
+		Object.defineProperty(root, 'clientHeight', { value: 800, configurable: true });
+		Object.defineProperty(root, 'clientWidth', { value: 1280, configurable: true });
+		let top = 2000;
+		mark.getBoundingClientRect = () =>
+			({ top, bottom: top + 16, left: 40, right: 56, width: 16, height: 16 }) as DOMRect;
+		const matches = mark.matches.bind(mark);
+		mark.matches = (selector: string) => selector === ':focus-visible' || matches(selector);
+		act(() => mark.focus());
+		expect(shown).toEqual([body]);
+		top = 1200;
+		fireEvent.scroll(window);
+		expect(hidden).toEqual([]);
+		top = 400;
+		fireEvent.scroll(window);
+		expect(hidden).toEqual([]);
+		top = -100;
+		fireEvent.scroll(window);
+		expect(hidden).toEqual([body]);
+		delete (root as unknown as Record<string, unknown>)['clientHeight'];
+		delete (root as unknown as Record<string, unknown>)['clientWidth'];
+	});
+
 	test('closes on a resize that leaves the mark off screen', async () => {
 		vi.useFakeTimers();
 		render(<DocsPage {...await data('en', CHIPS)} />);
-		const { wrapper, body } = firstMore();
+		const { wrapper, mark, body } = firstMore();
+		const box = placeMark(mark, 100);
 		fireEvent.pointerEnter(wrapper, { pointerType: 'mouse' });
 		act(() => vi.advanceTimersByTime(PREVIEW_OPEN_DELAY));
+		box.move(-200);
 		fireEvent(window, new Event('resize'));
 		expect(hidden).toEqual([body]);
+		box.done();
 	});
 });
 
