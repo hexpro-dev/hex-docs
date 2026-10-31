@@ -2350,7 +2350,10 @@ its name is its `aria-label` and it takes `interfaceLang`, the status-mark prece
 ### `table-cell-width`, a warning
 
 It counts a cell's visible text in display columns, wide characters twice, the folded part as the
-two columns of its mark, and warns over 200. Columns rather than characters for the reason the
+two columns of its mark, and warns over 200 in a table of three or more columns and over 400 in
+a table of one or two, whose last column takes most of the measure. The second limit came from
+hex-nfc's privacy page: the camera row says what it is for and that frames are never saved in 202
+Japanese columns, and the only remedy a 200 limit offered was to fold that guarantee. Columns rather than characters for the reason the
 title floor was removed: a character count is a measurement of Latin.
 
 ### Guards a deletion did not trip, and what was done

@@ -135,8 +135,8 @@ export const RULE_DEFINITIONS = {
 			'A row is as tall as its tallest cell, so one long note pushes every status beside it, and every row after it, down the screen. The reader scanning the column for a yes or a no loses the row they were reading. A warning rather than an error, because the page is still correct.',
 		examples: [
 			{
-				bad: `| Chip | Notes |\n| --- | --- |\n| NTAG213 | 144 bytes user memory. ${'Write protection confirmed on real tags after the September rework, read protection not yet run on the reworked code, and the lock pass re-run on the reworked sequence. '.repeat(2)}|`,
-				good: '| Chip | Notes |\n| --- | --- |\n| NTAG213 | 144 bytes user memory. :more[Write protection confirmed on real tags after the September rework.] |',
+				bad: `| Chip | Read | Notes |\n| --- | --- | --- |\n| NTAG213 | Yes | 144 bytes user memory. ${'Write protection confirmed on real tags after the September rework, read protection not yet run on the reworked code, and the lock pass re-run on the reworked sequence. '.repeat(2)}|`,
+				good: '| Chip | Read | Notes |\n| --- | --- | --- |\n| NTAG213 | Yes | 144 bytes user memory. :more[Write protection confirmed on real tags after the September rework.] |',
 			},
 		],
 	},

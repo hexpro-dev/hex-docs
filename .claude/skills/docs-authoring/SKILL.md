@@ -109,7 +109,8 @@ read by every house rule, so folding is never a way to hide a sentence from a ch
 - It is refused, as an `unsupported-syntax` error, in a heading, inside link text, inside
   another `:more`, in a directive's label, when empty, and with `{...}` attributes.
 - `table-cell-width` warns on a cell whose visible text, the folded part excluded, is
-  wider than 200 display columns (a CJK character counts as two). That warning is the cue
+  wider than 200 display columns, or 400 in a table of two columns (a CJK character counts
+  as two). That warning is the cue
   to fold.
 - Fold supporting detail, never a step, a warning or the only statement of a limitation:
   a reader who never hovers has to come away with everything they need to act safely.

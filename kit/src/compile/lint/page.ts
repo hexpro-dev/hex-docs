@@ -53,14 +53,19 @@ const SENTENCE_ENDINGS = ['.', '!', '?', '。', '！', '？', '؟'];
 
 /**
  * The widest a table cell's visible text may be, in display columns, before
- * `table-cell-width` suggests folding some of it.
+ * `table-cell-width` suggests folding some of it, in a table of three or more columns.
  *
- * A row is as tall as its tallest cell, so one long note pushes every status in the
- * row, and every row after it, down the screen. Two hundred columns is about four lines
- * in the narrow last column of a seven-column support matrix on a desktop, and about two
- * in a two-column table. Measured on hex-nfc's chip support matrix before it was
- * folded: 16 of its 26 Notes cells were over this in English and the longest was 2321,
- * and after folding no visible lead in any of its seven languages is.
+ * A row is as tall as its tallest cell, so one long note pushes every status in the row,
+ * and every row after it, down the screen. Two hundred columns is about five lines in the
+ * Notes column of a seven-column support matrix on a desktop. Measured on hex-nfc's chip
+ * support matrix before it was folded: 9 of its Notes cells were over this in English and
+ * 15 in Spanish, the longest 2321 and 3002 columns.
+ *
+ * A table of one or two columns gets twice as much, `TABLE_CELL_COLUMNS_MAX_PAIR`, because
+ * its last column takes most of the measure. hex-nfc's privacy page says what the camera is
+ * used for and that frames are never saved in 202 Japanese columns, which is two lines
+ * there. Held to the narrow limit, the warning's only remedy would have been to fold the
+ * guarantee the page exists to state.
  *
  * Columns rather than characters, because a floor or a ceiling measured in characters is
  * a measurement of Latin: a Japanese character is drawn twice as wide as a Latin letter,
@@ -69,6 +74,9 @@ const SENTENCE_ENDINGS = ['.', '!', '?', '。', '！', '？', '؟'];
  * all seven languages.
  */
 export const TABLE_CELL_COLUMNS_MAX = 200;
+
+/** The same limit for a table of one or two columns. `TABLE_CELL_COLUMNS_MAX` says why. */
+export const TABLE_CELL_COLUMNS_MAX_PAIR = 400;
 
 /** Characters that take no column of their own: variation selectors, marks, joiners, bidi controls. */
 const ZERO_WIDTH = /[\p{M}\u200b-\u200f\u2060-\u2069\ufe00-\ufe0f\ufeff]/u;
@@ -308,15 +316,16 @@ export function pageFindings(context: PageRuleContext): RawFinding[] {
 		}
 
 		if (block.type === 'table') {
+			const limit = block.header.length <= 2 ? TABLE_CELL_COLUMNS_MAX_PAIR : TABLE_CELL_COLUMNS_MAX;
 			for (const cell of [...block.header, ...block.rows.flat()]) {
 				const visible = visibleCell(cell.children);
-				if (visible.columns <= TABLE_CELL_COLUMNS_MAX) continue;
+				if (visible.columns <= limit) continue;
 				findings.push(
 					raw(
 						'table-cell-width',
 						locate(parsed.origins, cell, file),
 						locale,
-						`This table cell is ${visible.columns} columns wide and the limit is ${TABLE_CELL_COLUMNS_MAX}.`,
+						`This table cell is ${visible.columns} columns wide and the limit for a table of ${block.header.length} columns is ${limit}.`,
 						{
 							remediation:
 								'Keep the lead a reader scans the column for, and fold the rest into ":more[...]" at a sentence boundary. A row is as tall as its tallest cell, so one long note pushes the whole table down the screen. The folded text is still searchable and is shown inline in print and with no script.',

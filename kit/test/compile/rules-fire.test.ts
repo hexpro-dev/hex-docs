@@ -331,17 +331,27 @@ const CASES: readonly Case[] = [
 				matches: /is 202 columns wide/,
 				why: 'A cell of 101 Japanese characters, which is 202 columns because each is drawn twice as wide. Counted as characters it would be half the limit and pass.',
 			},
+			{
+				rule: 'table-cell-width',
+				matches: /is 401 columns wide and the limit for a table of 2 columns is 400/,
+				why: 'A two-column table, whose last column takes most of the measure and so has twice the limit.',
+			},
 		],
 		run: () =>
 			page(
 				[
 					'## Section',
 					'',
-					'| Chip | Notes |',
+					'| Chip | Read | Notes |',
+					'| --- | --- | --- |',
+					`| NTAG213 | Yes | ${'a'.repeat(201)} |`,
+					`| NTAG215 | Yes | ${'\u3042'.repeat(101)} |`,
+					`| NTAG216 | Yes | 144 bytes. :more[${'b'.repeat(500)}] |`,
+					'',
+					'| Permission | What it is used for |',
 					'| --- | --- |',
-					`| NTAG213 | ${'a'.repeat(201)} |`,
-					`| NTAG215 | ${'\u3042'.repeat(101)} |`,
-					`| NTAG216 | 144 bytes. :more[${'b'.repeat(500)}] |`,
+					`| Camera | ${'c'.repeat(300)} |`,
+					`| NFC | ${'d'.repeat(401)} |`,
 				].join('\n'),
 			),
 	},
@@ -729,35 +739,36 @@ describe('table-cell-width measures what a reader sees', () => {
 			[
 				'## Section',
 				'',
-				'| Chip | Notes |',
-				'| --- | --- |',
-				`| NTAG213 | ${'a'.repeat(200)} |`,
-				`| NTAG215 | 144 bytes. :more[${'b'.repeat(500)}] |`,
-				`| NTAG216 | \u2705 ${'c'.repeat(196)} |`,
-				`| NTAG424 | ${'d'.repeat(150)} \u3042\u3042 [a link](chip-support.md) |`,
-				`| ICODE | ${'e'.repeat(197)}\u0301\ufe0f\u200f |`,
+				'| Chip | Read | Notes |',
+				'| --- | --- | --- |',
+				`| NTAG213 | Yes | ${'a'.repeat(200)} |`,
+				`| NTAG215 | Yes | 144 bytes. :more[${'b'.repeat(500)}] |`,
+				`| NTAG216 | Yes | \u2705 ${'c'.repeat(196)} |`,
+				`| NTAG424 | Yes | ${'d'.repeat(150)} \u3042\u3042 [a link](chip-support.md) |`,
+				`| ICODE | Yes | ${'e'.repeat(197)}\u0301\ufe0f\u200f |`,
 			].join('\n'),
 		)
 			.filter((finding) => finding.rule === 'table-cell-width')
 			.map((finding) => finding.message);
-		// Exactly the one that is over: 150 + a space + two wide characters at two columns
-		// each + a space + the link's own words. Its destination is not read, so it is
-		// 150 + 1 + 4 + 1 + 6 = 162 and under; the combining accent, the variation selector
-		// and the right-to-left mark on the last row take no column, so it is 197 and under.
+		// None is over. The first is at the limit, which passes. The fold counts as its mark.
+		// A status counts two, so the third is 2 + 1 + 196 = 199. The fourth is 150, a space,
+		// two wide characters at two columns each, a space and the link's own words, with its
+		// destination unread: 150 + 1 + 4 + 1 + 6 = 162. On the last, the combining accent, the
+		// variation selector and the right-to-left mark take no column, so it is 197.
 		expect(widths).toEqual([]);
 
 		const over = page(
 			[
 				'## Section',
 				'',
-				'| Chip | Notes |',
-				'| --- | --- |',
-				`| NTAG213 | ${'a'.repeat(199)}\u3042 |`,
+				'| Chip | Read | Notes |',
+				'| --- | --- | --- |',
+				`| NTAG213 | Yes | ${'a'.repeat(199)}\u3042 |`,
 			].join('\n'),
 		).filter((finding) => finding.rule === 'table-cell-width');
 		// 199 Latin columns and one wide character is 201.
 		expect(over.map((finding) => finding.message)).toEqual([
-			'This table cell is 201 columns wide and the limit is 200.',
+			'This table cell is 201 columns wide and the limit for a table of 3 columns is 200.',
 		]);
 		expect(over[0]?.location).toMatchObject({ kind: 'file', line: 10 });
 	});
