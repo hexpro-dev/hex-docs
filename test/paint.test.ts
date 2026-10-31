@@ -477,8 +477,8 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 		expect(rows[0]?.state).toBe('PASS');
 		// A literal, so a deleted probe is a failure here rather than a smaller number on the
 		// ladder, which does not fail.
-		expect(rows[0]?.examined).toBe(38);
-		expect(PROBES.length).toBe(38);
+		expect(rows[0]?.examined).toBe(40);
+		expect(PROBES.length).toBe(40);
 		expect(rows[0]?.unit).toBe('probes');
 	}, 60_000);
 
@@ -1219,7 +1219,28 @@ describe.skipIf(BROWSER === undefined)('with a browser', () => {
 				expect(start).toBeGreaterThan(0);
 				return css.slice(0, start + 1) + css.slice(css.indexOf('\n}\n', start) + 3);
 			},
-			expect: ['The more-print probe'],
+			// Both print probes: the server's markup and the hydrated page each print through it.
+			expect: ['The more-print-hydrated probe', 'The more-print probe'],
+		},
+		{
+			name: "a closed preview left to the user agent's popover rule",
+			edit: (css) => {
+				const head = '.hx-root .hx-more-body:not(:popover-open) {\n';
+				const start = css.indexOf(head);
+				expect(start).toBeGreaterThan(0);
+				return css.slice(0, start) + css.slice(css.indexOf('\n}\n', start) + 3);
+			},
+			expect: ['The more-print-hydrated probe'],
+		},
+		{
+			name: 'a hydrated mark shown only by the scripting query',
+			edit: (css) =>
+				once(
+					css,
+					'.hx-root .hx-more[data-ready] .hx-more-mark {\n\tdisplay: inline-flex;\n}\n\n',
+					'',
+				),
+			expect: ['The more-ready probe'],
 		},
 		{
 			name: 'an Arabic mark drawn with the Latin question mark',

@@ -71,8 +71,14 @@ export function More(props: MoreProps): ReactElement {
 	return (
 		<span
 			className="hx-more"
+			// Set once the script runs, and what shows the mark and folds the text in an engine
+			// that has the Popover API and not the `scripting` media query. Without it the
+			// stylesheet's script-only rules never match there, the user agent hides the text
+			// as a closed popover, and the mark stays hidden: the note is unreachable.
+			data-ready={hydrated ? '' : undefined}
 			onPointerEnter={preview.onPointerEnter}
 			onPointerLeave={preview.onPointerLeave}
+			onFocus={preview.onFocus}
 			onBlur={preview.onBlur}
 		>
 			<button
@@ -82,7 +88,6 @@ export function More(props: MoreProps): ReactElement {
 				aria-label={uiString(context.locale, 'moreShow')}
 				{...interfaceLang(context.locale, context.contentLocale)}
 				disabled={!hydrated}
-				onFocus={preview.onFocus}
 				onClick={() => {
 					preview.hide();
 					setRevealed(node);

@@ -1802,6 +1802,42 @@ const MORE = `/*
 	}
 }
 
+/*
+ * The same two rules keyed on the attribute the component sets once it has hydrated, for an
+ * engine that has the Popover API and not the \`scripting\` query. There the rules above never
+ * match, the user agent hides the text as a closed popover, and without these the mark would
+ * stay hidden over a note nobody could reach.
+ */
+.hx-root .hx-more[data-ready] .hx-more-mark {
+	display: inline-flex;
+}
+
+.hx-root .hx-more[data-ready]:not([data-open]) .hx-more-body:not(:popover-open) {
+	display: none;
+}
+
+/*
+ * A closed preview laid out as text, whatever the user agent's \`[popover]\` rule says. That
+ * rule applies to a closed popover as much as an open one: fixed, inset to the viewport, a
+ * \`Canvas\` background and a border. Nothing shows it while it is hidden, but print shows it,
+ * and a page printed after hydration put every folded note in a white band across the top of
+ * every sheet, with its own cell empty.
+ */
+.hx-root .hx-more-body:not(:popover-open) {
+	position: static;
+	inset-block: auto;
+	inset-inline: auto;
+	inline-size: auto;
+	block-size: auto;
+	max-block-size: none;
+	margin: 0;
+	padding: 0;
+	overflow: visible;
+	background: none;
+	border: 0;
+	color: inherit;
+}
+
 .hx-root .hx-more:not([data-open]) .hx-more-body:popover-open {
 	display: block;
 	position: fixed;
@@ -1827,11 +1863,13 @@ const MORE = `/*
 
 /* Paper has no pointer. Every folded passage prints where it was written. */
 @media print {
-	.hx-root .hx-more-mark {
+	.hx-root .hx-more-mark,
+	.hx-root .hx-more[data-ready] .hx-more-mark {
 		display: none;
 	}
 
-	.hx-root .hx-more:not([data-open]) .hx-more-body {
+	.hx-root .hx-more:not([data-open]) .hx-more-body,
+	.hx-root .hx-more[data-ready]:not([data-open]) .hx-more-body:not(:popover-open) {
 		display: inline;
 	}
 }`;

@@ -966,6 +966,7 @@ const HYDRATE_MORE = `
 	const mark = document.querySelector('.hx-more-mark');
 	const body = document.querySelector('.hx-more-body');
 	mark.disabled = false;
+	document.querySelector('.hx-more').setAttribute('data-ready', '');
 	body.setAttribute('popover', 'manual');`;
 
 /**
@@ -1046,6 +1047,22 @@ const MORE_REVEALED = `(() => {${HYDRATE_MORE}
 		display: getComputedStyle(body).display,
 		sameLine: first !== undefined && first.top < leadLine.bottom && first.bottom > leadLine.top,
 		lines: Math.round(cell.getBoundingClientRect().height / parseFloat(getComputedStyle(cell).lineHeight)),
+	});
+})()`;
+
+/**
+ * The hydrated state, read the way a reader with no pointer gets it: whether the mark shows,
+ * how the text is laid out, and whether it sits in its own cell.
+ */
+const MORE_HYDRATED_STATE = `(() => {${HYDRATE_MORE}
+	const style = getComputedStyle(body);
+	const cell = body.closest('td').getBoundingClientRect();
+	const first = body.getClientRects()[0];
+	return JSON.stringify({
+		mark: getComputedStyle(mark).display,
+		body: style.display,
+		position: style.position,
+		inCell: first !== undefined && first.top >= cell.top - 1 && first.bottom <= cell.bottom + 1,
 	});
 })()`;
 
@@ -1432,6 +1449,22 @@ export const PROBES = [
 		body: hosted(shell({ prose: FRAGMENTS.moreTable })),
 		expression: MORE_STATE,
 		why: 'Paper has no pointer, so a printed page shows every folded note in full and no mark.',
+	},
+	{
+		id: 'more-print-hydrated',
+		host: HOST_BASE,
+		mediaType: 'print',
+		body: hosted(shell({ prose: FRAGMENTS.moreTable })),
+		expression: MORE_HYDRATED_STATE,
+		why: "A page printed after it hydrated. The text is a closed popover then, and the user agent's popover rule fixes it to the viewport with a background of its own, so unless the stylesheet lays a closed preview out as text, every note prints as a band across the top of the sheet.",
+	},
+	{
+		id: 'more-ready',
+		host: HOST_BASE,
+		script: false,
+		body: hosted(shell({ prose: FRAGMENTS.moreTable })),
+		expression: MORE_HYDRATED_STATE,
+		why: "A hydrated page in an engine with the Popover API and not the scripting query, which is what scripting off with the component's hydrated attributes amounts to. The script-only rules never match, so the mark has to be shown, and the text folded, from the attribute the component sets.",
 	},
 	{
 		id: 'more-arabic',
@@ -2073,6 +2106,25 @@ function layoutProblems(measured) {
 	) {
 		problems.push(
 			`The more-revealed probe found the text computing display ${revealed.display}, starting on the lead's line ${revealed.sameLine}, over ${revealed.lines} lines. ${why('more-revealed')}`,
+		);
+	}
+
+	const hydratedPrint = read('more-print-hydrated');
+	if (
+		hydratedPrint !== undefined &&
+		(hydratedPrint.mark !== 'none' ||
+			hydratedPrint.body !== 'inline' ||
+			hydratedPrint.position !== 'static' ||
+			hydratedPrint.inCell !== true)
+	) {
+		problems.push(
+			`The more-print-hydrated probe found the mark computing display ${hydratedPrint.mark}, and the text ${hydratedPrint.body} at position ${hydratedPrint.position}, inside its cell ${hydratedPrint.inCell}. ${why('more-print-hydrated')}`,
+		);
+	}
+	const ready = read('more-ready');
+	if (ready !== undefined && (ready.mark !== 'inline-flex' || ready.body !== 'none')) {
+		problems.push(
+			`The more-ready probe found the mark computing display ${ready.mark} and the folded text ${ready.body}. ${why('more-ready')}`,
 		);
 	}
 

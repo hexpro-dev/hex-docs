@@ -58,6 +58,16 @@ describe('placePopover', () => {
 		expect(left.left).toBe(POPOVER_MARGIN);
 	});
 
+	test('never a negative height, which a browser would read as no cap at all', () => {
+		const placed = placePopover(
+			{ top: 10, bottom: 26, left: 10, right: 26 },
+			{ width: 100, height: 50 },
+			{ width: 360, height: 20 },
+			'ltr',
+		);
+		expect(placed.maxHeight).toBe(0);
+	});
+
 	test('wider than the viewport keeps its start on screen', () => {
 		const placed = placePopover(
 			mark(10, 10),

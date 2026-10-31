@@ -558,13 +558,13 @@ export const PREVIEW_OPEN_DELAY = 100;
  */
 export const PREVIEW_CLOSE_DELAY = 150;
 
-/** What `usePreview` hands a `:more`: the handlers for its wrapper and mark, and a way to close. */
+/** What `usePreview` hands a `:more`: the handlers for its wrapper, and a way to close. */
 export interface Preview {
 	onPointerEnter: (event: PointerEvent<HTMLElement>) => void;
 	onPointerLeave: (event: PointerEvent<HTMLElement>) => void;
-	/** For the mark. A keyboard arriving on it opens the preview, a click does not. */
+	/** Focus arriving anywhere in the wrapper. A keyboard arriving on the mark opens it. */
 	onFocus: (event: FocusEvent<HTMLElement>) => void;
-	/** For the wrapper, so focus moving from the mark into a link in the preview keeps it open. */
+	/** Focus leaving the wrapper, so a move from the mark into a link in the preview keeps it. */
 	onBlur: (event: FocusEvent<HTMLElement>) => void;
 	hide: () => void;
 }
@@ -579,20 +579,47 @@ function focusVisible(element: Element): boolean {
 }
 
 /**
+ * The one preview open on the page, by its close function.
+ *
+ * Module level, because two marks are two components and only the page has one top layer.
+ * Opening takes a hundred milliseconds and closing a hundred and fifty, so a pointer moving
+ * from one mark to the next had both open, and a keyboard on one mark with the mouse resting
+ * on another kept both open for as long as nobody moved.
+ */
+let current: (() => void) | undefined;
+
+/** Whether any part of an element's box is inside the viewport. */
+function onScreen(element: Element): boolean {
+	const box = element.getBoundingClientRect();
+	const root = document.documentElement;
+	return (
+		box.bottom > 0 && box.right > 0 && box.top < root.clientHeight && box.left < root.clientWidth
+	);
+}
+
+/**
  * The hover and focus preview of a `:more`: a top-layer popover, positioned beside its mark.
  *
  * Shown on a resting mouse or pen pointer and on keyboard focus, never on touch, where a tap
  * is a click and a click reveals the text in place; a preview that flashed up first would
- * be gone again before it could be read. Hidden when the pointer leaves, when focus leaves,
- * on Escape, and on any scroll or resize, because a fixed-position box left behind by a
- * scroll points at nothing. A scroll inside the preview itself is not one of those: a
- * passage taller than the room it was given scrolls, and closing it there would make its
- * end unreadable.
+ * be gone again before it could be read. Hover and focus are two separate reasons to stay
+ * open, and it closes when neither holds: the review measured a keyboard reader's preview,
+ * with focus on a link inside it, closing under a pointer that merely crossed the mark, which
+ * took the focus ring down with it. Escape closes it whatever holds it, and only one preview
+ * is ever open.
+ *
+ * A scroll or a resize places it again while the mark is still on screen, and closes it once
+ * the mark has gone. Closing on every scroll was the first version, and it closed almost every
+ * keyboard preview: the browser scrolls a focused mark into view, so tabbing down a long table
+ * opened a preview and scrolled it shut in the same frame. A scroll inside the preview itself
+ * is ignored, because a passage taller than its room scrolls.
  *
  * Imperative rather than state, for one reason that decides it: the size has to be measured
  * after the element is shown and the position written before the frame paints, and a state
- * change paints in between. `showPopover`, the measurement and the two lengths happen in one
- * task, so the reader never sees it in the wrong place.
+ * change paints in between. `showPopover`, the measurement and the lengths happen in one
+ * task, so the reader never sees it in the wrong place. The lengths are taken off again when
+ * it closes, because the stylesheet lays a closed preview out inline, in print and once
+ * revealed, and an inline `max-height` left behind would cut that text off.
  *
  * `enabled` is false before hydration and once the text has been revealed, and an engine
  * without the Popover API gets no preview at all and keeps the click.
@@ -604,6 +631,8 @@ export function usePreview(
 ): Preview {
 	const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	const opened = useRef<(() => void) | undefined>(undefined);
+	const hovered = useRef(false);
+	const focused = useRef(false);
 
 	const clear = useCallback((): void => {
 		if (timer.current === undefined) return;
@@ -615,6 +644,7 @@ export function usePreview(
 		clear();
 		const close = opened.current;
 		opened.current = undefined;
+		if (current === hide) current = undefined;
 		close?.();
 	}, [clear]);
 
@@ -624,25 +654,32 @@ export function usePreview(
 		const anchor = mark.current;
 		if (!enabled || element === null || anchor === null || opened.current !== undefined) return;
 		if (typeof element.showPopover !== 'function') return;
+		if (current !== undefined && current !== hide) current();
+		current = hide;
 
-		// Measured at the origin with no height cap, because a fixed box near the right edge
-		// shrinks to the room left of it, and the last placement's cap would be measured as
-		// the size.
+		const place = (): void => {
+			// Measured at the origin with no height cap, because a fixed box near the right
+			// edge shrinks to the room left of it, and the last placement's cap would be
+			// measured as the size.
+			element.style.top = '0px';
+			element.style.left = '0px';
+			element.style.maxHeight = '';
+			const box = element.getBoundingClientRect();
+			const root = document.documentElement;
+			const placement = placePopover(
+				anchor.getBoundingClientRect(),
+				{ width: box.width, height: box.height },
+				{ width: root.clientWidth, height: root.clientHeight },
+				getComputedStyle(anchor).direction === 'rtl' ? 'rtl' : 'ltr',
+			);
+			element.style.top = `${placement.top}px`;
+			element.style.left = `${placement.left}px`;
+			element.style.maxHeight = `${placement.maxHeight}px`;
+		};
 		element.style.top = '0px';
 		element.style.left = '0px';
-		element.style.maxHeight = '';
 		element.showPopover();
-		const box = element.getBoundingClientRect();
-		const root = document.documentElement;
-		const placement = placePopover(
-			anchor.getBoundingClientRect(),
-			{ width: box.width, height: box.height },
-			{ width: root.clientWidth, height: root.clientHeight },
-			getComputedStyle(anchor).direction === 'rtl' ? 'rtl' : 'ltr',
-		);
-		element.style.top = `${placement.top}px`;
-		element.style.left = `${placement.left}px`;
-		element.style.maxHeight = `${placement.maxHeight}px`;
+		place();
 
 		const onKey = (event: globalThis.KeyboardEvent): void => {
 			// Marked as taken, so a dialog a consumer put around the page does not close as
@@ -653,7 +690,8 @@ export function usePreview(
 		};
 		const onMove = (event: Event): void => {
 			if (event.target instanceof Node && element.contains(event.target)) return;
-			hide();
+			if (onScreen(anchor)) place();
+			else hide();
 		};
 		document.addEventListener('keydown', onKey);
 		window.addEventListener('scroll', onMove, { capture: true, passive: true });
@@ -669,6 +707,9 @@ export function usePreview(
 			} catch {
 				// Already closed.
 			}
+			element.style.top = '';
+			element.style.left = '';
+			element.style.maxHeight = '';
 		};
 	}, [clear, enabled, hide, mark, popover]);
 
@@ -682,21 +723,25 @@ export function usePreview(
 	return {
 		onPointerEnter: (event) => {
 			if (event.pointerType === 'touch') return;
+			hovered.current = true;
 			clear();
 			if (opened.current === undefined) timer.current = setTimeout(show, PREVIEW_OPEN_DELAY);
 		},
 		onPointerLeave: (event) => {
 			if (event.pointerType === 'touch') return;
+			hovered.current = false;
 			clear();
-			timer.current = setTimeout(hide, PREVIEW_CLOSE_DELAY);
+			if (!focused.current) timer.current = setTimeout(hide, PREVIEW_CLOSE_DELAY);
 		},
 		onFocus: (event) => {
-			if (focusVisible(event.currentTarget)) show();
+			focused.current = true;
+			if (event.target === mark.current && focusVisible(event.target)) show();
 		},
 		onBlur: (event) => {
 			const next = event.relatedTarget;
 			if (next instanceof Node && event.currentTarget.contains(next)) return;
-			hide();
+			focused.current = false;
+			if (!hovered.current) hide();
 		},
 		hide,
 	};
