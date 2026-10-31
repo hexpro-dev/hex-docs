@@ -84,6 +84,36 @@ lower them:
 Vary sentence length deliberately. State things directly. Let a plain sentence stand
 without a flourish, and cut any sentence that exists only to introduce the next one.
 
+### Folding a long table cell
+
+A row is as tall as its tallest cell, so one long note pushes every status in the row, and
+every row after it, down the screen. Fold the detail behind a question mark with
+`:more[...]`, written inline:
+
+```markdown
+| NTAG213 | 144 bytes user memory. :more[Write protection confirmed on real tags after the September 2026 rework; read protection has not been run on the reworked code.] |
+```
+
+The reader sees the lead and a circled question mark. Hovering shows the folded text as a
+popover; clicking or tapping replaces the mark with the text, in the cell. With no script
+and in print it is simply shown. It is still searched, still in the raw markdown and still
+read by every house rule, so folding is never a way to hide a sentence from a check.
+
+- Keep the lead self-sufficient: the fact a reader scans the column for (a size, whether
+  it was tested, a yes or a no) stays visible, and only the supporting detail folds.
+- Fold at a sentence boundary, and put a space before `:more[` in Latin text. A CJK or
+  Arabic letter may sit directly before it; an ASCII letter or digit may not, which is what
+  keeps `key:value[0]` literal.
+- Inside it, a link and inline code work as usual. A literal `]` that does not close a link
+  is escaped `\]`, and in a table a literal `|` is `\|`, as everywhere in a table.
+- It is refused, as an `unsupported-syntax` error, in a heading, inside link text, inside
+  another `:more`, in a directive's label, when empty, and with `{...}` attributes.
+- `table-cell-width` warns on a cell whose visible text, the folded part excluded, is
+  wider than 200 display columns (a CJK character counts as two). That warning is the cue
+  to fold.
+- Fold supporting detail, never a step, a warning or the only statement of a limitation:
+  a reader who never hovers has to come away with everything they need to act safely.
+
 ## 3. Add an image, if the page needs one
 
 Put it under `docs/site/assets/` and reference it from the page. Two things are checked
@@ -176,7 +206,8 @@ token as an error.
 The directives are written out as plain markdown too, because this is the text agents read
 at `<slug>.md` and in `llms-full.txt`. A procedure is a numbered list with each step's title
 in bold, a callout is a quotation that opens with its label (`> **Warning:** ...`), a
-caption is a bold line, and `{#id}` is gone from the heading. That is output, not a way to
-write source: keep writing `::::steps`, `:::warning[Title]` and `{#id}`, because to the
-compiler a numbered list is not a procedure and a quotation is not a callout, so neither
-gets the structured data or the styling the directive gets.
+caption is a bold line, `{#id}` is gone from the heading, and `:more[...]` loses its
+markers and keeps its text where it was written. That is output, not a way to write source:
+keep writing `::::steps`, `:::warning[Title]`, `{#id}` and `:more[...]`, because to the
+compiler a numbered list is not a procedure, a quotation is not a callout and a sentence is
+not folded, so none of them gets the structured data or the styling the directive gets.

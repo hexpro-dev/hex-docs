@@ -201,11 +201,12 @@ preferences, and each one closes a failure the alternative left open.
 
 ### The AST is sized to the corpus, not to imagination
 
-Twenty-two node types: ten block, nine inline, three child-only, pinned to their
+Twenty-three node types: ten block, ten inline, three child-only, pinned to their
 unions by `AssertCovers` in `src/contracts/ast.ts` so a type added to one and not the
-other fails the typecheck by name.
+other fails the typecheck by name. Step 1 shipped twenty-two; `more` arrived with `ast-2`
+(see "Folded table notes" near the end of this file).
 
-**Deferred to `ast-2`, deliberately:** math, mermaid diagrams, footnotes and
+**Deferred, deliberately:** math, mermaid diagrams, footnotes and a block-level
 `<details>`. The real corpus is 59 markdown files with zero of any of them. Math also
 cannot use `$…$` as a delimiter: "A$9.99 per month or A$6.99" in kcalc's terms and
 `$0.createdAt > $1` in a Swift snippet would both render as equations. Mermaid needs a
@@ -2263,6 +2264,100 @@ manifest's, the same checks the browser makes.
 preflight. The card follows SEP-2127's schema, names the streamable HTTP endpoint and every version
 the server speaks, and refuses to describe a server with no origin or a name that is not
 reverse-DNS. The host's `/.well-known/ai-catalog.json` points at it.
+
+## Folded table notes (`:more`, `ast-2`)
+
+hex-nfc's chip support matrix had Notes cells of up to 2321 characters in English and 3002 in
+Spanish, and a row is as tall as its tallest cell. `:more[...]` folds a passage behind a
+circled question mark: a resting mouse or keyboard focus shows it as a popover, a click or a tap
+replaces the mark with the text inline, for the rest of the page view. What follows is what
+would otherwise be rediscovered.
+
+### It is a new node, so it is a new AST major
+
+`more` is the tenth inline type and `AST_VERSION` is 2. The stated rule in `ast.ts` is that a
+node type an older renderer would display wrongly bumps the major, and an `ast-1` renderer would
+render a `more` as nothing, links inside it included, with no error. Every check of the major is
+strict equality and `prefetch` fetches only `ast-<current>`, so a consumer that bumps its
+submodule needs every labelled commit published at `ast-2` first. It was cheap here because
+hex-web labelled exactly one version and that label moved to the commit that introduced the
+syntax; kcalc-ai does not mount the package at all, whatever the table at the top says.
+
+### The grammar is remark-directive's text directive, one rule stricter
+
+One colon, a name, a bracketed body, mid-line: `textDirectiveAt` in `src/contracts/source.ts`.
+The difference from remark-directive is that an ASCII letter or digit before the colon refuses it
+as well as a colon does, so `key:value[0]` and the `hexdocs:page/` tokens in raw markdown stay
+text. A CJK or Arabic letter before it is accepted, because CJK prose has no spaces. The scanner
+stops at the `[`, and the parser finds the close with `closingBracket`, because the body holds
+links whose brackets nest; a `[^\]]*` pattern would close at the first link.
+
+Refused, each by its own message and each claimed by an arm in `rules-fire.test.ts`: an unknown
+name (left literal), a missing `]` (left literal), and, with the words kept and the markers
+dropped, one inside link text, one inside another, one in a heading, an empty one and one with
+`{...}` attributes. A caption, a callout title and a step title need no entry: each is a
+directive label, a label holds no `]`, and a line like `:::note[x :more[y]]` fails the container
+pattern and arrives as a paragraph, which the directive-label refusal answers. That one alone is
+left as typed in the raw markdown, because dropping its markers writes `:::note[x y]`, a container
+the page does not have.
+
+### Lowering joins the link rewrite, and a refusal is lowered too
+
+`:more[x]` becomes `x` in `<slug>.md` and `llms-full.txt`. It sits mid-line, can share a line
+with another and with a link, and its `]` usually follows a link destination that is rewritten
+to a token of a different length, so the line plan in `lower.ts` cannot express it and a pass
+after the rewrite would read stale columns. Its two removals are `TextDirectiveRecord.remove`,
+measured by the inline parser through `sliceFolded`, and `rewriteDestinations` applies them in its
+own right-to-left pass. A refused `:more` whose words are kept is recorded too: the first version
+recorded only accepted ones, and `Outer :more[and :more[inner] text]` lowered its outer markers and
+left an inner `:more[inner]` that the reread accepted, so `assertLowered` threw rather than the
+build reporting an error.
+
+### Folded text is still text
+
+`inlineText` walks it, so search, the reading estimate, a slug and the agent snippets all count
+it; `walkLinks` and `imagesIn` recurse into it, so a broken anchor or an image with no alt behind
+a question mark is still found. All three walkers were if-chains or defaults that would have
+compiled and silently skipped the new node.
+
+### The preview is a top-layer popover, placed by arithmetic
+
+A table sits in `.hx-scroll`, whose `overflow-x: auto` clips both axes, and the layout is a
+`z-index: 1` stacking context under a host's sticky header, so only the top layer can show a
+preview outside its cell. Nothing positions a top-layer element and CSS anchor positioning is not
+in every engine yet, so `placePopover` in `src/site/popover.ts` is a pure function of the
+rectangles (below or above, the inline start of the mark, clamped to the viewport, a height cap)
+and `usePreview` in `src/render/client.ts` shows, measures and writes two lengths in one task so
+no frame paints it in the wrong place. Touch never previews, because a tap is the reveal.
+
+Three states, and which one a reader gets is decided by the stylesheet rather than assumed:
+
+- `@media (scripting: enabled)` is the only rule that hides the text and shows the mark. No
+  script, or an engine that does not know the query, gets the text inline and no mark. Print is
+  the same.
+- Before hydration the text has no `popover` attribute, because the user agent hides a
+  `[popover]` element and no media query reaches that rule. The paint probe reads the server
+  state as well as the hydrated one for this reason: after hydration the user agent hides the
+  text too, so a probe that looked only then passed with the package's hiding rule deleted, and
+  every page would have flashed its notes on load.
+- Revealed state is keyed to the AST node object, not a flag, so it does not follow a reader to
+  the next page when React reuses the component at the same position.
+
+The mark is an empty `<button>` with a CSS-drawn circle and glyph (U+061F under `:lang(ar)`), so
+its name is its `aria-label` and it takes `interfaceLang`, the status-mark precedent. It has no
+`aria-expanded` because activating it removes it, and focus moves to the revealed text.
+
+### `table-cell-width`, a warning
+
+It counts a cell's visible text in display columns, wide characters twice, the folded part as the
+two columns of its mark, and warns over 200. Columns rather than characters for the reason the
+title floor was removed: a character count is a measurement of Latin.
+
+### Guards a deletion did not trip, and what was done
+
+The popover `margin: 0` cannot be observed: with both insets `auto`, a margin of `auto` resolves
+to zero in a fixed box, bare or hosted. It stays, as the preflight rule says, and has no break
+entry, because a break nothing can see is a test that cannot fail.
 
 ## Code style
 
