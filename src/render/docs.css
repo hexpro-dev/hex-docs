@@ -1657,6 +1657,172 @@
 }
 
 /*
+ * `:more[...]`, a passage folded behind a circled question mark. `src/render/more.tsx`
+ * describes the three states; this is how each one is drawn.
+ *
+ * The text is inline unless something here hides it, and the only thing that does is a
+ * rule inside `scripting: enabled`. That inversion is the point. A reader with no script,
+ * or an engine that does not know the query, gets the words where the author wrote them
+ * and no mark, rather than a mark nobody can operate over words nobody can reach. The
+ * mark is hidden by default for the same reason and shown only where a script can run it.
+ *
+ * With script, the text is hidden until it is either previewed, which puts it in the top
+ * layer as a popover, or revealed, which sets `data-open` on the wrapper and drops the
+ * hiding rule. `:popover-open` is selected through `:not([data-open])` as well, because
+ * that selector is what has to outrank the hiding rule, and two rules of equal weight would
+ * leave the answer to their order in this file.
+ *
+ * The preview states everything the user agent's `[popover]` rule sets (a centred
+ * `margin: auto`, `inset: 0`, a `Canvas` background, a solid border) and everything a
+ * host's base layer resets, because unlayered beats layered only for what a rule names.
+ * Its position is two lengths written by `usePreview`, which measures the page, so it
+ * states no side here.
+ *
+ * The mark is a CSS circle and a question mark from the stylesheet, so its name is its
+ * label and no font has to cover a glyph. In Arabic it is U+061F, the Arabic question mark,
+ * which is the mirrored form an Arabic reader expects; it follows the mark's own language,
+ * which is the reader's, so an English page served at an Arabic address still draws it.
+ */
+.hx-root .hx-more-mark {
+	position: relative;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	inline-size: 1.15em;
+	block-size: 1.15em;
+	vertical-align: -0.15em;
+	margin: 0;
+	margin-inline: 0.15em;
+	padding: 0;
+	background: transparent;
+	border: 1.5px solid currentColor;
+	border-radius: 50%;
+	color: var(--hx-dim, #a89f93);
+	font: inherit;
+	line-height: 1;
+	cursor: pointer;
+}
+
+/*
+ * A larger target than the circle, with no effect on the line. The mark sits inside a
+ * sentence, where WCAG's target-size rule exempts it, but it is also the only way to reach
+ * the text on a phone.
+ */
+.hx-root .hx-more-mark::after {
+	content: '';
+	position: absolute;
+	inset-block: -0.4em;
+	inset-inline: -0.4em;
+}
+
+.hx-root .hx-more-mark::before {
+	content: '?';
+	font-size: 0.75em;
+	font-weight: 700;
+	line-height: 1;
+}
+
+.hx-root .hx-more-mark:lang(ar)::before {
+	content: '\61F';
+}
+
+.hx-root .hx-more-mark:not(:disabled):hover,
+.hx-root .hx-more-mark:focus-visible {
+	color: var(--hx-accent-link, #5ba3f5);
+}
+
+.hx-root .hx-more-mark:disabled {
+	color: var(--hx-faint, #6f675d);
+	cursor: default;
+}
+
+.hx-root .hx-more-mark {
+	display: none;
+}
+
+@media (scripting: enabled) {
+	.hx-root .hx-more-mark {
+		display: inline-flex;
+	}
+
+	.hx-root .hx-more:not([data-open]) .hx-more-body {
+		display: none;
+	}
+}
+
+/*
+ * The same two rules keyed on the attribute the component sets once it has hydrated, for an
+ * engine that has the Popover API and not the `scripting` query. There the rules above never
+ * match, the user agent hides the text as a closed popover, and without these the mark would
+ * stay hidden over a note nobody could reach.
+ */
+.hx-root .hx-more[data-ready] .hx-more-mark {
+	display: inline-flex;
+}
+
+.hx-root .hx-more[data-ready]:not([data-open]) .hx-more-body:not(:popover-open) {
+	display: none;
+}
+
+/*
+ * A closed preview laid out as text, whatever the user agent's `[popover]` rule says. That
+ * rule applies to a closed popover as much as an open one: fixed, inset to the viewport, a
+ * `Canvas` background and a border. Nothing shows it while it is hidden, but print shows it,
+ * and a page printed after hydration put every folded note in a white band across the top of
+ * every sheet, with its own cell empty.
+ */
+.hx-root .hx-more-body:not(:popover-open) {
+	position: static;
+	inset-block: auto;
+	inset-inline: auto;
+	inline-size: auto;
+	block-size: auto;
+	max-block-size: none;
+	margin: 0;
+	padding: 0;
+	overflow: visible;
+	background: none;
+	border: 0;
+	color: inherit;
+}
+
+.hx-root .hx-more:not([data-open]) .hx-more-body:popover-open {
+	display: block;
+	position: fixed;
+	inset-block: auto;
+	inset-inline: auto;
+	box-sizing: border-box;
+	inline-size: max-content;
+	max-inline-size: min(24rem, calc(100vw - 1rem));
+	block-size: auto;
+	margin: 0;
+	padding: 0.6rem 0.8rem;
+	overflow: auto;
+	background: var(--hx-surface, #171512);
+	border: 1px solid var(--hx-control, #78716c);
+	border-radius: 8px;
+	color: var(--hx-ink, #f2ede6);
+	font-size: 0.875rem;
+	font-weight: 400;
+	line-height: 1.55;
+	text-align: start;
+	white-space: normal;
+}
+
+/* Paper has no pointer. Every folded passage prints where it was written. */
+@media print {
+	.hx-root .hx-more-mark,
+	.hx-root .hx-more[data-ready] .hx-more-mark {
+		display: none;
+	}
+
+	.hx-root .hx-more:not([data-open]) .hx-more-body,
+	.hx-root .hx-more[data-ready]:not([data-open]) .hx-more-body:not(:popover-open) {
+		display: inline;
+	}
+}
+
+/*
  * Script-dependent typography.
  *
  * The self-hosted faces both consumers ship cover latin and latin-ext, so CJK and Arabic

@@ -56,6 +56,7 @@ const IN_MARKDOWN: readonly LintRuleId[] = [
 	'heading-order',
 	'code-fence-language',
 	'table-header-required',
+	'table-cell-width',
 	'unsupported-syntax',
 	'alt-text-required',
 	'no-bolded-bullet-leadins',

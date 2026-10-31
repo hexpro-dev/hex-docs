@@ -32,7 +32,7 @@ ISO 15693 上の Type 5 のいずれかです。独自プロト
 | NTAG213 | `NT2H1311` | ✅ | ✅ | 144 |
 | NTAG215 | `NT2H1511` | ✅ | ✅ | 504 |
 | NTAG216 | `NT2H1611` | ✅ | ✅ | 888 |
-| [NTAG424 DNA](https://example.com/chips/nt4h2421gx) | `NT4H2421Gx` | ✅ | ⚠️ | 416 |
+| [NTAG424 DNA](https://example.com/chips/nt4h2421gx) | `NT4H2421Gx` | ✅ | ⚠️ | 416 :more[アプリケーションキーを入力して `ChangeFileSettings` でサイズを変更するまで、NDEF ファイルは 256 バイトです。[注意点の意味](#what-the-caveats-mean)を参照してください。] |
 | MIFARE Ultralight EV1 | `MF0UL1101` | ✅ | ✅ | 48 |
 | MIFARE Ultralight C | `MF0ICU2` | ✅ | ⚠️ | 144 |
 | ICODE SLIX2 | `SL2S2602` | ✅ | ⚠️ | 316 |

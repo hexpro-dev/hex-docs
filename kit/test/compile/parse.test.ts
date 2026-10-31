@@ -27,6 +27,7 @@ import {
 	CALLOUT_KINDS,
 	STATUS_VALUES,
 	type Block,
+	type Heading,
 	type Inline,
 } from '../../../src/contracts/ast.js';
 import {
@@ -73,6 +74,7 @@ import {
 	type ProseSegment,
 	type RawFinding,
 	type ResolvedDestination,
+	type TextDirectiveRecord,
 } from '../../src/compile/types.js';
 import { createImageResolver, createLinkResolver } from '../../src/compile/links.js';
 import { highlight } from '../../src/compile/highlight/index.js';
@@ -228,6 +230,7 @@ interface ParsedInline {
 	titles: FoldedText[];
 	problems: RawFinding[];
 	origins: NodeOrigins;
+	directives: TextDirectiveRecord[];
 }
 
 /** Parses one run of inline text, folding it first the way a paragraph is folded. */
@@ -240,6 +243,7 @@ function parseInlineText(
 	const result = parseInline(foldLines(toLines(source)), {
 		file: FILE,
 		scope: options.scope ?? 'inline',
+		kind: options.scope === 'cell' ? 'tableCell' : 'paragraph',
 		origins,
 		services: stubServices(options.services),
 		problems,
@@ -250,6 +254,7 @@ function parseInlineText(
 		titles: result.titles,
 		problems,
 		origins,
+		directives: result.directives,
 	};
 }
 
@@ -760,6 +765,7 @@ describe('what the prose excludes', () => {
 		const { nodes, prose } = parseInline(foldLines(toLines('A \\* is not a bullet.')), {
 			file: FILE,
 			scope: 'inline',
+			kind: 'paragraph',
 			origins: new WeakMap(),
 			services: stubServices(),
 			problems: [],
@@ -1582,6 +1588,166 @@ describe('a bracket that opens no link', () => {
 		// asserting because the cheap version of this fix is to reject too much.
 		const { nodes } = parseInlineText('See the [guide](first-tag.md) for more.');
 		expect(inlineOfType(nodes, 1, 'link').children).toHaveLength(1);
+	});
+});
+
+describe('inline directives', () => {
+	test('a :more folds its inline content, links and code included, and records its markers', () => {
+		const { nodes, prose, problems, origins, directives } = parseInlineText(
+			'Lead. :more[Rest with [a link](first-tag.md) and `code`.] After.',
+		);
+		expect(problems).toEqual([]);
+		expect(inlineOfType(nodes, 0, 'text').value).toBe('Lead. ');
+		const more = inlineOfType(nodes, 1, 'more');
+		expect(more.children.map((node) => node.type)).toEqual([
+			'text',
+			'link',
+			'text',
+			'inlineCode',
+			'text',
+		]);
+		expect(inlineOfType(nodes, 2, 'text').value).toBe(' After.');
+		expect(originOf(origins, more)).toBe(`${FILE}:1:7`);
+		// The folded words are prose like any other: every house rule has to read them.
+		expect(prose).toBe('Lead. Rest with a link and . After.');
+		// `:more[` at column 7, and the `]` after the full stop, at column 57.
+		expect(directives).toEqual([
+			{
+				kind: 'text',
+				name: 'more',
+				at: { line: 1, column: 7 },
+				remove: [
+					{ line: 1, column: 7, length: 6 },
+					{ line: 1, column: 57, length: 1 },
+				],
+			},
+		]);
+	});
+
+	test('a body crossing a soft wrap removes each marker from its own line', () => {
+		const { directives } = parseInlineText('Lead :more[one\ntwo] end.');
+		expect(directives[0]?.remove).toEqual([
+			{ line: 1, column: 6, length: 6 },
+			{ line: 2, column: 4, length: 1 },
+		]);
+	});
+
+	test('two on one line are two nodes', () => {
+		const { nodes, directives } = parseInlineText('A :more[one] and B :more[two].');
+		expect(nodes.filter((node) => node.type === 'more')).toHaveLength(2);
+		expect(directives).toHaveLength(2);
+	});
+
+	test.each([
+		['a key and a subscript', 'Set key:value[0] first.'],
+		['a time', 'At 10:30[UTC] it runs.'],
+		['a double colon', 'The a::more[x] form.'],
+		['an escaped colon', 'Write \\:more[x] literally.'],
+		['a scheme', 'The hexdocs:page/guide.md token.'],
+		['no bracket', 'See :more for details.'],
+	])('%s stays literal text', (_label, source) => {
+		const { nodes, problems, directives } = parseInlineText(source);
+		expect(problems).toEqual([]);
+		expect(nodes.some((node) => node.type === 'more')).toBe(false);
+		expect(directives).toEqual([]);
+	});
+
+	test('a CJK letter before the colon still opens one, because CJK prose has no spaces', () => {
+		const { nodes, problems } = parseInlineText('詳細:more[本文]');
+		expect(problems).toEqual([]);
+		expect(inlineOfType(nodes, 1, 'more').children).toEqual([{ type: 'text', value: '本文' }]);
+	});
+
+	test('a status glyph inside one is a status, and a whole-cell em dash inside one is not', () => {
+		const glyph = parseInlineText(':more[\u2705 confirmed]', { scope: 'cell' });
+		expect(inlineOfType(glyph.nodes, 0, 'more').children[0]?.type).toBe('status');
+		// The "not applicable" spelling is the em dash as the entire cell. Inside a fold it is
+		// not the entire cell, so it stays the character the house rules ban.
+		const dash = parseInlineText(':more[\u2014]', { scope: 'cell' });
+		expect(inlineOfType(dash.nodes, 0, 'more').children).toEqual([
+			{ type: 'text', value: '\u2014' },
+		]);
+	});
+
+	test('a refused one keeps its words in the page, is reported once, and keeps its markers in the raw text', () => {
+		const { blocks, problems, directives } = parseBody('## Title :more[hidden]');
+		const heading = blocks[0] as Heading;
+		expect(heading.children).toEqual([
+			{ type: 'text', value: 'Title ' },
+			{ type: 'text', value: 'hidden' },
+		]);
+		expect(onlyProblem(problems).message).toMatch(/inside a heading/);
+		// Not recorded, so its markers stay in the raw text and the reread refuses it again.
+		// Dropped, `## Title :more[{#id}]` would lower to a heading with an explicit id.
+		expect(directives.filter((record) => record.kind === 'text')).toEqual([]);
+	});
+
+	test('one refused inside an accepted one is recorded, so both sets of markers go', () => {
+		const { directives, problems } = parseBody('Outer :more[and :more[inner] text].');
+		expect(onlyProblem(problems).message).toMatch(/inside another/);
+		expect(directives.filter((record) => record.kind === 'text')).toHaveLength(2);
+	});
+
+	test('a close past the end of an enclosing span is no close at all', () => {
+		// The emphasis closes inside the brackets, so the bracket that would close the fold is
+		// outside the span being parsed. Taking it anyway would fold across the emphasis edge
+		// and publish the text after it twice.
+		const { problems, nodes } = parseInlineText('Text *a :more[b* c] end.');
+		expect(problems.map((problem) => problem.message)).toContainEqual(
+			expect.stringMatching(/with no "\]" to close it/),
+		);
+		expect(nodes.some((node) => node.type === 'more')).toBe(false);
+	});
+
+	test('emphasis inside link text carries the link with it', () => {
+		const { problems } = parseInlineText('[**the :more[x] guide**](first-tag.md)');
+		expect(onlyProblem(problems).message).toMatch(/inside link text/);
+	});
+
+	test("a refused one's body is parsed where the refused one was, so its own folds are refused the same way", () => {
+		const link = parseInlineText('[a :more[b :more[c] d]](first-tag.md)');
+		expect(link.problems.map((problem) => problem.message)).toEqual([
+			'A ":more[...]" inside link text.',
+			'A ":more[...]" inside link text.',
+		]);
+		const heading = parseBody('## T :more[a :more[b] c]');
+		expect(heading.problems.map((problem) => problem.message)).toEqual([
+			'A ":more[...]" inside a heading.',
+			'A ":more[...]" inside a heading.',
+		]);
+	});
+
+	test('an unknown name is refused and the bracket after it is still read, so a link survives', () => {
+		const { nodes, problems } = parseInlineText(':mroe[guide](first-tag.md)');
+		expect(onlyProblem(problems).message).toMatch(/":mroe\[" is not an inline directive/);
+		expect(nodes.some((node) => node.type === 'link')).toBe(true);
+	});
+
+	test('a fold holding nothing but a hard break is empty', () => {
+		const { problems } = parseInlineText(':more[\\\n]');
+		expect(onlyProblem(problems).message).toMatch(/An empty/);
+	});
+
+	test('a capitalised name is named with the spelling that works, and after punctuation an unknown name is code', () => {
+		expect(onlyProblem(parseInlineText('A :More[x] here.').problems).remediation).toMatch(
+			/write ":more\["/,
+		);
+		expect(parseInlineText('Match (?:a[0-9]) and [&:hover]:text-[red].').problems).toEqual([]);
+	});
+
+	test('one in image alt text is refused by name', () => {
+		const { problems } = parseInlineText('![A tag :more[on a desk]](scan.png)');
+		expect(problems.map((problem) => problem.message)).toContainEqual(
+			'A ":more[...]" inside image alt text.',
+		);
+	});
+
+	test('one in a directive label is refused and left as typed, so lowering cannot make a container', () => {
+		const { problems, directives } = parseBody(':::note[Careful :more[x]]\nText.\n:::');
+		expect(problems.map((problem) => problem.message)).toContainEqual(
+			expect.stringMatching(/would leave a directive line/),
+		);
+		expect(directives.filter((record) => record.kind === 'text')).toEqual([]);
 	});
 });
 

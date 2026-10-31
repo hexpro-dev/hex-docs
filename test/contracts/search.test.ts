@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'vitest';
 
+import { AST_VERSION } from '../../src/contracts/ast.js';
+
 import {
 	AUDIENCE_MASK,
 	DEFAULT_B,
@@ -21,7 +23,7 @@ function index(overrides: Partial<SearchIndex> = {}): SearchIndex {
 	return {
 		kind: SEARCH_INDEX_KIND,
 		v: SEARCH_INDEX_VERSION,
-		ast: 1,
+		ast: AST_VERSION,
 		tokeniser: TOKENISER_VERSION,
 		norm: INDEX_NORMALISATION,
 		stem: false,

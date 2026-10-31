@@ -201,11 +201,12 @@ preferences, and each one closes a failure the alternative left open.
 
 ### The AST is sized to the corpus, not to imagination
 
-Twenty-two node types: ten block, nine inline, three child-only, pinned to their
+Twenty-three node types: ten block, ten inline, three child-only, pinned to their
 unions by `AssertCovers` in `src/contracts/ast.ts` so a type added to one and not the
-other fails the typecheck by name.
+other fails the typecheck by name. Step 1 shipped twenty-two; `more` arrived with `ast-2`
+(see "Folded table notes" near the end of this file).
 
-**Deferred to `ast-2`, deliberately:** math, mermaid diagrams, footnotes and
+**Deferred, deliberately:** math, mermaid diagrams, footnotes and a block-level
 `<details>`. The real corpus is 59 markdown files with zero of any of them. Math also
 cannot use `$…$` as a delimiter: "A$9.99 per month or A$6.99" in kcalc's terms and
 `$0.createdAt > $1` in a Swift snippet would both render as equations. Mermaid needs a
@@ -2263,6 +2264,158 @@ manifest's, the same checks the browser makes.
 preflight. The card follows SEP-2127's schema, names the streamable HTTP endpoint and every version
 the server speaks, and refuses to describe a server with no origin or a name that is not
 reverse-DNS. The host's `/.well-known/ai-catalog.json` points at it.
+
+## Folded table notes (`:more`, `ast-2`)
+
+hex-nfc's chip support matrix had Notes cells of up to 2321 characters in English and 3002 in
+Spanish, and a row is as tall as its tallest cell. `:more[...]` folds a passage behind a
+circled question mark: a resting mouse or keyboard focus shows it as a popover, a click or a tap
+replaces the mark with the text inline, for the rest of the page view. What follows is what
+would otherwise be rediscovered.
+
+### It is a new node, so it is a new AST major
+
+`more` is the tenth inline type and `AST_VERSION` is 2. The stated rule in `ast.ts` is that a
+node type an older renderer would display wrongly bumps the major, and an `ast-1` renderer would
+render a `more` as nothing, links inside it included, with no error. Every check of the major is
+strict equality and `prefetch` fetches only `ast-<current>`, so a consumer that bumps its
+submodule needs every labelled commit published at `ast-2` first. It was cheap here because
+hex-web labelled exactly one version and that label moved to the commit that introduced the
+syntax; kcalc-ai does not mount the package at all, whatever the table at the top says.
+
+### The grammar is remark-directive's text directive, one rule stricter
+
+One colon, a name, a bracketed body, mid-line: `textDirectiveAt` in `src/contracts/source.ts`.
+The difference from remark-directive is that an ASCII letter or digit before the colon refuses it
+as well as a colon does, so `key:value[0]` and the `hexdocs:page/` tokens in raw markdown stay
+text. A CJK or Arabic letter before it is accepted, because CJK prose has no spaces. The scanner
+stops at the `[`, and the parser finds the close with `closingBracket`, because the body holds
+links whose brackets nest; a `[^\]]*` pattern would close at the first link.
+
+Refused, each by its own message and each claimed by an arm in `rules-fire.test.ts`: an unknown
+name (left literal, and not refused at all after ASCII punctuation, where it is unbackticked code
+such as `(?:a[0-9])` or `[&:hover]:text-[x]` and an error would stop a publish over a sentence
+that reads correctly), a capitalised name (named, with the lower-case spelling), a missing `]`,
+one inside link text, one inside another, one in a heading, one in image alt text, an empty one,
+one with `{...}` attributes, and one whose markers would change the text around them. A caption,
+a callout title and a step title need no entry of their own: each is a directive label and a
+label holds no `]`. A `:::note[x :more[y]]` line fails the container pattern and arrives as a
+paragraph, where the last refusal catches it; a `:::step[x :more[y]]` line inside steps is loose
+text, which the steps container refuses with its own message and without naming `:more`.
+
+**The words survive every refusal; the markers survive all but one.** Only a `:more` refused
+inside an accepted one has its markers removed, because the outer one's go and an inner one left
+as typed reads as accepted on the reread. Every other refusal keeps its markers, so the reread
+meets the text the author wrote and refuses it the same way.
+
+### A marker removed can change the document, so the parser asks first
+
+The review's sharpest finding. The raw markdown is the source with the markers taken out, which
+is text the parser never read: `:more[` first on a line followed by `# x`, `- x`, ` ``` `, `:::x`
+or `[!NOTE]` lowers to a heading, a list, a fence that swallows the rest of `<slug>.md`, a
+directive the reread throws on, or an alert; `[x]:more[(a.md)]` lowers to a link the page does not
+have; two backtick runs a marker kept apart become one; and a `:more[:]more[x]` lowers to another
+`:more`. A container label on a paragraph's second line threw, because the first version only
+looked at the paragraph's first line. `loweringHazard` in `inline.ts` takes out the markers from
+the source lines they sit on, as the fold holds them, and refuses when that line now starts a
+block it did not, when a new link, image, delimiter run or `:more` appears at a seam, and skips the
+block test in a table cell, whose text follows a pipe and cannot start a block.
+
+### Lowering joins the link rewrite, and a refusal is lowered too
+
+`:more[x]` becomes `x` in `<slug>.md` and `llms-full.txt`. It sits mid-line, can share a line
+with another and with a link, and its `]` usually follows a link destination that is rewritten
+to a token of a different length, so the line plan in `lower.ts` cannot express it and a pass
+after the rewrite would read stale columns. Its two removals are `TextDirectiveRecord.remove`,
+measured by the inline parser through `sliceFolded`, and `rewriteDestinations` applies them in its
+own right-to-left pass. A refused `:more` whose words are kept is recorded too: the first version
+recorded only accepted ones, and `Outer :more[and :more[inner] text]` lowered its outer markers and
+left an inner `:more[inner]` that the reread accepted, so `assertLowered` threw rather than the
+build reporting an error.
+
+### Folded text is still text
+
+`inlineText` walks it, so search, the reading estimate, a slug and the agent snippets all count
+it; `walkLinks` and `imagesIn` recurse into it, so a broken anchor or an image with no alt behind
+a question mark is still found. All three walkers were if-chains or defaults that would have
+compiled and silently skipped the new node.
+
+### The preview is a top-layer popover, placed by arithmetic
+
+A table sits in `.hx-scroll`, whose `overflow-x: auto` clips both axes, and the layout is a
+`z-index: 1` stacking context under a host's sticky header, so only the top layer can show a
+preview outside its cell. Nothing positions a top-layer element and CSS anchor positioning is not
+in every engine yet, so `placePopover` in `src/site/popover.ts` is a pure function of the
+rectangles (below or above, the inline start of the mark, clamped to the viewport, a height cap)
+and `usePreview` in `src/render/client.ts` shows, measures and writes two lengths in one task so
+no frame paints it in the wrong place. Touch never previews, because a tap is the reveal.
+
+Three states, and which one a reader gets is decided by the stylesheet rather than assumed:
+
+- `@media (scripting: enabled)` is the only rule that hides the text and shows the mark. No
+  script, or an engine that does not know the query, gets the text inline and no mark. Print is
+  the same.
+- Before hydration the text has no `popover` attribute, because the user agent hides a
+  `[popover]` element and no media query reaches that rule. The paint probe reads the server
+  state as well as the hydrated one for this reason: after hydration the user agent hides the
+  text too, so a probe that looked only then passed with the package's hiding rule deleted, and
+  every page would have flashed its notes on load.
+- Revealed state is keyed to the AST node object, not a flag, so it does not follow a reader to
+  the next page when React reuses the component at the same position.
+
+The mark is an empty `<button>` with a CSS-drawn circle and glyph (U+061F under `:lang(ar)`), so
+its name is its `aria-label` and it takes `interfaceLang`, the status-mark precedent. It has no
+`aria-expanded` because activating it removes it, and focus moves to the revealed text.
+
+What the browser pass found, and the rule each produced:
+
+- **A closed popover is still a fixed box.** The user agent's `[popover]` rule positions it to
+  the viewport with a background of its own whether it is open or not, so a page printed after
+  hydration put every note in a white band across the top of each sheet. `.hx-more-body:not
+(:popover-open)` lays a closed preview out as text, and `usePreview` takes its lengths off when
+  it closes, because an inline `max-height` would cut the printed text short.
+- **`scripting: enabled` is not the only gate.** An engine with the Popover API and without that
+  query (Chromium 114 to 119, by the release notes) would match none of the script-only rules,
+  hide the text as a closed popover and never show the mark. The component sets `data-ready`
+  once it hydrates and the same two rules hang off it.
+- **Closing on every scroll closed every keyboard preview**, because the browser scrolls a focused
+  mark into view. A scroll places it again while the mark is on screen and closes it once the
+  mark leaves.
+- **Hover and focus are separate reasons to stay open.** A pointer crossing a mark closed a
+  preview the keyboard had opened, with focus on a link inside it, and the focus ring went with
+  it. One preview is open at a time, held at module level.
+
+Two limits are known and left. Find in page cannot see folded text: `hidden="until-found"` would
+fix it, and does nothing on an inline element, which the fold has to be. And a page whose script
+never hydrates (a CSP nonce failure, a stale chunk after a deploy) keeps every note folded behind
+a disabled mark; that is the price of a first paint that does not shift when the script arrives,
+and the same failure leaves search and the page menu dead too.
+
+### `table-cell-width`, a warning
+
+It counts a cell's visible text in display columns, wide characters twice, the folded part as the
+two columns of its mark, and warns over 200 in a table of three or more columns and over 400 in
+a table of one or two, whose last column takes most of the measure. The second limit came from
+hex-nfc's privacy page: the camera row says what it is for and that frames are never saved in 202
+Japanese columns, and the only remedy a 200 limit offered was to fold that guarantee. Columns rather than characters for the reason the
+title floor was removed: a character count is a measurement of Latin.
+
+### What the review found
+
+Three reviewers: one fed inputs to the parser and the lowering, one drove the hydrated page in
+headless Chrome over CDP, and one deleted guards one at a time. The first found the
+lowering hazards above and a label refusal that only read a paragraph's first line, both of
+which threw in the reread on inputs an author could write. The second found the five preview
+defects above, every one invisible to a happy-dom suite and to static paint probes, because each
+needs a hydrated page, a print medium or the browser's own scroll. The third deleted 66 guards
+and 18 survived. Each surviving gap now has a test, and the twelve that guard new code were made
+to fail on purpose.
+
+### Guards a deletion did not trip, and what was done
+
+The popover `margin: 0` cannot be observed: with both insets `auto`, a margin of `auto` resolves
+to zero in a fixed box, bare or hosted. It stays, as the preflight rule says, and has no break
+entry, because a break nothing can see is a test that cannot fail.
 
 ## Code style
 

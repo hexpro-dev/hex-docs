@@ -3,8 +3,8 @@
  *
  * No hooks, no state, no context and no effects: every function here takes a node and a
  * context and returns markup. That is what lets the whole node layer be tested by calling
- * it, and it is why the shell keeps the hooks and the fence keeps the one piece of state
- * the copy button needs.
+ * it, and it is why the shell keeps the hooks, the fence keeps the one piece of state the
+ * copy button needs, and a `:more` is a component in `more.tsx`.
  *
  * There is no `dangerouslySetInnerHTML` anywhere in this package, and that is structural
  * rather than a convention somebody keeps: `ast.ts` has no `html` node and the compiler
@@ -48,6 +48,7 @@ import { statusLabel } from '../ui/status.js';
 import { calloutLabel, uiString } from '../ui/strings.js';
 import { CodeBlock } from './code.js';
 import type { DocsLinkComponent, RenderContext } from './context.js';
+import { More } from './more.js';
 
 /**
  * The default `Link`: a plain anchor, so a consumer that passes nothing gets a working,
@@ -192,6 +193,15 @@ export function renderInline(nodes: readonly Inline[], context: RenderContext): 
 						aria-label={statusLabel(context.locale, node.value)}
 						{...interfaceLang(context.locale, context.contentLocale)}
 					/>
+				);
+			case 'more':
+				// The one inline node with state, which is why it is a component of its own and
+				// this file stays a plain function of its arguments. Its children are rendered
+				// here and handed over, so `more.tsx` never imports this module back.
+				return (
+					<More key={index} node={node} context={context}>
+						{renderInline(node.children, context)}
+					</More>
 				);
 			default:
 				return unhandledNode(node, 'renderInline');

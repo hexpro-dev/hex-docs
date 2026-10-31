@@ -85,7 +85,7 @@ const KIT_VERSION = '@hex-pro/docs-kit@0.0.1';
 const PROJECT = 'fixture-app';
 const SITE = 'apps/front';
 /** The sha `fixtures/site/fixture-app.docs.json` marks default. */
-const DEFAULT_COMMIT = 'fc2ef4dea95fb36e5201504e7d06fd2cd0c79b56';
+const DEFAULT_COMMIT = '54ce86a3b69d49475fdb30d20499cc2b48c14cb1';
 
 let scratch: string;
 let corpus: string;

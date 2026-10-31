@@ -27,7 +27,7 @@ iPhone 15 Pro，测试对象是三家供应商的空白标签。“读取”
 | NTAG213 | `NT2H1311` | ✅ | ✅ | 144 |
 | NTAG215 | `NT2H1511` | ✅ | ✅ | 504 |
 | NTAG216 | `NT2H1611` | ✅ | ✅ | 888 |
-| [NTAG424 DNA](https://example.com/chips/nt4h2421gx) | `NT4H2421Gx` | ✅ | ⚠️ | 416 |
+| [NTAG424 DNA](https://example.com/chips/nt4h2421gx) | `NT4H2421Gx` | ✅ | ⚠️ | 416 :more[输入应用密钥并由 `ChangeFileSettings` 调整大小之前，NDEF 文件只有 256 字节。见[这些注意事项是什么意思](#what-the-caveats-mean)。] |
 | MIFARE Ultralight EV1 | `MF0UL1101` | ✅ | ✅ | 48 |
 | MIFARE Ultralight C | `MF0ICU2` | ✅ | ⚠️ | 144 |
 | ICODE SLIX2 | `SL2S2602` | ✅ | ⚠️ | 316 |

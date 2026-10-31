@@ -377,6 +377,12 @@ function planLines(lowering: RawLowering): Map<number, LinePlan> {
 			case 'headingId':
 				planOf(record.line).stripId = true;
 				break;
+			case 'text':
+				// Already gone. An inline directive sits mid-line and can share its line with
+				// a link and with another of its kind, which a one-edit-per-line plan cannot
+				// express, so its markers are removed by `rewriteDestinations` before this
+				// runs, from the ranges the inline parser measured.
+				break;
 			default:
 				return unhandled(record, lowering.file);
 		}

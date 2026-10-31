@@ -1,5 +1,5 @@
 {
-	"ast": 1,
+	"ast": 2,
 	"project": "fixture-app",
 	"slug": "reference/chip-support",
 	"locale": "zh",
@@ -408,7 +408,39 @@
 						"children": [
 							{
 								"type": "text",
-								"value": "416"
+								"value": "416 "
+							},
+							{
+								"type": "more",
+								"children": [
+									{
+										"type": "text",
+										"value": "\u8f93\u5165\u5e94\u7528\u5bc6\u94a5\u5e76\u7531 "
+									},
+									{
+										"type": "inlineCode",
+										"value": "ChangeFileSettings"
+									},
+									{
+										"type": "text",
+										"value": " \u8c03\u6574\u5927\u5c0f\u4e4b\u524d\uff0cNDEF \u6587\u4ef6\u53ea\u6709 256 \u5b57\u8282\u3002\u89c1"
+									},
+									{
+										"type": "link",
+										"kind": "anchor",
+										"anchor": "what-the-caveats-mean",
+										"children": [
+											{
+												"type": "text",
+												"value": "\u8fd9\u4e9b\u6ce8\u610f\u4e8b\u9879\u662f\u4ec0\u4e48\u610f\u601d"
+											}
+										]
+									},
+									{
+										"type": "text",
+										"value": "\u3002"
+									}
+								]
 							}
 						]
 					}
@@ -774,7 +806,7 @@
 		"translationUpdated": "2026-02-10T11:30:00Z"
 	},
 	"reading": {
-		"words": 845,
+		"words": 880,
 		"minutes": 5
 	},
 	"snippets": [

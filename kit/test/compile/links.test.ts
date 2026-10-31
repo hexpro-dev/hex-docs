@@ -479,7 +479,7 @@ describe('every reference the corpus contains', () => {
 		expect(documents.length).toBe(51);
 		// Every kind appears, so the sweep is not one kind repeated. The counts are the
 		// corpus's own and a page added to it moves them on purpose.
-		expect(kinds).toEqual({ internal: 87, anchor: 8, external: 17, mailto: 15 });
+		expect(kinds).toEqual({ internal: 87, anchor: 13, external: 17, mailto: 15 });
 		expect(images).toBe(17);
 	});
 });

@@ -202,6 +202,7 @@ export function parseBlocks(lines: readonly SourceLine[], context: BlockContext)
 		const result = parseInline(folded, {
 			file: context.file,
 			scope,
+			kind,
 			origins: context.origins,
 			services: context.services,
 			problems: context.problems,
@@ -215,6 +216,7 @@ export function parseBlocks(lines: readonly SourceLine[], context: BlockContext)
 			});
 		}
 		context.destinations.push(...result.destinations);
+		context.directives.push(...result.directives);
 		// One segment per title, carrying its own line and column. Kept out of the block's
 		// prose on purpose: see `InlineResult.titles`.
 		for (const title of result.titles) {

@@ -75,6 +75,7 @@ import type {
 	InlineCode,
 	ListItem,
 	ListNode,
+	More,
 	Paragraph,
 	StatusNode,
 	Step,
@@ -151,6 +152,7 @@ type _inlineCode = Expect<AssertExact<Of<typeof ast.inlineCodeSchema>, InlineCod
 type _image = Expect<AssertExact<Of<typeof ast.imageSchema>, ImageNode>>;
 type _break = Expect<AssertExact<Of<typeof ast.breakSchema>, BreakNode>>;
 type _status = Expect<AssertExact<Of<typeof ast.statusSchema>, StatusNode>>;
+type _more = Expect<AssertExact<Of<typeof ast.moreSchema>, More>>;
 
 /* Every union contract below uses `AssertExactUnion`, which compares whole members.
  * `AssertExact` compares keys, and `keyof` a union is the *intersection* of its

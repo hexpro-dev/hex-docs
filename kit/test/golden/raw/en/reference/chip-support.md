@@ -30,7 +30,7 @@ the row rather than the family name on the packaging.
 | NTAG213 | `NT2H1311` | \u2705 | \u2705 | 144 |
 | NTAG215 | `NT2H1511` | \u2705 | \u2705 | 504 |
 | NTAG216 | `NT2H1611` | \u2705 | \u2705 | 888 |
-| [NTAG424 DNA](https://example.com/chips/nt4h2421gx) | `NT4H2421Gx` | \u2705 | \u26a0\ufe0f | 416 |
+| [NTAG424 DNA](https://example.com/chips/nt4h2421gx) | `NT4H2421Gx` | \u2705 | \u26a0\ufe0f | 416 The NDEF file holds 256 bytes until the application key is entered and `ChangeFileSettings` resizes it. See [what the caveats mean](#what-the-caveats-mean). |
 | MIFARE Ultralight EV1 | `MF0UL1101` | \u2705 | \u2705 | 48 |
 | MIFARE Ultralight C | `MF0ICU2` | \u2705 | \u26a0\ufe0f | 144 |
 | ICODE SLIX2 | `SL2S2602` | \u2705 | \u26a0\ufe0f | 316 |

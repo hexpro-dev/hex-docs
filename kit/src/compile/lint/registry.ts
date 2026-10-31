@@ -126,6 +126,20 @@ export const RULE_DEFINITIONS = {
 			},
 		],
 	},
+	'table-cell-width': {
+		id: 'table-cell-width',
+		category: 'structure',
+		defaultSeverity: 'warning',
+		title: 'Fold a long table cell behind :more[...].',
+		consequence:
+			'A row is as tall as its tallest cell, so one long note pushes every status beside it, and every row after it, down the screen. The reader scanning the column for a yes or a no loses the row they were reading. A warning rather than an error, because the page is still correct.',
+		examples: [
+			{
+				bad: `| Chip | Read | Notes |\n| --- | --- | --- |\n| NTAG213 | Yes | 144 bytes user memory. ${'Write protection confirmed on real tags after the September rework, read protection not yet run on the reworked code, and the lock pass re-run on the reworked sequence. '.repeat(2)}|`,
+				good: '| Chip | Read | Notes |\n| --- | --- | --- |\n| NTAG213 | Yes | 144 bytes user memory. :more[Write protection confirmed on real tags after the September rework.] |',
+			},
+		],
+	},
 	'page-size': {
 		id: 'page-size',
 		category: 'structure',
@@ -150,6 +164,7 @@ export const RULE_DEFINITIONS = {
 		examples: [
 			{ bad: 'The threshold is $$x > 3$$.', good: 'The threshold is `x > 3`.' },
 			{ bad: ':::aside[Note]\nText.\n:::', good: ':::note[Note]\nText.\n:::' },
+			{ bad: '## Write :more[the first] record', good: '## Write the first record' },
 		],
 	},
 

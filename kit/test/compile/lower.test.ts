@@ -372,6 +372,132 @@ describe('one container inside another', () => {
 	});
 });
 
+describe('an inline :more', () => {
+	test('loses its markers and keeps its words, beside and around a rewritten link', () => {
+		// The link before the fold and the link inside it are both rewritten on this line, to
+		// tokens of a different length than the paths they replace, and the closing bracket
+		// comes after the second. Lowered in a pass of its own afterwards, from the parser's
+		// columns, the bracket's column would point into the middle of the token.
+		expect(rawOf('See [one](first-tag.md). :more[Then [two](first-tag.md) and more.] Done.')).toBe(
+			`See [one](${RAW_PAGE_LINK}guide/first-tag.md). Then [two](${RAW_PAGE_LINK}guide/first-tag.md) and more. Done.`,
+		);
+	});
+
+	test('two on one line, and one whose body crosses a wrap', () => {
+		expect(rawOf('A :more[one] and B :more[two].')).toBe('A one and B two.');
+		expect(rawOf(lines('Lead :more[first line', 'second line] end.'))).toBe(
+			lines('Lead first line', 'second line end.'),
+		);
+	});
+
+	test('in a table cell, with an escaped pipe inside it', () => {
+		expect(
+			rawOf(
+				lines('| Chip | Notes |', '| --- | --- |', '| NTAG213 | 144. :more[Read \\| write.] |'),
+			),
+		).toBe(lines('| Chip | Notes |', '| --- | --- |', '| NTAG213 | 144. Read \\| write. |'));
+	});
+
+	test('inside a callout and a step, after the prefixes those add', () => {
+		expect(rawOf(lines(':::note', ':more[Folded] first.', ':::'))).toBe(
+			'> **Note:** Folded first.',
+		);
+		expect(
+			rawOf(lines('::::steps', ':::step[Scan]', 'Hold it. :more[Near the top.]', ':::', '::::')),
+		).toBe(lines('1. **Scan**', '', '   Hold it. Near the top.'));
+	});
+
+	test('in code is code', () => {
+		expect(rawOf('Write `:more[text]` to fold.')).toBe('Write `:more[text]` to fold.');
+		expect(rawOf(lines('```markdown', 'A :more[b] c.', '```'))).toBe(
+			lines('```markdown', 'A :more[b] c.', '```'),
+		);
+	});
+
+	test('refused inside another, both sets of markers go, so the reread finds nothing', () => {
+		// The outer is accepted and lowered. The inner was refused, and left as typed it would
+		// read as an accepted one on the reread, which throws: the defect a refusal recorded
+		// nothing for.
+		const output = compile('Outer :more[and :more[inner] text].');
+		expect(output.raw.split('\n').slice(2).join('\n').trimEnd()).toBe('Outer and inner text.');
+		expect(output.findings.map((finding) => finding.message)).toContainEqual(
+			expect.stringMatching(/inside another ":more/),
+		);
+	});
+});
+
+describe('a :more whose markers would change the text around them', () => {
+	// Each of these was measured by the review to throw in the reread or to publish raw
+	// markdown that disagrees with the page. Every one is refused by name now, with its
+	// markers left in place, so the build reports an error rather than throwing, and the raw
+	// text is the source as written.
+	test.each([
+		[
+			'a container label on a paragraph second line',
+			lines('Intro.', ':::note[Background :more[scanning details]]', 'Body', ':::'),
+			/directive line/,
+		],
+		[
+			'a container label in a list item',
+			lines('- item text', '  :::note[Careful :more[really]]', '  Body', '  :::'),
+			/directive line/,
+		],
+		[
+			'a container label in a quotation',
+			lines('> quoted text', '> :::warning[Careful :more[really]]'),
+			/directive line/,
+		],
+		['a folded include', lines('Intro.', '', ':more[::include[safety-note]]'), /directive line/],
+		['a folded container open', lines('Intro', ':more[:::note]', 'Body', ':::'), /directive line/],
+		['a folded alert marker', lines('> :more[[!NOTE]]', '> Text.'), /GitHub alert/],
+		['a folded heading', lines('Intro', ':more[# Not a heading]'), /a heading/],
+		['a folded list item', ':more[- item]', /a list item/],
+		['a folded quotation', ':more[> quoted]', /a quotation/],
+		['a folded fence', lines('Intro', ':more[```text] after'), /a code fence/],
+		['a colon that makes another :more', 'Text :more[:]more[x] end.', /another ":more"/],
+		['a bracket before a parenthesis', 'See [x]:more[(first-tag.md)] now.', /a link/],
+		['a bracketed body before a parenthesis', ':more[[a]](first-tag.md) end', /a link/],
+		['an image from a bang', 'A !:more[[b](first-tag.md)] here.', /an image/],
+		['two backtick runs that join', 'A `x`:more[`y`] here.', /one run of "`"/],
+	])('%s is refused, not thrown, and the raw keeps its markers', (_label, body, message) => {
+		const output = compile(body);
+		const refusals = output.findings.filter((finding) => finding.rule === 'unsupported-syntax');
+		expect(refusals.map((finding) => finding.message)).toContainEqual(
+			expect.stringMatching(message),
+		);
+		expect(output.raw).toContain(':more[');
+	});
+
+	test('a heading with a folded id is refused as a heading and keeps its markers', () => {
+		const output = compile('## Title :more[{#custom}]');
+		expect(output.findings.map((finding) => finding.message)).toContainEqual(
+			expect.stringMatching(/inside a heading/),
+		);
+		expect(output.raw).toContain('## Title :more[{#custom}]');
+	});
+
+	test('what is safe is still lowered', () => {
+		// A line that starts with a directive-like word and has no bracket to close, a fold at
+		// the start of a table cell whose text starts like a list item, and a paragraph whose
+		// continuation line is a year: none of them changes when the markers go.
+		expect(rawOf('::foo is not a directive and :more[this is fine] here.')).toBe(
+			'::foo is not a directive and this is fine here.',
+		);
+		expect(
+			rawOf(
+				lines(
+					'| Chip | Read | Notes |',
+					'| --- | --- | --- |',
+					'| A | Yes | :more[- dash first] |',
+				),
+			),
+		).toBe(lines('| Chip | Read | Notes |', '| --- | --- | --- |', '| A | Yes | - dash first |'));
+		expect(rawOf(lines('The standard was set', '1985. It :more[changed] later.'))).toBe(
+			lines('The standard was set', '1985. It changed later.'),
+		);
+	});
+});
+
 describe('directive syntax that is code', () => {
 	test('is left exactly as typed, at the top and inside a step', () => {
 		const sample = [':::note[Title]', '::include[safety-note]', '## Heading {#anchor}'];
@@ -458,6 +584,26 @@ describe('a snippet', () => {
 		);
 		// What `scaffolded` compares. A label in the file's own language would make a French
 		// file copied byte for byte from the English one read as translated.
+		expect(rawSnippetBody(text, 1, [])).toBe(text);
+	});
+
+	test("lowers a :more from the snippet's own records", () => {
+		const text = 'From the snippet. :more[Folded in it.] After.';
+		const parsed = parseDocument(text, {
+			file: 'snippets/en/safety-note.md',
+			config: CONFIG,
+			services: services(),
+			includeDepth: 1,
+		});
+		const lowering = {
+			locale: 'en',
+			file: 'snippets/en/safety-note.md',
+			directives: parsed.directives,
+			origins: parsed.origins,
+			snippetBodies: new Map<string, string>(),
+		} as const;
+		expect(rawSnippetBody(text, 1, [], lowering)).toBe('From the snippet. Folded in it. After.');
+		// And the scaffold comparison keeps the markers, so two locales are compared as written.
 		expect(rawSnippetBody(text, 1, [])).toBe(text);
 	});
 });

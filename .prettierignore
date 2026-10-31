@@ -32,3 +32,9 @@ test/golden/
 # rewrote it would make that gate fail on every run until somebody taught the generator
 # prettier's CSS style. The generator's own output is the format.
 src/render/docs.css
+
+# Isolated agent checkouts of this repository, which are working copies rather than
+# source. Prettier walks the filesystem, and a `pnpm format` here once reformatted the
+# generated and golden files inside one, which its own `.prettierignore` excludes only
+# relative to its own root.
+.claude/worktrees/

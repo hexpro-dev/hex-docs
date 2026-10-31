@@ -25,6 +25,7 @@ import {
 	paragraphSchema,
 	stepSchema,
 	strikethroughSchema,
+	moreSchema,
 	strongSchema,
 	tableCellSchema,
 	tableSchema,
@@ -51,6 +52,7 @@ const FIXTURES = {
 	image: { type: 'image', src: ASSET, alt: 'The scan screen', width: 750, height: 1334 },
 	break: { type: 'break' },
 	status: { type: 'status', value: 'partial' },
+	more: { type: 'more', children: [text] },
 
 	paragraph: { type: 'paragraph', children: [text] },
 	heading: { type: 'heading', depth: 2, id: 'writing-a-tag', idSource: 'slug', children: [text] },
@@ -257,6 +259,7 @@ describe('the recursion seam', () => {
 		['emphasis.children', emphasisSchema.shape.children],
 		['strong.children', strongSchema.shape.children],
 		['strikethrough.children', strikethroughSchema.shape.children],
+		['more.children', moreSchema.shape.children],
 		['tableCell.children', tableCellSchema.shape.children],
 		['callout.title', calloutSchema.shape.title],
 		['table.caption', tableSchema.shape.caption],
@@ -312,6 +315,13 @@ describe('the recursion seam', () => {
 				id: 'x',
 				idSource: 'slug',
 				children: [{ type: 'link', kind: 'external', href: 'javascript:alert(1)', children: [] }],
+			},
+		],
+		[
+			'raw markup folded behind a :more',
+			{
+				type: 'paragraph',
+				children: [{ type: 'more', children: [{ type: 'html', value: '<b>' }] }],
 			},
 		],
 		[

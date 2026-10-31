@@ -59,6 +59,10 @@ export function inlineText(nodes: readonly Inline[], options: FlattenOptions = {
 			case 'strong':
 			case 'strikethrough':
 			case 'link':
+			// Folded text is still text. A passage behind a question mark is hidden by the
+			// layout, not by the meaning, so search, the reading estimate and a heading's
+			// slug all count it as the page does in print and with no script.
+			case 'more':
 				text += inlineText(node.children, options);
 				break;
 			case 'image':

@@ -30,6 +30,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { notRunRow, type CheckRow } from '../../../src/contracts/diagnostics.js';
+import { AST_VERSION } from '../../../src/contracts/ast.js';
 import type { Locale } from '../../../src/contracts/locales.js';
 import { MANIFEST_KEY, type BundleManifest } from '../../../src/contracts/manifest.js';
 import { verifyBundle } from '../compile/bundle.js';
@@ -255,7 +256,7 @@ export const bundle = defineCommand({
 		// here" and "you passed the parent of the ast-N directory, or a typo" send an
 		// operator to two different places, and the second is what actually happens.
 		if (!existsSync(directory) || !statSync(directory).isDirectory()) {
-			const why = `${directory} is not a directory. Point at the ast-N directory of one bundle, such as <cache>/<project>/<commit>/ast-1.`;
+			const why = `${directory} is not a directory. Point at the ast-N directory of one bundle, such as <cache>/<project>/<commit>/ast-${AST_VERSION}.`;
 			return {
 				data: { path: directory, described: false, why },
 				lines: [why],

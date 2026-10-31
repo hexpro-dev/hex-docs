@@ -116,17 +116,22 @@ describe('what the route refuses', () => {
 		// A refusal rather than a page of skipped nodes. A bundle compiled at a newer major
 		// would render most of a page and drop the rest, which looks exactly like a working
 		// page.
-		const result = await route({ manifest: { ...MANIFEST, ast: 2 } as unknown as BundleManifest });
+		const result = await route({
+			manifest: { ...MANIFEST, ast: AST_VERSION + 1 } as unknown as BundleManifest,
+		});
 		expect(result).toEqual({ ok: false, reason: 'unsupported-ast' });
 	});
 
 	test('an AST major the payload declares and the manifest does not', async () => {
 		// Both are checked, because they are two claims about the same thing and the whole
 		// write-once mechanism rests on them agreeing.
-		const page = { ...goldenPage('en', 'guide/first-tag').page, ast: 2 } as unknown as CompiledPage;
+		const page = {
+			...goldenPage('en', 'guide/first-tag').page,
+			ast: AST_VERSION + 1,
+		} as unknown as CompiledPage;
 		const result = await route({ load: async () => page });
 		expect(result).toEqual({ ok: false, reason: 'unsupported-ast' });
-		expect(AST_VERSION).toBe(1);
+		expect(AST_VERSION).toBe(2);
 	});
 
 	test('a payload that is not shaped like a compiled page', async () => {

@@ -80,7 +80,7 @@ the same date, so nothing is ever newer than anything. Set `fetch-depth: 0` on
 
 **A version in the picker serves 404s on every page.** The commit is labelled and no
 bundle exists for it. Either the publish workflow has not run for that commit, or
-`hexdocs prefetch` has not run on this machine. `hexdocs bundle <cache>/<project>/<sha>/ast-1`
+`hexdocs prefetch` has not run on this machine. `hexdocs bundle <cache>/<project>/<sha>/ast-2`
 says which.
 
 **The docs pages render and never become interactive.** A docs route module exports
